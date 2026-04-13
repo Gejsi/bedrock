@@ -177,7 +177,7 @@ void br_byte_buffer_reset(br_byte_buffer *buffer) {
     br__byte_buffer_clear_state(buffer);
 }
 
-int br_byte_buffer_is_empty(const br_byte_buffer *buffer) {
+bool br_byte_buffer_is_empty(const br_byte_buffer *buffer) {
     return buffer == NULL || br__byte_buffer_unread_len(buffer) == 0u;
 }
 

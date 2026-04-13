@@ -33,13 +33,13 @@ static br_string_builder_rune_result br__string_builder_rune_result(
     return result;
 }
 
-static int br__string_builder_add_overflow(usize lhs, usize rhs, usize *out) {
+static bool br__string_builder_add_overflow(usize lhs, usize rhs, usize *out) {
     if (lhs > SIZE_MAX - rhs) {
-        return 1;
+        return true;
     }
 
     *out = lhs + rhs;
-    return 0;
+    return false;
 }
 
 static br_status br__string_builder_grow(br_string_builder *builder, usize additional) {
@@ -167,7 +167,7 @@ void br_string_builder_reset(br_string_builder *builder) {
     builder->len = 0u;
 }
 
-int br_string_builder_is_empty(const br_string_builder *builder) {
+bool br_string_builder_is_empty(const br_string_builder *builder) {
     return builder == NULL || builder->len == 0u;
 }
 

@@ -71,22 +71,22 @@ int br_string_compare(br_string_view lhs, br_string_view rhs);
 /*
 Return whether two strings have the same bytes.
 */
-int br_string_equal(br_string_view lhs, br_string_view rhs);
+bool br_string_equal(br_string_view lhs, br_string_view rhs);
 
 /*
 Return whether `s` begins with `prefix`.
 */
-int br_string_has_prefix(br_string_view s, br_string_view prefix);
+bool br_string_has_prefix(br_string_view s, br_string_view prefix);
 
 /*
 Return whether `s` ends with `suffix`.
 */
-int br_string_has_suffix(br_string_view s, br_string_view suffix);
+bool br_string_has_suffix(br_string_view s, br_string_view suffix);
 
 /*
 Return whether `needle` occurs within `s`.
 */
-int br_string_contains(br_string_view s, br_string_view needle);
+bool br_string_contains(br_string_view s, br_string_view needle);
 
 /*
 Return whether Unicode scalar value `value` occurs within `s`.
@@ -94,12 +94,12 @@ Return whether Unicode scalar value `value` occurs within `s`.
 This follows Odin's `contains_rune` and walks the string as UTF-8 rather than
 scanning raw bytes.
 */
-int br_string_contains_rune(br_string_view s, br_rune value);
+bool br_string_contains_rune(br_string_view s, br_rune value);
 
 /*
 Report whether `s` is valid UTF-8.
 */
-int br_string_valid(br_string_view s);
+bool br_string_valid(br_string_view s);
 
 /*
 Return the byte offset of `needle` within `s`, or `-1` if it is absent.

@@ -54,17 +54,17 @@ br_utf8_decode_result br_utf8_decode_last(br_bytes_view s);
 /*
 Report whether `value` is a valid Unicode scalar value.
 */
-int br_utf8_valid_rune(br_rune value);
+bool br_utf8_valid_rune(br_rune value);
 
 /*
 Report whether `s` is entirely valid UTF-8.
 */
-int br_utf8_valid(br_bytes_view s);
+bool br_utf8_valid(br_bytes_view s);
 
 /*
 Report whether `byte_value` can begin a UTF-8 encoded rune.
 */
-int br_utf8_rune_start(u8 byte_value);
+bool br_utf8_rune_start(u8 byte_value);
 
 /*
 Count runes in `s`.
@@ -86,7 +86,7 @@ Report whether `s` begins with a complete UTF-8 encoding.
 Like Odin's `full_rune`, invalid encodings are considered complete because they
 decode as a width-1 replacement rune.
 */
-int br_utf8_full_rune(br_bytes_view s);
+bool br_utf8_full_rune(br_bytes_view s);
 
 BR_EXTERN_C_END
 

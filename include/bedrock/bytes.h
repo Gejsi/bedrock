@@ -69,11 +69,11 @@ br_status br_bytes_rewrite_free(br_bytes_rewrite_result result, br_allocator all
 br_bytes_result br_bytes_clone(br_bytes_view src, br_allocator allocator);
 
 int br_bytes_compare(br_bytes_view lhs, br_bytes_view rhs);
-int br_bytes_equal(br_bytes_view lhs, br_bytes_view rhs);
-int br_bytes_has_prefix(br_bytes_view s, br_bytes_view prefix);
-int br_bytes_has_suffix(br_bytes_view s, br_bytes_view suffix);
-int br_bytes_contains(br_bytes_view s, br_bytes_view needle);
-int br_bytes_contains_any(br_bytes_view s, br_bytes_view chars);
+bool br_bytes_equal(br_bytes_view lhs, br_bytes_view rhs);
+bool br_bytes_has_prefix(br_bytes_view s, br_bytes_view prefix);
+bool br_bytes_has_suffix(br_bytes_view s, br_bytes_view suffix);
+bool br_bytes_contains(br_bytes_view s, br_bytes_view needle);
+bool br_bytes_contains_any(br_bytes_view s, br_bytes_view chars);
 
 isize br_bytes_index_byte(br_bytes_view s, u8 byte_value);
 isize br_bytes_last_index_byte(br_bytes_view s, u8 byte_value);

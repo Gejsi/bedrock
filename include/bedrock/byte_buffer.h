@@ -33,7 +33,7 @@ br_status br_byte_buffer_init_copy(
 void br_byte_buffer_destroy(br_byte_buffer *buffer);
 void br_byte_buffer_reset(br_byte_buffer *buffer);
 
-int br_byte_buffer_is_empty(const br_byte_buffer *buffer);
+bool br_byte_buffer_is_empty(const br_byte_buffer *buffer);
 usize br_byte_buffer_len(const br_byte_buffer *buffer);
 usize br_byte_buffer_capacity(const br_byte_buffer *buffer);
 br_bytes_view br_byte_buffer_view(const br_byte_buffer *buffer);

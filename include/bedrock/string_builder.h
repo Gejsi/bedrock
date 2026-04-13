@@ -75,7 +75,7 @@ void br_string_builder_reset(br_string_builder *builder);
 /*
 Return whether the builder currently holds no bytes.
 */
-int br_string_builder_is_empty(const br_string_builder *builder);
+bool br_string_builder_is_empty(const br_string_builder *builder);
 
 /*
 Return the current byte length of the builder contents.

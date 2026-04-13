@@ -28,7 +28,7 @@ typedef enum br_status {
     BR_STATUS_INVALID_STATE = 5
 } br_status;
 
-static inline int br_is_power_of_two_size(usize value) {
+static inline bool br_is_power_of_two_size(usize value) {
     return value != 0u && (value & (value - 1u)) == 0u;
 }
 

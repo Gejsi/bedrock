@@ -23,27 +23,27 @@ int br_string_compare(br_string_view lhs, br_string_view rhs) {
     return br_bytes_compare(br_string_view_as_bytes(lhs), br_string_view_as_bytes(rhs));
 }
 
-int br_string_equal(br_string_view lhs, br_string_view rhs) {
+bool br_string_equal(br_string_view lhs, br_string_view rhs) {
     return br_bytes_equal(br_string_view_as_bytes(lhs), br_string_view_as_bytes(rhs));
 }
 
-int br_string_has_prefix(br_string_view s, br_string_view prefix) {
+bool br_string_has_prefix(br_string_view s, br_string_view prefix) {
     return br_bytes_has_prefix(br_string_view_as_bytes(s), br_string_view_as_bytes(prefix));
 }
 
-int br_string_has_suffix(br_string_view s, br_string_view suffix) {
+bool br_string_has_suffix(br_string_view s, br_string_view suffix) {
     return br_bytes_has_suffix(br_string_view_as_bytes(s), br_string_view_as_bytes(suffix));
 }
 
-int br_string_contains(br_string_view s, br_string_view needle) {
+bool br_string_contains(br_string_view s, br_string_view needle) {
     return br_bytes_contains(br_string_view_as_bytes(s), br_string_view_as_bytes(needle));
 }
 
-int br_string_contains_rune(br_string_view s, br_rune value) {
+bool br_string_contains_rune(br_string_view s, br_rune value) {
     return br_string_index_rune(s, value) >= 0;
 }
 
-int br_string_valid(br_string_view s) {
+bool br_string_valid(br_string_view s) {
     return br_utf8_valid(br_string_view_as_bytes(s));
 }
 

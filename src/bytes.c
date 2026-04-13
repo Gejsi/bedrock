@@ -45,23 +45,23 @@ static br_bytes_rewrite_result br__bytes_rewrite_owned_result(
     return result;
 }
 
-static int br__bytes_contains_byte(br_bytes_view chars, u8 byte_value) {
+static bool br__bytes_contains_byte(br_bytes_view chars, u8 byte_value) {
     for (usize i = 0; i < chars.len; ++i) {
         if (chars.data[i] == byte_value) {
-            return 1;
+            return true;
         }
     }
 
-    return 0;
+    return false;
 }
 
-static int br__bytes_add_overflow(usize lhs, usize rhs, usize *out) {
+static bool br__bytes_add_overflow(usize lhs, usize rhs, usize *out) {
     if (lhs > SIZE_MAX - rhs) {
-        return 1;
+        return true;
     }
 
     *out = lhs + rhs;
-    return 0;
+    return false;
 }
 
 br_status br_bytes_free(br_bytes bytes, br_allocator allocator) {
@@ -119,41 +119,41 @@ int br_bytes_compare(br_bytes_view lhs, br_bytes_view rhs) {
     return lhs.len < rhs.len ? -1 : 1;
 }
 
-int br_bytes_equal(br_bytes_view lhs, br_bytes_view rhs) {
+bool br_bytes_equal(br_bytes_view lhs, br_bytes_view rhs) {
     if (lhs.len != rhs.len) {
-        return 0;
+        return false;
     }
     if (lhs.len == 0u) {
-        return 1;
+        return true;
     }
     return memcmp(lhs.data, rhs.data, lhs.len) == 0;
 }
 
-int br_bytes_has_prefix(br_bytes_view s, br_bytes_view prefix) {
+bool br_bytes_has_prefix(br_bytes_view s, br_bytes_view prefix) {
     if (prefix.len > s.len) {
-        return 0;
+        return false;
     }
     if (prefix.len == 0u) {
-        return 1;
+        return true;
     }
     return memcmp(s.data, prefix.data, prefix.len) == 0;
 }
 
-int br_bytes_has_suffix(br_bytes_view s, br_bytes_view suffix) {
+bool br_bytes_has_suffix(br_bytes_view s, br_bytes_view suffix) {
     if (suffix.len > s.len) {
-        return 0;
+        return false;
     }
     if (suffix.len == 0u) {
-        return 1;
+        return true;
     }
     return memcmp(s.data + (s.len - suffix.len), suffix.data, suffix.len) == 0;
 }
 
-int br_bytes_contains(br_bytes_view s, br_bytes_view needle) {
+bool br_bytes_contains(br_bytes_view s, br_bytes_view needle) {
     return br_bytes_index(s, needle) >= 0;
 }
 
-int br_bytes_contains_any(br_bytes_view s, br_bytes_view chars) {
+bool br_bytes_contains_any(br_bytes_view s, br_bytes_view chars) {
     return br_bytes_index_any(s, chars) >= 0;
 }
 

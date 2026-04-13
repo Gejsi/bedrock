@@ -2,6 +2,7 @@
 #define BEDROCK_TYPES_H
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifndef BEDROCK_NO_SHORT_TYPES

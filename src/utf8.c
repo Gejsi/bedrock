@@ -100,7 +100,7 @@ static br__utf8_lead_info br__utf8_classify_lead(u8 lead) {
     return info;
 }
 
-static int br__utf8_is_continuation(u8 byte_value) {
+static bool br__utf8_is_continuation(u8 byte_value) {
     return byte_value >= BR__UTF8_LOCB && byte_value <= BR__UTF8_HICB;
 }
 
@@ -241,20 +241,20 @@ br_utf8_decode_result br_utf8_decode_last(br_bytes_view s) {
     return result;
 }
 
-int br_utf8_valid_rune(br_rune value) {
+bool br_utf8_valid_rune(br_rune value) {
     if (value < 0) {
-        return 0;
+        return false;
     }
     if (value >= BR__UTF8_SURROGATE_MIN && value <= BR__UTF8_SURROGATE_MAX) {
-        return 0;
+        return false;
     }
     if (value > BR_RUNE_MAX) {
-        return 0;
+        return false;
     }
-    return 1;
+    return true;
 }
 
-int br_utf8_valid(br_bytes_view s) {
+bool br_utf8_valid(br_bytes_view s) {
     usize i = 0u;
 
     while (i < s.len) {
@@ -267,27 +267,27 @@ int br_utf8_valid(br_bytes_view s) {
             continue;
         }
         if (info.invalid || i + info.width > s.len) {
-            return 0;
+            return false;
         }
 
         b1 = s.data[i + 1u];
         if (b1 < info.lo || b1 > info.hi) {
-            return 0;
+            return false;
         }
         if (info.width > 2u && !br__utf8_is_continuation(s.data[i + 2u])) {
-            return 0;
+            return false;
         }
         if (info.width > 3u && !br__utf8_is_continuation(s.data[i + 3u])) {
-            return 0;
+            return false;
         }
 
         i += info.width;
     }
 
-    return 1;
+    return true;
 }
 
-int br_utf8_rune_start(u8 byte_value) {
+bool br_utf8_rune_start(u8 byte_value) {
     return (byte_value & 0xc0u) != 0x80u;
 }
 
@@ -349,23 +349,23 @@ int br_utf8_rune_size(br_rune value) {
     return -1;
 }
 
-int br_utf8_full_rune(br_bytes_view s) {
+bool br_utf8_full_rune(br_bytes_view s) {
     br__utf8_lead_info info;
 
     if (s.len == 0u) {
-        return 0;
+        return false;
     }
 
     info = br__utf8_classify_lead(s.data[0]);
     if (info.ascii || info.invalid || s.len >= info.width) {
-        return 1;
+        return true;
     }
     if (s.len > 1u && (s.data[1] < info.lo || s.data[1] > info.hi)) {
-        return 1;
+        return true;
     }
     if (s.len > 2u && !br__utf8_is_continuation(s.data[2])) {
-        return 1;
+        return true;
     }
 
-    return 0;
+    return false;
 }
