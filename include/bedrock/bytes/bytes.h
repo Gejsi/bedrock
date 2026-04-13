@@ -6,61 +6,61 @@
 BR_EXTERN_C_BEGIN
 
 typedef struct br_bytes {
-    u8 *data;
-    usize len;
+  u8 *data;
+  usize len;
 } br_bytes;
 
 typedef struct br_bytes_view {
-    const u8 *data;
-    usize len;
+  const u8 *data;
+  usize len;
 } br_bytes_view;
 
 typedef struct br_bytes_result {
-    br_bytes value;
-    br_status status;
+  br_bytes value;
+  br_status status;
 } br_bytes_result;
 
 typedef struct br_bytes_view_list {
-    br_bytes_view *data;
-    usize len;
+  br_bytes_view *data;
+  usize len;
 } br_bytes_view_list;
 
 typedef struct br_bytes_view_list_result {
-    br_bytes_view_list value;
-    br_status status;
+  br_bytes_view_list value;
+  br_status status;
 } br_bytes_view_list_result;
 
 typedef struct br_bytes_rewrite_result {
-    br_bytes_view value;
-    br_bytes owned;
-    int allocated;
-    br_status status;
+  br_bytes_view value;
+  br_bytes owned;
+  int allocated;
+  br_status status;
 } br_bytes_rewrite_result;
 
 #define BR_BYTES_LIT(s) br_bytes_view_make((const void *)(s), sizeof(s) - 1u)
 
 static inline br_bytes br_bytes_make(void *data, usize len) {
-    br_bytes bytes;
+  br_bytes bytes;
 
-    bytes.data = (u8 *)data;
-    bytes.len = len;
-    return bytes;
+  bytes.data = (u8 *)data;
+  bytes.len = len;
+  return bytes;
 }
 
 static inline br_bytes_view br_bytes_view_make(const void *data, usize len) {
-    br_bytes_view bytes;
+  br_bytes_view bytes;
 
-    bytes.data = (const u8 *)data;
-    bytes.len = len;
-    return bytes;
+  bytes.data = (const u8 *)data;
+  bytes.len = len;
+  return bytes;
 }
 
 static inline br_bytes_view br_bytes_view_from_bytes(br_bytes bytes) {
-    return br_bytes_view_make(bytes.data, bytes.len);
+  return br_bytes_view_make(bytes.data, bytes.len);
 }
 
 static inline br_bytes_view br_bytes_view_from_cstr(const char *s) {
-    return br_bytes_view_make(s, s != NULL ? strlen(s) : 0u);
+  return br_bytes_view_make(s, s != NULL ? strlen(s) : 0u);
 }
 
 br_status br_bytes_free(br_bytes bytes, br_allocator allocator);

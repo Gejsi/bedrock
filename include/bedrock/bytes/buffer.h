@@ -6,22 +6,22 @@
 BR_EXTERN_C_BEGIN
 
 typedef struct br_byte_buffer {
-    u8 *data;
-    usize len;
-    usize cap;
-    usize off;
-    br_allocator allocator;
-    int can_unread_byte;
+  u8 *data;
+  usize len;
+  usize cap;
+  usize off;
+  br_allocator allocator;
+  int can_unread_byte;
 } br_byte_buffer;
 
 typedef struct br_byte_buffer_io_result {
-    usize count;
-    br_status status;
+  usize count;
+  br_status status;
 } br_byte_buffer_io_result;
 
 typedef struct br_byte_buffer_byte_result {
-    u8 value;
-    br_status status;
+  u8 value;
+  br_status status;
 } br_byte_buffer_byte_result;
 
 void br_byte_buffer_init(br_byte_buffer *buffer, br_allocator allocator);

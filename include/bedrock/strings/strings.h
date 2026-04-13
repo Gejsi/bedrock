@@ -6,48 +6,48 @@
 BR_EXTERN_C_BEGIN
 
 typedef struct br_string {
-    char *data;
-    usize len;
+  char *data;
+  usize len;
 } br_string;
 
 typedef struct br_string_view {
-    const char *data;
-    usize len;
+  const char *data;
+  usize len;
 } br_string_view;
 
 typedef struct br_string_result {
-    br_string value;
-    br_status status;
+  br_string value;
+  br_status status;
 } br_string_result;
 
 #define BR_STR_LIT(s) br_string_view_make((s), sizeof(s) - 1u)
 
 static inline br_string br_string_make(void *data, usize len) {
-    br_string string;
+  br_string string;
 
-    string.data = (char *)data;
-    string.len = len;
-    return string;
+  string.data = (char *)data;
+  string.len = len;
+  return string;
 }
 
 static inline br_string_view br_string_view_make(const void *data, usize len) {
-    br_string_view string;
+  br_string_view string;
 
-    string.data = (const char *)data;
-    string.len = len;
-    return string;
+  string.data = (const char *)data;
+  string.len = len;
+  return string;
 }
 
 static inline br_string_view br_string_view_from_string(br_string string) {
-    return br_string_view_make(string.data, string.len);
+  return br_string_view_make(string.data, string.len);
 }
 
 static inline br_string_view br_string_view_from_cstr(const char *s) {
-    return br_string_view_make(s, s != NULL ? strlen(s) : 0u);
+  return br_string_view_make(s, s != NULL ? strlen(s) : 0u);
 }
 
 static inline br_bytes_view br_string_view_as_bytes(br_string_view s) {
-    return br_bytes_view_make(s.data, s.len);
+  return br_bytes_view_make(s.data, s.len);
 }
 
 /*

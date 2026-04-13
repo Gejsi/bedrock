@@ -38,14 +38,12 @@ CLANG_ONLY_CFLAGS += -Wnewline-eof -Wno-unsafe-buffer-usage
 endif
 
 DEBUG_CFLAGS := -O0 -g3 -DDEBUG -fno-omit-frame-pointer -fno-optimize-sibling-calls
-RELEASE_CFLAGS := -O2 -DNDEBUG
-ASAN_CFLAGS := -O1 -g3 -DDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls
-UBSAN_CFLAGS := -O1 -g3 -DDEBUG -fsanitize=undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls
+RELEASE_CFLAGS := -O3 -DNDEBUG
+SANITIZE_CFLAGS := -O1 -g3 -DDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls
 
 DEBUG_LDFLAGS :=
 RELEASE_LDFLAGS :=
-ASAN_LDFLAGS := -fsanitize=address,undefined
-UBSAN_LDFLAGS := -fsanitize=undefined
+SANITIZE_LDFLAGS := -fsanitize=address,undefined
 
 ifeq ($(MODE),debug)
 MODE_CFLAGS := $(DEBUG_CFLAGS)
@@ -53,14 +51,14 @@ MODE_LDFLAGS := $(DEBUG_LDFLAGS)
 else ifeq ($(MODE),release)
 MODE_CFLAGS := $(RELEASE_CFLAGS)
 MODE_LDFLAGS := $(RELEASE_LDFLAGS)
+else ifeq ($(MODE),sanitize)
+MODE_CFLAGS := $(SANITIZE_CFLAGS)
+MODE_LDFLAGS := $(SANITIZE_LDFLAGS)
 else ifeq ($(MODE),asan)
-MODE_CFLAGS := $(ASAN_CFLAGS)
-MODE_LDFLAGS := $(ASAN_LDFLAGS)
-else ifeq ($(MODE),ubsan)
-MODE_CFLAGS := $(UBSAN_CFLAGS)
-MODE_LDFLAGS := $(UBSAN_LDFLAGS)
+MODE_CFLAGS := $(SANITIZE_CFLAGS)
+MODE_LDFLAGS := $(SANITIZE_LDFLAGS)
 else
-$(error Unsupported MODE '$(MODE)'; use debug, release, asan, or ubsan)
+$(error Unsupported MODE '$(MODE)'; use debug, release, or sanitize)
 endif
 
 CFLAGS ?=
@@ -70,11 +68,11 @@ LDFLAGS += $(MODE_LDFLAGS)
 
 TEST_CFLAGS := $(filter-out -DNDEBUG,$(CFLAGS))
 TEST_ENV :=
-ifeq ($(MODE),asan)
+ifeq ($(MODE),sanitize)
 TEST_ENV += ASAN_OPTIONS=detect_leaks=0
 endif
-ifeq ($(MODE),ubsan)
-TEST_ENV += UBSAN_OPTIONS=print_stacktrace=1
+ifeq ($(MODE),asan)
+TEST_ENV += ASAN_OPTIONS=detect_leaks=0
 endif
 
 SRC_FILES := $(shell find $(SRC_DIR) -type f -name '*.c' | sort)
@@ -84,7 +82,7 @@ FORMAT_FILES := $(shell find $(FORMAT_DIRS) -type f \( -name '*.c' -o -name '*.h
 LIB_OBJS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRC_FILES))
 TEST_BINS := $(patsubst $(TEST_DIR)/%.c,$(BIN_DIR)/%,$(TEST_FILES))
 
-.PHONY: all clean test check debug release asan ubsan format check-format print-config
+.PHONY: all clean test check debug release sanitize asan format check-format print-config
 
 all: $(LIB_TARGET)
 
@@ -96,11 +94,11 @@ debug:
 release:
 	$(MAKE) MODE=release all
 
-asan:
-	$(MAKE) MODE=asan test
+sanitize:
+	$(MAKE) MODE=sanitize test
 
-ubsan:
-	$(MAKE) MODE=ubsan test
+asan:
+	$(MAKE) MODE=sanitize test
 
 format:
 	$(CLANG_FORMAT) -i $(FORMAT_FILES)

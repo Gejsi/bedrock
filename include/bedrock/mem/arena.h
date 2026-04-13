@@ -6,14 +6,14 @@
 BR_EXTERN_C_BEGIN
 
 typedef struct br_arena {
-    u8 *buffer;
-    usize capacity;
-    usize offset;
-    usize peak;
+  u8 *buffer;
+  usize capacity;
+  usize offset;
+  usize peak;
 } br_arena;
 
 typedef struct br_arena_mark {
-    usize offset;
+  usize offset;
 } br_arena_mark;
 
 void br_arena_init(br_arena *arena, void *buffer, usize capacity);

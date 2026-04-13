@@ -15,13 +15,13 @@ typedef i32 br_rune;
 #define BR_UTF8_MAX 4
 
 typedef struct br_utf8_decode_result {
-    br_rune value;
-    usize width;
+  br_rune value;
+  usize width;
 } br_utf8_decode_result;
 
 typedef struct br_utf8_encode_result {
-    u8 bytes[BR_UTF8_MAX];
-    usize len;
+  u8 bytes[BR_UTF8_MAX];
+  usize len;
 } br_utf8_encode_result;
 
 /*

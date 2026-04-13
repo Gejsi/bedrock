@@ -13,23 +13,23 @@ memory, it tracks a current read index, and it supports random-access reads
 without changing the main cursor.
 */
 typedef struct br_byte_reader {
-    br_bytes_view source;
-    i64 index;
+  br_bytes_view source;
+  i64 index;
 } br_byte_reader;
 
 typedef struct br_byte_reader_io_result {
-    usize count;
-    br_status status;
+  usize count;
+  br_status status;
 } br_byte_reader_io_result;
 
 typedef struct br_byte_reader_byte_result {
-    u8 value;
-    br_status status;
+  u8 value;
+  br_status status;
 } br_byte_reader_byte_result;
 
 typedef struct br_byte_reader_seek_result {
-    i64 offset;
-    br_status status;
+  i64 offset;
+  br_status status;
 } br_byte_reader_seek_result;
 
 /*

@@ -13,30 +13,30 @@ memory, it tracks a current byte index, and it supports both byte-wise and
 rune-wise reads over the same input.
 */
 typedef struct br_string_reader {
-    br_string_view source;
-    i64 index;
-    i64 prev_rune;
+  br_string_view source;
+  i64 index;
+  i64 prev_rune;
 } br_string_reader;
 
 typedef struct br_string_reader_io_result {
-    usize count;
-    br_status status;
+  usize count;
+  br_status status;
 } br_string_reader_io_result;
 
 typedef struct br_string_reader_byte_result {
-    u8 value;
-    br_status status;
+  u8 value;
+  br_status status;
 } br_string_reader_byte_result;
 
 typedef struct br_string_reader_rune_result {
-    br_rune value;
-    usize width;
-    br_status status;
+  br_rune value;
+  usize width;
+  br_status status;
 } br_string_reader_rune_result;
 
 typedef struct br_string_reader_seek_result {
-    i64 offset;
-    br_status status;
+  i64 offset;
+  br_status status;
 } br_string_reader_seek_result;
 
 /*

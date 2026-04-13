@@ -13,27 +13,27 @@ keeps allocation and ownership explicit. A builder is either heap-backed and
 growable, or backed by a caller-provided fixed buffer.
 */
 typedef struct br_string_builder {
-    char *data;
-    usize len;
-    usize cap;
-    br_allocator allocator;
-    int owns_storage;
+  char *data;
+  usize len;
+  usize cap;
+  br_allocator allocator;
+  int owns_storage;
 } br_string_builder;
 
 typedef struct br_string_builder_io_result {
-    usize count;
-    br_status status;
+  usize count;
+  br_status status;
 } br_string_builder_io_result;
 
 typedef struct br_string_builder_byte_result {
-    u8 value;
-    br_status status;
+  u8 value;
+  br_status status;
 } br_string_builder_byte_result;
 
 typedef struct br_string_builder_rune_result {
-    br_rune value;
-    usize width;
-    br_status status;
+  br_rune value;
+  usize width;
+  br_status status;
 } br_string_builder_rune_result;
 
 /*
