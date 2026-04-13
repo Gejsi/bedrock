@@ -2,6 +2,7 @@
 #define BEDROCK_BYTES_BUFFER_H
 
 #include <bedrock/bytes/bytes.h>
+#include <bedrock/io/io.h>
 
 BR_EXTERN_C_BEGIN
 
@@ -14,10 +15,7 @@ typedef struct br_byte_buffer {
   int can_unread_byte;
 } br_byte_buffer;
 
-typedef struct br_byte_buffer_io_result {
-  usize count;
-  br_status status;
-} br_byte_buffer_io_result;
+typedef br_io_result br_byte_buffer_io_result;
 
 typedef struct br_byte_buffer_byte_result {
   u8 value;
@@ -46,6 +44,12 @@ br_bytes_view br_byte_buffer_next(br_byte_buffer *buffer, usize n);
 br_byte_buffer_io_result br_byte_buffer_read(br_byte_buffer *buffer, void *dst, usize dst_len);
 br_byte_buffer_byte_result br_byte_buffer_read_byte(br_byte_buffer *buffer);
 br_status br_byte_buffer_unread_byte(br_byte_buffer *buffer);
+
+/*
+Expose this buffer through the generic byte-oriented IO traits.
+*/
+br_reader br_byte_buffer_as_reader(br_byte_buffer *buffer);
+br_writer br_byte_buffer_as_writer(br_byte_buffer *buffer);
 
 BR_EXTERN_C_END
 

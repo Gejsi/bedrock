@@ -2,6 +2,7 @@
 #define BEDROCK_BYTES_READER_H
 
 #include <bedrock/bytes/bytes.h>
+#include <bedrock/io/io.h>
 
 BR_EXTERN_C_BEGIN
 
@@ -17,20 +18,14 @@ typedef struct br_byte_reader {
   i64 index;
 } br_byte_reader;
 
-typedef struct br_byte_reader_io_result {
-  usize count;
-  br_status status;
-} br_byte_reader_io_result;
+typedef br_io_result br_byte_reader_io_result;
 
 typedef struct br_byte_reader_byte_result {
   u8 value;
   br_status status;
 } br_byte_reader_byte_result;
 
-typedef struct br_byte_reader_seek_result {
-  i64 offset;
-  br_status status;
-} br_byte_reader_seek_result;
+typedef br_io_seek_result br_byte_reader_seek_result;
 
 /*
 Initialize a reader to consume `source`.
@@ -103,6 +98,12 @@ offsets are rejected.
 */
 br_byte_reader_seek_result
 br_byte_reader_seek(br_byte_reader *reader, i64 offset, br_seek_from whence);
+
+/*
+Expose this reader through the generic byte-oriented IO traits.
+*/
+br_reader br_byte_reader_as_reader(br_byte_reader *reader);
+br_seeker br_byte_reader_as_seeker(br_byte_reader *reader);
 
 BR_EXTERN_C_END
 

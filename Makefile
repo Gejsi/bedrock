@@ -119,6 +119,7 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 
 $(LIB_TARGET): $(LIB_OBJS)
 	@mkdir -p $(dir $@)
+	rm -f $@
 	$(AR) $(ARFLAGS) $@ $(LIB_OBJS)
 
 $(BIN_DIR)/%: $(TEST_DIR)/%.c $(LIB_TARGET)

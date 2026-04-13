@@ -289,3 +289,16 @@ br_string_builder_rune_result br_string_builder_pop_rune(br_string_builder *buil
   builder->len -= decoded.width;
   return br__string_builder_rune_result(decoded.value, decoded.width, BR_STATUS_OK);
 }
+
+static br_io_result
+br__string_builder_write_adapter(void *context, const void *src, usize src_len) {
+  if (src == NULL && src_len > 0u) {
+    return br_io_result_make(0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+
+  return br_string_builder_write((br_string_builder *)context, br_string_view_make(src, src_len));
+}
+
+br_writer br_string_builder_as_writer(br_string_builder *builder) {
+  return br_writer_make(builder, br__string_builder_write_adapter);
+}

@@ -153,3 +153,45 @@ Summary:
 - It should not yet be described as a broad port of Odin `core/strings`.
 - The next safe growth area is the remaining convenience helpers, then `io`
   adapters, then table-driven Unicode behavior.
+
+## `core/io`
+
+Current label: `partial v1`
+
+Why this label:
+- Bedrock now has a minimal generic IO layer with separate reader, writer, and
+  seeker traits.
+- The in-memory byte and string types can be exposed through those traits.
+- This is intentionally much smaller than Odin's full `core/io` surface.
+
+Current Bedrock files:
+- `include/bedrock/io/io.h`
+- `src/io/io.c`
+- `include/bedrock/bytes/reader.h`
+- `src/bytes/reader.c`
+- `include/bedrock/bytes/buffer.h`
+- `src/bytes/buffer.c`
+- `include/bedrock/strings/reader.h`
+- `src/strings/reader.c`
+- `include/bedrock/strings/builder.h`
+- `src/strings/builder.c`
+
+| Odin area | Status | Bedrock coverage | Notes |
+| --- | --- | --- | --- |
+| `Seek_From` / shared seek origin | `adapted` | `io.h` | Moved out of `base.h` into the IO module. |
+| generic reader / writer / seeker traits | `adapted` | `io.h`, `io.c` | Minimal `fn + context` traits landed. |
+| shared IO result / seek result types | `done` | `io.h` | Shared across generic IO and concrete adapters. |
+| byte reader adapters | `adapted` | `bytes/reader.h`, `bytes/reader.c` | `bytes.Reader` now exposes generic reader/seeker traits. |
+| byte buffer adapters | `adapted` | `bytes/buffer.h`, `bytes/buffer.c` | `bytes.Buffer` now exposes generic reader/writer traits. |
+| string reader adapters | `adapted` | `strings/reader.h`, `strings/reader.c` | Exposed as byte-oriented generic reader/seeker traits. |
+| string builder adapters | `adapted` | `strings/builder.h`, `strings/builder.c` | Exposed as a byte-oriented generic writer trait. |
+| read-at / write-at generic traits | `planned` | none | Concrete types support some random access, but the generic IO layer does not yet. |
+| close / flush lifecycle traits | `excluded` | none | Intentionally out of the minimal v1 shape. |
+| buffered IO / scanners / pipes | `planned` | none | Future `bufio` work, not part of the base IO traits. |
+
+Summary:
+- `io` now exists as a real foundational module.
+- The current Bedrock shape is intentionally smaller than Odin's broader IO
+  package.
+- The next growth area is buffered utilities and deciding whether random-access
+  traits belong in the generic layer.

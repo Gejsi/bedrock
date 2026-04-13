@@ -227,3 +227,20 @@ br_string_reader_seek(br_string_reader *reader, i64 offset, br_seek_from whence)
   reader->index = absolute;
   return br__string_reader_seek_result(absolute, BR_STATUS_OK);
 }
+
+static br_io_result br__string_reader_read_adapter(void *context, void *dst, usize dst_len) {
+  return br_string_reader_read((br_string_reader *)context, dst, dst_len);
+}
+
+static br_io_seek_result
+br__string_reader_seek_adapter(void *context, i64 offset, br_seek_from whence) {
+  return br_string_reader_seek((br_string_reader *)context, offset, whence);
+}
+
+br_reader br_string_reader_as_reader(br_string_reader *reader) {
+  return br_reader_make(reader, br__string_reader_read_adapter);
+}
+
+br_seeker br_string_reader_as_seeker(br_string_reader *reader) {
+  return br_seeker_make(reader, br__string_reader_seek_adapter);
+}

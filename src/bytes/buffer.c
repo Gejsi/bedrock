@@ -329,3 +329,23 @@ br_status br_byte_buffer_unread_byte(br_byte_buffer *buffer) {
   buffer->can_unread_byte = 0;
   return BR_STATUS_OK;
 }
+
+static br_io_result br__byte_buffer_read_adapter(void *context, void *dst, usize dst_len) {
+  return br_byte_buffer_read((br_byte_buffer *)context, dst, dst_len);
+}
+
+static br_io_result br__byte_buffer_write_adapter(void *context, const void *src, usize src_len) {
+  if (src == NULL && src_len > 0u) {
+    return br_io_result_make(0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+
+  return br_byte_buffer_write((br_byte_buffer *)context, br_bytes_view_make(src, src_len));
+}
+
+br_reader br_byte_buffer_as_reader(br_byte_buffer *buffer) {
+  return br_reader_make(buffer, br__byte_buffer_read_adapter);
+}
+
+br_writer br_byte_buffer_as_writer(br_byte_buffer *buffer) {
+  return br_writer_make(buffer, br__byte_buffer_write_adapter);
+}
