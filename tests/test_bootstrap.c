@@ -13,25 +13,25 @@ static void test_heap_allocator(void) {
     br_alloc_result resized;
     int *values;
 
-    alloc = br_allocator_alloc(br_allocator_heap(), sizeof(int) * 4u, _Alignof(int));
+    alloc = br_allocator_alloc(br_allocator_heap(), sizeof(int) * 4u, (usize)_Alignof(int));
     assert(alloc.status == BR_STATUS_OK);
     assert(alloc.ptr != NULL);
 
     values = (int *)alloc.ptr;
-    for (size_t i = 0; i < 4u; ++i) {
+    for (usize i = 0; i < 4u; ++i) {
         assert(values[i] == 0);
         values[i] = (int)(i + 1u);
     }
 
-    resized = br_allocator_resize(br_allocator_heap(), values, sizeof(int) * 4u, sizeof(int) * 8u, _Alignof(int));
+    resized = br_allocator_resize(br_allocator_heap(), values, sizeof(int) * 4u, sizeof(int) * 8u, (usize)_Alignof(int));
     assert(resized.status == BR_STATUS_OK);
     assert(resized.ptr != NULL);
 
     values = (int *)resized.ptr;
-    for (size_t i = 0; i < 4u; ++i) {
+    for (usize i = 0; i < 4u; ++i) {
         assert(values[i] == (int)(i + 1u));
     }
-    for (size_t i = 4u; i < 8u; ++i) {
+    for (usize i = 4u; i < 8u; ++i) {
         assert(values[i] == 0);
     }
 
@@ -39,20 +39,20 @@ static void test_heap_allocator(void) {
 }
 
 static void test_arena(void) {
-    unsigned char storage[128];
+    u8 storage[128];
     br_arena arena;
     br_arena_mark mark;
     br_alloc_result first;
     br_alloc_result second;
     br_alloc_result third;
-    uint32_t *value;
+    u32 *value;
 
     br_arena_init(&arena, storage, sizeof(storage));
 
     first = br_arena_alloc(&arena, 16u, 16u);
     assert(first.status == BR_STATUS_OK);
     assert(first.ptr != NULL);
-    assert(((uintptr_t)first.ptr & 15u) == 0u);
+    assert(((uptr)first.ptr & 15u) == 0u);
 
     mark = br_arena_mark_save(&arena);
     second = br_arena_alloc_uninit(&arena, 32u, 8u);
@@ -61,11 +61,11 @@ static void test_arena(void) {
 
     assert(br_arena_rewind(&arena, mark) == BR_STATUS_OK);
 
-    third = br_allocator_alloc(br_arena_allocator(&arena), sizeof(uint32_t), _Alignof(uint32_t));
+    third = br_allocator_alloc(br_arena_allocator(&arena), sizeof(u32), (usize)_Alignof(u32));
     assert(third.status == BR_STATUS_OK);
     assert(third.ptr != NULL);
 
-    value = (uint32_t *)third.ptr;
+    value = (u32 *)third.ptr;
     assert(*value == 0u);
     *value = 0xdeadbeefu;
     assert(*value == 0xdeadbeefu);

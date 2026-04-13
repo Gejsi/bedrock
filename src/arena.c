@@ -1,6 +1,6 @@
 #include <bedrock/arena.h>
 
-static br_alloc_result br__arena_result(void *ptr, size_t size, br_status status) {
+static br_alloc_result br__arena_result(void *ptr, usize size, br_status status) {
     br_alloc_result result;
 
     result.ptr = ptr;
@@ -9,15 +9,15 @@ static br_alloc_result br__arena_result(void *ptr, size_t size, br_status status
     return result;
 }
 
-static uintptr_t br__arena_align_up(uintptr_t value, size_t alignment) {
-    return (value + (uintptr_t)(alignment - 1u)) & ~((uintptr_t)(alignment - 1u));
+static uptr br__arena_align_up(uptr value, usize alignment) {
+    return (value + (uptr)(alignment - 1u)) & ~((uptr)(alignment - 1u));
 }
 
-static br_alloc_result br__arena_alloc(br_arena *arena, size_t size, size_t alignment, int zeroed) {
-    uintptr_t base_addr;
-    uintptr_t aligned_addr;
-    size_t new_offset;
-    size_t start;
+static br_alloc_result br__arena_alloc(br_arena *arena, usize size, usize alignment, int zeroed) {
+    uptr base_addr;
+    uptr aligned_addr;
+    usize new_offset;
+    usize start;
 
     if (arena == NULL) {
         return br__arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
@@ -35,9 +35,9 @@ static br_alloc_result br__arena_alloc(br_arena *arena, size_t size, size_t alig
         return br__arena_result(NULL, 0u, BR_STATUS_OK);
     }
 
-    base_addr = (uintptr_t)arena->buffer;
+    base_addr = (uptr)arena->buffer;
     aligned_addr = br__arena_align_up(base_addr + arena->offset, alignment);
-    start = (size_t)(aligned_addr - base_addr);
+    start = (usize)(aligned_addr - base_addr);
 
     if (start > arena->capacity || size > (arena->capacity - start)) {
         return br__arena_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
@@ -95,12 +95,12 @@ static br_alloc_result br__arena_allocator_fn(void *ctx, const br_alloc_request 
     return br__arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
 }
 
-void br_arena_init(br_arena *arena, void *buffer, size_t capacity) {
+void br_arena_init(br_arena *arena, void *buffer, usize capacity) {
     if (arena == NULL) {
         return;
     }
 
-    arena->buffer = (unsigned char *)buffer;
+    arena->buffer = (u8 *)buffer;
     arena->capacity = capacity;
     arena->offset = 0u;
     arena->peak = 0u;
@@ -134,11 +134,11 @@ br_status br_arena_rewind(br_arena *arena, br_arena_mark mark) {
     return BR_STATUS_OK;
 }
 
-br_alloc_result br_arena_alloc(br_arena *arena, size_t size, size_t alignment) {
+br_alloc_result br_arena_alloc(br_arena *arena, usize size, usize alignment) {
     return br__arena_alloc(arena, size, alignment, 1);
 }
 
-br_alloc_result br_arena_alloc_uninit(br_arena *arena, size_t size, size_t alignment) {
+br_alloc_result br_arena_alloc_uninit(br_arena *arena, usize size, usize alignment) {
     return br__arena_alloc(arena, size, alignment, 0);
 }
 

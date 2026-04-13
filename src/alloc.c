@@ -4,10 +4,10 @@
 
 typedef struct br__heap_header {
     void *base;
-    size_t size;
+    usize size;
 } br__heap_header;
 
-static br_alloc_result br__alloc_result(void *ptr, size_t size, br_status status) {
+static br_alloc_result br__alloc_result(void *ptr, usize size, br_status status) {
     br_alloc_result result;
 
     result.ptr = ptr;
@@ -16,8 +16,8 @@ static br_alloc_result br__alloc_result(void *ptr, size_t size, br_status status
     return result;
 }
 
-static size_t br__normalize_alignment(size_t alignment) {
-    size_t min_alignment = _Alignof(br__heap_header);
+static usize br__normalize_alignment(usize alignment) {
+    usize min_alignment = (usize)_Alignof(br__heap_header);
 
     if (alignment == 0u) {
         alignment = BR_DEFAULT_ALIGNMENT;
@@ -30,16 +30,16 @@ static size_t br__normalize_alignment(size_t alignment) {
     return alignment;
 }
 
-static uintptr_t br__align_up_uintptr(uintptr_t value, size_t alignment) {
-    return (value + (uintptr_t)(alignment - 1u)) & ~((uintptr_t)(alignment - 1u));
+static uptr br__align_up_uintptr(uptr value, usize alignment) {
+    return (value + (uptr)(alignment - 1u)) & ~((uptr)(alignment - 1u));
 }
 
-static br_alloc_result br__heap_alloc(size_t size, size_t alignment, int zeroed) {
+static br_alloc_result br__heap_alloc(usize size, usize alignment, int zeroed) {
     br__heap_header *header;
-    uintptr_t aligned_addr;
-    unsigned char *base;
-    size_t extra;
-    size_t total;
+    uptr aligned_addr;
+    u8 *base;
+    usize extra;
+    usize total;
 
     alignment = br__normalize_alignment(alignment);
     if (!br_is_power_of_two_size(alignment)) {
@@ -56,13 +56,13 @@ static br_alloc_result br__heap_alloc(size_t size, size_t alignment, int zeroed)
     }
 
     total = size + extra;
-    base = zeroed ? (unsigned char *)calloc(1u, total) : (unsigned char *)malloc(total);
+    base = zeroed ? (u8 *)calloc(1u, total) : (u8 *)malloc(total);
     if (base == NULL) {
         return br__alloc_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
     }
 
-    aligned_addr = br__align_up_uintptr((uintptr_t)base + sizeof(br__heap_header), alignment);
-    header = (br__heap_header *)(void *)(aligned_addr - sizeof(br__heap_header));
+    aligned_addr = br__align_up_uintptr((uptr)base + sizeof(br__heap_header), alignment);
+    header = (br__heap_header *)(void *)(aligned_addr - (uptr)sizeof(br__heap_header));
     header->base = base;
     header->size = size;
 
@@ -71,9 +71,9 @@ static br_alloc_result br__heap_alloc(size_t size, size_t alignment, int zeroed)
 
 static br_alloc_result br__heap_resize(
     void *ptr,
-    size_t old_size,
-    size_t new_size,
-    size_t alignment,
+    usize old_size,
+    usize new_size,
+    usize alignment,
     int zeroed
 ) {
     br__heap_header *header;
@@ -168,7 +168,7 @@ br_alloc_result br_allocator_call(br_allocator allocator, const br_alloc_request
     return allocator.fn(allocator.ctx, req);
 }
 
-br_alloc_result br_allocator_alloc(br_allocator allocator, size_t size, size_t alignment) {
+br_alloc_result br_allocator_alloc(br_allocator allocator, usize size, usize alignment) {
     br_alloc_request req;
 
     req.op = BR_ALLOC_OP_ALLOC;
@@ -179,7 +179,7 @@ br_alloc_result br_allocator_alloc(br_allocator allocator, size_t size, size_t a
     return br_allocator_call(allocator, &req);
 }
 
-br_alloc_result br_allocator_alloc_uninit(br_allocator allocator, size_t size, size_t alignment) {
+br_alloc_result br_allocator_alloc_uninit(br_allocator allocator, usize size, usize alignment) {
     br_alloc_request req;
 
     req.op = BR_ALLOC_OP_ALLOC_UNINIT;
@@ -193,9 +193,9 @@ br_alloc_result br_allocator_alloc_uninit(br_allocator allocator, size_t size, s
 br_alloc_result br_allocator_resize(
     br_allocator allocator,
     void *ptr,
-    size_t old_size,
-    size_t new_size,
-    size_t alignment
+    usize old_size,
+    usize new_size,
+    usize alignment
 ) {
     br_alloc_request req;
 
@@ -210,9 +210,9 @@ br_alloc_result br_allocator_resize(
 br_alloc_result br_allocator_resize_uninit(
     br_allocator allocator,
     void *ptr,
-    size_t old_size,
-    size_t new_size,
-    size_t alignment
+    usize old_size,
+    usize new_size,
+    usize alignment
 ) {
     br_alloc_request req;
 
@@ -224,7 +224,7 @@ br_alloc_result br_allocator_resize_uninit(
     return br_allocator_call(allocator, &req);
 }
 
-br_status br_allocator_free(br_allocator allocator, void *ptr, size_t old_size) {
+br_status br_allocator_free(br_allocator allocator, void *ptr, usize old_size) {
     br_alloc_request req;
     br_alloc_result result;
 

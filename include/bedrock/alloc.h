@@ -17,14 +17,14 @@ typedef enum br_alloc_op {
 typedef struct br_alloc_request {
     br_alloc_op op;
     void *ptr;
-    size_t old_size;
-    size_t size;
-    size_t alignment;
+    usize old_size;
+    usize size;
+    usize alignment;
 } br_alloc_request;
 
 typedef struct br_alloc_result {
     void *ptr;
-    size_t size;
+    usize size;
     br_status status;
 } br_alloc_result;
 
@@ -37,23 +37,23 @@ typedef struct br_allocator {
 
 br_alloc_result br_allocator_call(br_allocator allocator, const br_alloc_request *req);
 
-br_alloc_result br_allocator_alloc(br_allocator allocator, size_t size, size_t alignment);
-br_alloc_result br_allocator_alloc_uninit(br_allocator allocator, size_t size, size_t alignment);
+br_alloc_result br_allocator_alloc(br_allocator allocator, usize size, usize alignment);
+br_alloc_result br_allocator_alloc_uninit(br_allocator allocator, usize size, usize alignment);
 br_alloc_result br_allocator_resize(
     br_allocator allocator,
     void *ptr,
-    size_t old_size,
-    size_t new_size,
-    size_t alignment
+    usize old_size,
+    usize new_size,
+    usize alignment
 );
 br_alloc_result br_allocator_resize_uninit(
     br_allocator allocator,
     void *ptr,
-    size_t old_size,
-    size_t new_size,
-    size_t alignment
+    usize old_size,
+    usize new_size,
+    usize alignment
 );
-br_status br_allocator_free(br_allocator allocator, void *ptr, size_t old_size);
+br_status br_allocator_free(br_allocator allocator, void *ptr, usize old_size);
 br_status br_allocator_reset(br_allocator allocator);
 
 br_allocator br_allocator_heap(void);

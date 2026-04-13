@@ -24,6 +24,7 @@ Current direction:
 
 Current implemented bootstrap:
 
+- central short-type aliases in `include/bedrock/types.h`
 - allocator ABI in `include/bedrock/alloc.h` and `src/alloc.c`
 - fixed-buffer arena in `include/bedrock/arena.h` and `src/arena.c`
 - typed vector template in `include/bedrock/template/vec.h`
@@ -34,3 +35,27 @@ Build and test:
 ```sh
 make test
 ```
+
+Build modes:
+
+```sh
+make MODE=debug test
+make MODE=release test
+make MODE=asan test
+make MODE=ubsan test
+```
+
+Convenience targets:
+
+```sh
+make debug
+make release
+make asan
+make ubsan
+```
+
+The `Makefile` discovers `src/**/*.c` and `tests/**/*.c` automatically, so new
+modules and tests do not need to be hardcoded into the build.
+
+If a consumer does not want the short aliases like `u32` and `usize`, they can
+define `BEDROCK_NO_SHORT_TYPES` before including Bedrock headers.
