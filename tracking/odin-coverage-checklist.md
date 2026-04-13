@@ -132,9 +132,9 @@ Current Bedrock files:
 | `strings.Builder` core | `adapted` | `string_builder.h`, `string_builder.c` | Heap-backed and fixed-backing builder landed with write/pop operations. |
 | `strings.Reader` core | `adapted` | `string_reader.h`, `string_reader.c` | Byte and rune read/unread plus seek are implemented. |
 | ptr / cstring conversion helpers | `planned` | none | `string_from_ptr`, `clone_to_cstring`, etc. are not landed. |
-| contains_any / index_any / last_index / last_index_any / index_byte / last_index_byte | `planned` | none | Not landed. |
+| contains_any / index_any / last_index / last_index_any / index_byte / last_index_byte | `done` | `strings.h`, `strings.c` | Implemented. |
 | prefix_length / common_prefix | `planned` | none | Not landed. |
-| join / concatenate / count / repeat | `planned` | none | Not landed. |
+| join / concatenate / count / repeat | `adapted` | `strings.h`, `strings.c` | Implemented as explicit allocating helpers plus substring counting. |
 | replace / remove family | `planned` | none | Not landed. |
 | split family / line split / iterators | `planned` | none | Not landed. |
 | cut / substring helpers | `planned` | none | Not landed. |

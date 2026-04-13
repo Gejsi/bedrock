@@ -87,6 +87,7 @@ bool br_string_has_suffix(br_string_view s, br_string_view suffix);
 Return whether `needle` occurs within `s`.
 */
 bool br_string_contains(br_string_view s, br_string_view needle);
+bool br_string_contains_any(br_string_view s, br_string_view chars);
 
 /*
 Return whether Unicode scalar value `value` occurs within `s`.
@@ -105,17 +106,36 @@ bool br_string_valid(br_string_view s);
 Return the byte offset of `needle` within `s`, or `-1` if it is absent.
 */
 isize br_string_index(br_string_view s, br_string_view needle);
+isize br_string_index_byte(br_string_view s, u8 byte_value);
 
 /*
 Return the byte offset of the first occurrence of rune `value`, or `-1` if it
 is absent.
 */
 isize br_string_index_rune(br_string_view s, br_rune value);
+isize br_string_last_index(br_string_view s, br_string_view needle);
+isize br_string_last_index_byte(br_string_view s, u8 byte_value);
+isize br_string_index_any(br_string_view s, br_string_view chars);
+isize br_string_last_index_any(br_string_view s, br_string_view chars);
+usize br_string_count(br_string_view s, br_string_view needle);
 
 /*
 Return the number of UTF-8 runes in `s`.
 */
 usize br_string_rune_count(br_string_view s);
+
+br_string_result br_string_join(
+    const br_string_view *parts,
+    usize part_count,
+    br_string_view sep,
+    br_allocator allocator
+);
+br_string_result br_string_concat(
+    const br_string_view *parts,
+    usize part_count,
+    br_allocator allocator
+);
+br_string_result br_string_repeat(br_string_view s, usize count, br_allocator allocator);
 
 /*
 Truncate `s` at the first occurrence of byte `byte_value`.
