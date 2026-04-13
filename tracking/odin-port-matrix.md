@@ -5,8 +5,9 @@ redesign, and which ones should stay out of scope.
 
 | Odin package | Decision | Notes |
 | --- | --- | --- |
+| `core/unicode/utf8` | partial v1 | Self-contained UTF-8 encode/decode/validate/count foundation landed without vendor dependencies; higher Unicode tables and case folding are still separate work. |
 | `core/bytes` | partial v1 | Slice/view model, buffer, reader, split, and replace/remove family landed; remaining gaps are mostly Unicode/rune-heavy helpers and some convenience APIs. |
-| `core/strings` | v1 | Good fit; string views and builders should be explicit. |
+| `core/strings` | partial v1 | Initial string view/owned string layer landed with UTF-8-aware rune search/count helpers; builder, reader, and broader convenience surface still remain. |
 | `core/io` | v1 | Maps well to function-pointer plus userdata streams. |
 | `core/bufio` | v1 | Good on top of `io`. |
 | `core/encoding/base64` | v1 | Straightforward table-driven code. |
