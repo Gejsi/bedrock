@@ -1,0 +1,314 @@
+#include <bedrock/bytes.h>
+
+static br_bytes_result br__bytes_result(void *data, usize len, br_status status) {
+    br_bytes_result result;
+
+    result.value = br_bytes_make(data, len);
+    result.status = status;
+    return result;
+}
+
+static int br__bytes_contains_byte(br_bytes_view chars, u8 byte_value) {
+    for (usize i = 0; i < chars.len; ++i) {
+        if (chars.data[i] == byte_value) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int br__bytes_add_overflow(usize lhs, usize rhs, usize *out) {
+    if (lhs > SIZE_MAX - rhs) {
+        return 1;
+    }
+
+    *out = lhs + rhs;
+    return 0;
+}
+
+br_status br_bytes_free(br_bytes bytes, br_allocator allocator) {
+    return br_allocator_free(allocator, bytes.data, bytes.len);
+}
+
+br_bytes_result br_bytes_clone(br_bytes_view src, br_allocator allocator) {
+    br_alloc_result alloc;
+
+    if (src.len == 0u) {
+        return br__bytes_result(NULL, 0u, BR_STATUS_OK);
+    }
+
+    alloc = br_allocator_alloc_uninit(allocator, src.len, 1u);
+    if (alloc.status != BR_STATUS_OK) {
+        return br__bytes_result(NULL, 0u, alloc.status);
+    }
+
+    memcpy(alloc.ptr, src.data, src.len);
+    return br__bytes_result(alloc.ptr, src.len, BR_STATUS_OK);
+}
+
+int br_bytes_compare(br_bytes_view lhs, br_bytes_view rhs) {
+    usize common_len = br_min_size(lhs.len, rhs.len);
+    int cmp;
+
+    if (common_len == 0u) {
+        if (lhs.len == rhs.len) {
+            return 0;
+        }
+        return lhs.len < rhs.len ? -1 : 1;
+    }
+
+    cmp = memcmp(lhs.data, rhs.data, common_len);
+    if (cmp < 0) {
+        return -1;
+    }
+    if (cmp > 0) {
+        return 1;
+    }
+    if (lhs.len == rhs.len) {
+        return 0;
+    }
+    return lhs.len < rhs.len ? -1 : 1;
+}
+
+int br_bytes_equal(br_bytes_view lhs, br_bytes_view rhs) {
+    if (lhs.len != rhs.len) {
+        return 0;
+    }
+    if (lhs.len == 0u) {
+        return 1;
+    }
+    return memcmp(lhs.data, rhs.data, lhs.len) == 0;
+}
+
+int br_bytes_has_prefix(br_bytes_view s, br_bytes_view prefix) {
+    if (prefix.len > s.len) {
+        return 0;
+    }
+    if (prefix.len == 0u) {
+        return 1;
+    }
+    return memcmp(s.data, prefix.data, prefix.len) == 0;
+}
+
+int br_bytes_has_suffix(br_bytes_view s, br_bytes_view suffix) {
+    if (suffix.len > s.len) {
+        return 0;
+    }
+    if (suffix.len == 0u) {
+        return 1;
+    }
+    return memcmp(s.data + (s.len - suffix.len), suffix.data, suffix.len) == 0;
+}
+
+int br_bytes_contains(br_bytes_view s, br_bytes_view needle) {
+    return br_bytes_index(s, needle) >= 0;
+}
+
+int br_bytes_contains_any(br_bytes_view s, br_bytes_view chars) {
+    return br_bytes_index_any(s, chars) >= 0;
+}
+
+isize br_bytes_index_byte(br_bytes_view s, u8 byte_value) {
+    const void *ptr = memchr(s.data, byte_value, s.len);
+
+    if (ptr == NULL) {
+        return -1;
+    }
+
+    return (isize)((const u8 *)ptr - s.data);
+}
+
+isize br_bytes_last_index_byte(br_bytes_view s, u8 byte_value) {
+    for (usize i = s.len; i > 0u; --i) {
+        if (s.data[i - 1u] == byte_value) {
+            return (isize)(i - 1u);
+        }
+    }
+
+    return -1;
+}
+
+isize br_bytes_index(br_bytes_view s, br_bytes_view needle) {
+    if (needle.len == 0u) {
+        return 0;
+    }
+    if (needle.len == 1u) {
+        return br_bytes_index_byte(s, needle.data[0]);
+    }
+    if (needle.len > s.len) {
+        return -1;
+    }
+    if (needle.len == s.len) {
+        return br_bytes_equal(s, needle) ? 0 : -1;
+    }
+
+    for (usize i = 0; i <= s.len - needle.len; ++i) {
+        if (s.data[i] == needle.data[0] &&
+            memcmp(s.data + i, needle.data, needle.len) == 0) {
+            return (isize)i;
+        }
+    }
+
+    return -1;
+}
+
+isize br_bytes_last_index(br_bytes_view s, br_bytes_view needle) {
+    if (needle.len == 0u) {
+        return (isize)s.len;
+    }
+    if (needle.len == 1u) {
+        return br_bytes_last_index_byte(s, needle.data[0]);
+    }
+    if (needle.len > s.len) {
+        return -1;
+    }
+    if (needle.len == s.len) {
+        return br_bytes_equal(s, needle) ? 0 : -1;
+    }
+
+    for (usize i = s.len - needle.len + 1u; i > 0u; --i) {
+        usize pos = i - 1u;
+        if (s.data[pos] == needle.data[0] &&
+            memcmp(s.data + pos, needle.data, needle.len) == 0) {
+            return (isize)pos;
+        }
+    }
+
+    return -1;
+}
+
+isize br_bytes_index_any(br_bytes_view s, br_bytes_view chars) {
+    if (chars.len == 0u) {
+        return -1;
+    }
+
+    for (usize i = 0; i < s.len; ++i) {
+        if (br__bytes_contains_byte(chars, s.data[i])) {
+            return (isize)i;
+        }
+    }
+
+    return -1;
+}
+
+br_bytes_view br_bytes_truncate_to_byte(br_bytes_view s, u8 byte_value) {
+    isize index = br_bytes_index_byte(s, byte_value);
+
+    if (index < 0) {
+        return s;
+    }
+
+    return br_bytes_view_make(s.data, (usize)index);
+}
+
+br_bytes_view br_bytes_trim_prefix(br_bytes_view s, br_bytes_view prefix) {
+    if (br_bytes_has_prefix(s, prefix)) {
+        return br_bytes_view_make(s.data + prefix.len, s.len - prefix.len);
+    }
+
+    return s;
+}
+
+br_bytes_view br_bytes_trim_suffix(br_bytes_view s, br_bytes_view suffix) {
+    if (br_bytes_has_suffix(s, suffix)) {
+        return br_bytes_view_make(s.data, s.len - suffix.len);
+    }
+
+    return s;
+}
+
+br_bytes_result br_bytes_join(
+    const br_bytes_view *parts,
+    usize part_count,
+    br_bytes_view sep,
+    br_allocator allocator
+) {
+    br_alloc_result alloc;
+    usize total = 0u;
+    usize offset = 0u;
+
+    if (part_count == 0u) {
+        return br__bytes_result(NULL, 0u, BR_STATUS_OK);
+    }
+    if (parts == NULL) {
+        return br__bytes_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+    }
+
+    for (usize i = 0; i < part_count; ++i) {
+        if (br__bytes_add_overflow(total, parts[i].len, &total)) {
+            return br__bytes_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+        }
+    }
+
+    if (part_count > 1u) {
+        usize sep_total;
+
+        if (sep.len > 0u && (part_count - 1u) > (SIZE_MAX / sep.len)) {
+            return br__bytes_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+        }
+        sep_total = sep.len * (part_count - 1u);
+        if (br__bytes_add_overflow(total, sep_total, &total)) {
+            return br__bytes_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+        }
+    }
+
+    if (total == 0u) {
+        return br__bytes_result(NULL, 0u, BR_STATUS_OK);
+    }
+
+    alloc = br_allocator_alloc_uninit(allocator, total, 1u);
+    if (alloc.status != BR_STATUS_OK) {
+        return br__bytes_result(NULL, 0u, alloc.status);
+    }
+
+    for (usize i = 0; i < part_count; ++i) {
+        if (i > 0u && sep.len > 0u) {
+            memcpy((u8 *)alloc.ptr + offset, sep.data, sep.len);
+            offset += sep.len;
+        }
+        if (parts[i].len > 0u) {
+            memcpy((u8 *)alloc.ptr + offset, parts[i].data, parts[i].len);
+            offset += parts[i].len;
+        }
+    }
+
+    return br__bytes_result(alloc.ptr, total, BR_STATUS_OK);
+}
+
+br_bytes_result br_bytes_concat(
+    const br_bytes_view *parts,
+    usize part_count,
+    br_allocator allocator
+) {
+    return br_bytes_join(parts, part_count, br_bytes_view_make(NULL, 0u), allocator);
+}
+
+br_bytes_result br_bytes_repeat(br_bytes_view s, usize count, br_allocator allocator) {
+    br_alloc_result alloc;
+    usize total;
+    usize copied;
+
+    if (count == 0u || s.len == 0u) {
+        return br__bytes_result(NULL, 0u, BR_STATUS_OK);
+    }
+    if (count > (SIZE_MAX / s.len)) {
+        return br__bytes_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+    }
+
+    total = s.len * count;
+    alloc = br_allocator_alloc_uninit(allocator, total, 1u);
+    if (alloc.status != BR_STATUS_OK) {
+        return br__bytes_result(NULL, 0u, alloc.status);
+    }
+
+    memcpy(alloc.ptr, s.data, s.len);
+    copied = s.len;
+    while (copied < total) {
+        usize chunk = br_min_size(copied, total - copied);
+        memcpy((u8 *)alloc.ptr + copied, alloc.ptr, chunk);
+        copied += chunk;
+    }
+
+    return br__bytes_result(alloc.ptr, total, BR_STATUS_OK);
+}

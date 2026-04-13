@@ -27,8 +27,9 @@ Current implemented bootstrap:
 - central short-type aliases in `include/bedrock/types.h`
 - allocator ABI in `include/bedrock/alloc.h` and `src/alloc.c`
 - fixed-buffer arena in `include/bedrock/arena.h` and `src/arena.c`
+- `bytes` slice/view helpers in `include/bedrock/bytes.h` and `src/bytes.c`
 - typed vector template in `include/bedrock/template/vec.h`
-- smoke test in `tests/test_bootstrap.c`
+- smoke tests in `tests/test_bootstrap.c` and `tests/test_bytes.c`
 
 Build and test:
 
