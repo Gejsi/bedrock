@@ -21,6 +21,30 @@ static br_bytes_view_list_result br__bytes_view_list_result(
     return result;
 }
 
+static br_bytes_rewrite_result br__bytes_rewrite_alias_result(br_bytes_view value) {
+    br_bytes_rewrite_result result;
+
+    result.value = value;
+    result.owned = br_bytes_make(NULL, 0u);
+    result.allocated = 0;
+    result.status = BR_STATUS_OK;
+    return result;
+}
+
+static br_bytes_rewrite_result br__bytes_rewrite_owned_result(
+    void *data,
+    usize len,
+    br_status status
+) {
+    br_bytes_rewrite_result result;
+
+    result.owned = br_bytes_make(data, len);
+    result.value = br_bytes_view_from_bytes(result.owned);
+    result.allocated = status == BR_STATUS_OK;
+    result.status = status;
+    return result;
+}
+
 static int br__bytes_contains_byte(br_bytes_view chars, u8 byte_value) {
     for (usize i = 0; i < chars.len; ++i) {
         if (chars.data[i] == byte_value) {
@@ -46,6 +70,13 @@ br_status br_bytes_free(br_bytes bytes, br_allocator allocator) {
 
 br_status br_bytes_view_list_free(br_bytes_view_list list, br_allocator allocator) {
     return br_allocator_free(allocator, list.data, list.len * sizeof(br_bytes_view));
+}
+
+br_status br_bytes_rewrite_free(br_bytes_rewrite_result result, br_allocator allocator) {
+    if (!result.allocated) {
+        return BR_STATUS_OK;
+    }
+    return br_bytes_free(result.owned, allocator);
 }
 
 br_bytes_result br_bytes_clone(br_bytes_view src, br_allocator allocator) {
@@ -448,4 +479,123 @@ br_bytes_view_list_result br_bytes_split_after_n(
     br_allocator allocator
 ) {
     return br__bytes_split_impl(s, sep, sep.len, n, allocator);
+}
+
+br_bytes_rewrite_result br_bytes_replace(
+    br_bytes_view s,
+    br_bytes_view old_bytes,
+    br_bytes_view new_bytes,
+    isize n,
+    br_allocator allocator
+) {
+    br_alloc_result alloc;
+    isize match_count;
+    isize replace_count;
+    usize output_len;
+    usize start = 0u;
+    usize write_offset = 0u;
+
+    if ((old_bytes.len == new_bytes.len &&
+         (old_bytes.len == 0u ||
+          (old_bytes.data != NULL &&
+           new_bytes.data != NULL &&
+           memcmp(old_bytes.data, new_bytes.data, old_bytes.len) == 0))) ||
+        n == 0) {
+        return br__bytes_rewrite_alias_result(s);
+    }
+
+    match_count = br_bytes_count(s, old_bytes);
+    if (match_count == 0) {
+        return br__bytes_rewrite_alias_result(s);
+    }
+
+    replace_count = match_count;
+    if (n >= 0 && n < replace_count) {
+        replace_count = n;
+    }
+
+    if (new_bytes.len >= old_bytes.len) {
+        usize extra_per_match = new_bytes.len - old_bytes.len;
+        if ((usize)replace_count > 0u && extra_per_match > SIZE_MAX / (usize)replace_count) {
+            return br__bytes_rewrite_owned_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+        }
+        if (s.len > SIZE_MAX - (extra_per_match * (usize)replace_count)) {
+            return br__bytes_rewrite_owned_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+        }
+        output_len = s.len + (extra_per_match * (usize)replace_count);
+    } else {
+        output_len = s.len - ((old_bytes.len - new_bytes.len) * (usize)replace_count);
+    }
+
+    if (output_len == 0u) {
+        return br__bytes_rewrite_owned_result(NULL, 0u, BR_STATUS_OK);
+    }
+
+    alloc = br_allocator_alloc_uninit(allocator, output_len, 1u);
+    if (alloc.status != BR_STATUS_OK) {
+        return br__bytes_rewrite_owned_result(NULL, 0u, alloc.status);
+    }
+
+    for (isize i = 0; i < replace_count; ++i) {
+        usize split_at;
+        usize next_start;
+
+        if (old_bytes.len == 0u) {
+            split_at = start;
+            if (i > 0 && split_at < s.len) {
+                split_at += 1u;
+            }
+            next_start = split_at;
+        } else {
+            isize local_index = br_bytes_index(
+                br_bytes_view_make(s.data + start, s.len - start),
+                old_bytes
+            );
+            split_at = start + (usize)local_index;
+            next_start = split_at + old_bytes.len;
+        }
+
+        if (split_at > start) {
+            memcpy((u8 *)alloc.ptr + write_offset, s.data + start, split_at - start);
+            write_offset += split_at - start;
+        }
+        if (new_bytes.len > 0u) {
+            memcpy((u8 *)alloc.ptr + write_offset, new_bytes.data, new_bytes.len);
+            write_offset += new_bytes.len;
+        }
+        start = next_start;
+    }
+
+    if (start < s.len) {
+        memcpy((u8 *)alloc.ptr + write_offset, s.data + start, s.len - start);
+        write_offset += s.len - start;
+    }
+
+    return br__bytes_rewrite_owned_result(alloc.ptr, write_offset, BR_STATUS_OK);
+}
+
+br_bytes_rewrite_result br_bytes_replace_all(
+    br_bytes_view s,
+    br_bytes_view old_bytes,
+    br_bytes_view new_bytes,
+    br_allocator allocator
+) {
+    return br_bytes_replace(s, old_bytes, new_bytes, -1, allocator);
+}
+
+br_bytes_rewrite_result br_bytes_remove(
+    br_bytes_view s,
+    br_bytes_view key,
+    isize n,
+    br_allocator allocator
+) {
+    return br_bytes_replace(s, key, br_bytes_view_make(NULL, 0u), n, allocator);
+}
+
+br_bytes_rewrite_result br_bytes_remove_all(
+    br_bytes_view s,
+    br_bytes_view key,
+    br_allocator allocator
+) {
+    return br_bytes_remove(s, key, -1, allocator);
 }

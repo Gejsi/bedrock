@@ -153,10 +153,71 @@ static void test_bytes_split_helpers(void) {
     assert(split_n.value.len == 0u);
 }
 
+static void test_bytes_replace_helpers(void) {
+    br_bytes_rewrite_result replaced;
+    br_bytes_rewrite_result replaced_n;
+    br_bytes_rewrite_result removed;
+    br_bytes_rewrite_result noop;
+    br_bytes_rewrite_result empty_old;
+
+    replaced = br_bytes_replace_all(
+        BR_BYTES_LIT("alpha,beta,gamma"),
+        BR_BYTES_LIT(","),
+        BR_BYTES_LIT("|"),
+        br_allocator_heap()
+    );
+    assert(replaced.status == BR_STATUS_OK);
+    assert(replaced.allocated);
+    assert(br_bytes_equal(replaced.value, BR_BYTES_LIT("alpha|beta|gamma")));
+    assert(br_bytes_rewrite_free(replaced, br_allocator_heap()) == BR_STATUS_OK);
+
+    replaced_n = br_bytes_replace(
+        BR_BYTES_LIT("foofoofoo"),
+        BR_BYTES_LIT("foo"),
+        BR_BYTES_LIT("x"),
+        2,
+        br_allocator_heap()
+    );
+    assert(replaced_n.status == BR_STATUS_OK);
+    assert(replaced_n.allocated);
+    assert(br_bytes_equal(replaced_n.value, BR_BYTES_LIT("xxfoo")));
+    assert(br_bytes_rewrite_free(replaced_n, br_allocator_heap()) == BR_STATUS_OK);
+
+    removed = br_bytes_remove_all(BR_BYTES_LIT("a-b-c"), BR_BYTES_LIT("-"), br_allocator_heap());
+    assert(removed.status == BR_STATUS_OK);
+    assert(removed.allocated);
+    assert(br_bytes_equal(removed.value, BR_BYTES_LIT("abc")));
+    assert(br_bytes_rewrite_free(removed, br_allocator_heap()) == BR_STATUS_OK);
+
+    noop = br_bytes_replace_all(
+        BR_BYTES_LIT("unchanged"),
+        BR_BYTES_LIT("zzz"),
+        BR_BYTES_LIT("x"),
+        br_allocator_heap()
+    );
+    assert(noop.status == BR_STATUS_OK);
+    assert(!noop.allocated);
+    assert(br_bytes_equal(noop.value, BR_BYTES_LIT("unchanged")));
+    assert(br_bytes_rewrite_free(noop, br_allocator_heap()) == BR_STATUS_OK);
+
+    empty_old = br_bytes_replace(
+        BR_BYTES_LIT("ab"),
+        BR_BYTES_LIT(""),
+        BR_BYTES_LIT("."),
+        -1,
+        br_allocator_heap()
+    );
+    assert(empty_old.status == BR_STATUS_OK);
+    assert(empty_old.allocated);
+    assert(br_bytes_equal(empty_old.value, BR_BYTES_LIT(".a.b.")));
+    assert(br_bytes_rewrite_free(empty_old, br_allocator_heap()) == BR_STATUS_OK);
+}
+
 int main(void) {
     test_bytes_compare_and_search();
     test_bytes_views();
     test_bytes_allocating_helpers();
     test_bytes_split_helpers();
+    test_bytes_replace_helpers();
     return 0;
 }

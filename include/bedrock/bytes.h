@@ -30,6 +30,13 @@ typedef struct br_bytes_view_list_result {
     br_status status;
 } br_bytes_view_list_result;
 
+typedef struct br_bytes_rewrite_result {
+    br_bytes_view value;
+    br_bytes owned;
+    int allocated;
+    br_status status;
+} br_bytes_rewrite_result;
+
 #define BR_BYTES_LIT(s) br_bytes_view_make((const void *)(s), sizeof(s) - 1u)
 
 static inline br_bytes br_bytes_make(void *data, usize len) {
@@ -58,6 +65,7 @@ static inline br_bytes_view br_bytes_view_from_cstr(const char *s) {
 
 br_status br_bytes_free(br_bytes bytes, br_allocator allocator);
 br_status br_bytes_view_list_free(br_bytes_view_list list, br_allocator allocator);
+br_status br_bytes_rewrite_free(br_bytes_rewrite_result result, br_allocator allocator);
 br_bytes_result br_bytes_clone(br_bytes_view src, br_allocator allocator);
 
 int br_bytes_compare(br_bytes_view lhs, br_bytes_view rhs);
@@ -118,6 +126,41 @@ br_bytes_view_list_result br_bytes_split_after_n(
     br_bytes_view s,
     br_bytes_view sep,
     isize n,
+    br_allocator allocator
+);
+
+/*
+Replace up to `n` occurrences of `old_bytes` with `new_bytes`.
+
+If no rewrite is needed, `allocated` will be false and `value` will alias the
+original input. If a rewrite allocates, `allocated` will be true, `owned` will
+hold the allocation, and `value` will view that owned storage.
+
+This first C pass is byte-oriented. When `old_bytes` is empty, replacements are
+inserted at byte boundaries rather than Unicode rune boundaries.
+*/
+br_bytes_rewrite_result br_bytes_replace(
+    br_bytes_view s,
+    br_bytes_view old_bytes,
+    br_bytes_view new_bytes,
+    isize n,
+    br_allocator allocator
+);
+br_bytes_rewrite_result br_bytes_replace_all(
+    br_bytes_view s,
+    br_bytes_view old_bytes,
+    br_bytes_view new_bytes,
+    br_allocator allocator
+);
+br_bytes_rewrite_result br_bytes_remove(
+    br_bytes_view s,
+    br_bytes_view key,
+    isize n,
+    br_allocator allocator
+);
+br_bytes_rewrite_result br_bytes_remove_all(
+    br_bytes_view s,
+    br_bytes_view key,
     br_allocator allocator
 );
 
