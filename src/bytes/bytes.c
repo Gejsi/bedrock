@@ -1,4 +1,5 @@
 #include <bedrock/bytes/bytes.h>
+#include <bedrock/unicode/utf8.h>
 
 static br_bytes_result br__bytes_result(void *data, usize len, br_status status) {
   br_bytes_result result;
@@ -237,7 +238,7 @@ isize br_bytes_count(br_bytes_view s, br_bytes_view needle) {
   isize index;
 
   if (needle.len == 0u) {
-    return (isize)s.len + 1;
+    return (isize)br_utf8_rune_count(s) + 1;
   }
   if (needle.len == 1u) {
     for (usize i = 0; i < s.len; ++i) {
@@ -379,11 +380,38 @@ static br_bytes_view_list_result br__bytes_split_impl(
   usize target_count;
   usize part_index = 0u;
 
-  if (sep.len == 0u) {
-    return br__bytes_view_list_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
-  }
   if (n == 0) {
     return br__bytes_view_list_result(NULL, 0u, BR_STATUS_OK);
+  }
+
+  if (sep.len == 0u) {
+    target_count = br_utf8_rune_count(s);
+    if (n >= 0 && (usize)n < target_count) {
+      target_count = (usize)n;
+    }
+    if (target_count == 0u) {
+      return br__bytes_view_list_result(NULL, 0u, BR_STATUS_OK);
+    }
+
+    alloc = br_allocator_alloc_uninit(
+      allocator, target_count * sizeof(br_bytes_view), _Alignof(br_bytes_view));
+    if (alloc.status != BR_STATUS_OK) {
+      return br__bytes_view_list_result(NULL, 0u, alloc.status);
+    }
+
+    parts = alloc.ptr;
+    for (; part_index + 1u < target_count; ++part_index) {
+      br_utf8_decode_result decoded;
+
+      decoded = br_utf8_decode(s);
+      if (decoded.width == 0u) {
+        break;
+      }
+      parts[part_index] = br_bytes_view_make(s.data, decoded.width);
+      s = br_bytes_view_make(s.data + decoded.width, s.len - decoded.width);
+    }
+    parts[part_index] = s;
+    return br__bytes_view_list_result(parts, part_index + 1u, BR_STATUS_OK);
   }
 
   if (n < 0) {
@@ -502,7 +530,12 @@ br_bytes_rewrite_result br_bytes_replace(br_bytes_view s,
     if (old_bytes.len == 0u) {
       split_at = start;
       if (i > 0 && split_at < s.len) {
-        split_at += 1u;
+        br_utf8_decode_result decoded;
+
+        decoded = br_utf8_decode(br_bytes_view_make(s.data + start, s.len - start));
+        if (decoded.width > 0u) {
+          split_at += decoded.width;
+        }
       }
       next_start = split_at;
     } else {

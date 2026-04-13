@@ -95,11 +95,10 @@ br_bytes_concat(const br_bytes_view *parts, usize part_count, br_allocator alloc
 br_bytes_result br_bytes_repeat(br_bytes_view s, usize count, br_allocator allocator);
 
 /*
-Split `s` around a non-empty byte separator.
+Split `s` around separator `sep`.
 
-This follows the broad shape of Odin's `split` family, but this first C pass is
-strictly byte-oriented: an empty separator is rejected instead of triggering the
-Unicode-aware rune splitting behavior Odin supports with `nil`.
+Like Odin's `bytes.split` family, an empty separator splits on UTF-8 rune
+boundaries rather than being rejected.
 */
 br_bytes_view_list_result
 br_bytes_split(br_bytes_view s, br_bytes_view sep, br_allocator allocator);
@@ -117,8 +116,8 @@ If no rewrite is needed, `allocated` will be false and `value` will alias the
 original input. If a rewrite allocates, `allocated` will be true, `owned` will
 hold the allocation, and `value` will view that owned storage.
 
-This first C pass is byte-oriented. When `old_bytes` is empty, replacements are
-inserted at byte boundaries rather than Unicode rune boundaries.
+When `old_bytes` is empty, replacements are inserted at UTF-8 rune boundaries,
+following Odin's `bytes.replace` semantics.
 */
 br_bytes_rewrite_result br_bytes_replace(br_bytes_view s,
                                          br_bytes_view old_bytes,

@@ -15,6 +15,8 @@ static void test_bytes_compare_and_search(void) {
   br_bytes_view abc = BR_BYTES_LIT("abc");
   br_bytes_view abcabc = BR_BYTES_LIT("abcabc");
   br_bytes_view empty = br_bytes_view_make(NULL, 0u);
+  static const u8 utf8_name[] = {'a', 'b', 'c', 0xc3u, 0xa4u, 'd', 'e', 'f'};
+  br_bytes_view utf8 = br_bytes_view_make(utf8_name, BR_ARRAY_COUNT(utf8_name));
 
   assert(br_bytes_compare(abc, BR_BYTES_LIT("abc")) == 0);
   assert(br_bytes_compare(abc, BR_BYTES_LIT("abd")) < 0);
@@ -46,6 +48,7 @@ static void test_bytes_compare_and_search(void) {
   assert(br_bytes_count(abcabc, BR_BYTES_LIT("abc")) == 2);
   assert(br_bytes_count(abcabc, BR_BYTES_LIT("b")) == 2);
   assert(br_bytes_count(abcabc, empty) == 7);
+  assert(br_bytes_count(utf8, empty) == 8);
 }
 
 static void test_bytes_views(void) {
@@ -103,11 +106,14 @@ static void test_bytes_allocating_helpers(void) {
 }
 
 static void test_bytes_split_helpers(void) {
+  static const u8 utf8_name[] = {'a', 'b', 'c', 0xc3u, 0xa4u, 'd', 'e', 'f'};
+  br_bytes_view utf8 = br_bytes_view_make(utf8_name, BR_ARRAY_COUNT(utf8_name));
   br_bytes_view_list_result split;
   br_bytes_view_list_result split_n;
   br_bytes_view_list_result split_after;
   br_bytes_view_list_result split_after_n;
-  br_bytes_view_list_result invalid;
+  br_bytes_view_list_result rune_split;
+  br_bytes_view_list_result rune_split_n;
   const br_bytes_view expected_split[] = {
     BR_BYTES_LIT("alpha"),
     BR_BYTES_LIT("beta"),
@@ -125,6 +131,20 @@ static void test_bytes_split_helpers(void) {
   const br_bytes_view expected_split_after_n[] = {
     BR_BYTES_LIT("alpha,"),
     BR_BYTES_LIT("beta,gamma"),
+  };
+  const br_bytes_view expected_rune_split[] = {
+    BR_BYTES_LIT("a"),
+    BR_BYTES_LIT("b"),
+    BR_BYTES_LIT("c"),
+    br_bytes_view_make(utf8_name + 3, 2u),
+    BR_BYTES_LIT("d"),
+    BR_BYTES_LIT("e"),
+    BR_BYTES_LIT("f"),
+  };
+  const br_bytes_view expected_rune_split_n[] = {
+    BR_BYTES_LIT("a"),
+    BR_BYTES_LIT("b"),
+    br_bytes_view_make(utf8_name + 2, BR_ARRAY_COUNT(utf8_name) - 2u),
   };
 
   split = br_bytes_split(BR_BYTES_LIT("alpha,beta,gamma"), BR_BYTES_LIT(","), br_allocator_heap());
@@ -152,10 +172,17 @@ static void test_bytes_split_helpers(void) {
     split_after_n.value, expected_split_after_n, BR_ARRAY_COUNT(expected_split_after_n));
   assert(br_bytes_view_list_free(split_after_n.value, br_allocator_heap()) == BR_STATUS_OK);
 
-  invalid = br_bytes_split(BR_BYTES_LIT("abc"), BR_BYTES_LIT(""), br_allocator_heap());
-  assert(invalid.status == BR_STATUS_INVALID_ARGUMENT);
-  assert(invalid.value.data == NULL);
-  assert(invalid.value.len == 0u);
+  rune_split = br_bytes_split(utf8, BR_BYTES_LIT(""), br_allocator_heap());
+  assert(rune_split.status == BR_STATUS_OK);
+  assert_bytes_view_list_eq(
+    rune_split.value, expected_rune_split, BR_ARRAY_COUNT(expected_rune_split));
+  assert(br_bytes_view_list_free(rune_split.value, br_allocator_heap()) == BR_STATUS_OK);
+
+  rune_split_n = br_bytes_split_n(utf8, BR_BYTES_LIT(""), 3, br_allocator_heap());
+  assert(rune_split_n.status == BR_STATUS_OK);
+  assert_bytes_view_list_eq(
+    rune_split_n.value, expected_rune_split_n, BR_ARRAY_COUNT(expected_rune_split_n));
+  assert(br_bytes_view_list_free(rune_split_n.value, br_allocator_heap()) == BR_STATUS_OK);
 
   split_n = br_bytes_split_n(BR_BYTES_LIT("a,b,c"), BR_BYTES_LIT(","), 0, br_allocator_heap());
   assert(split_n.status == BR_STATUS_OK);
@@ -164,6 +191,11 @@ static void test_bytes_split_helpers(void) {
 }
 
 static void test_bytes_replace_helpers(void) {
+  static const u8 utf8_word[] = {'a', 0xc3u, 0xa4u, 'b'};
+  static const u8 expected_inserted[] = {'.', 'a', '.', 0xc3u, 0xa4u, '.', 'b', '.'};
+  br_bytes_view utf8 = br_bytes_view_make(utf8_word, BR_ARRAY_COUNT(utf8_word));
+  br_bytes_view expected_inserted_view =
+    br_bytes_view_make(expected_inserted, BR_ARRAY_COUNT(expected_inserted));
   br_bytes_rewrite_result replaced;
   br_bytes_rewrite_result replaced_n;
   br_bytes_rewrite_result removed;
@@ -197,11 +229,10 @@ static void test_bytes_replace_helpers(void) {
   assert(br_bytes_equal(noop.value, BR_BYTES_LIT("unchanged")));
   assert(br_bytes_rewrite_free(noop, br_allocator_heap()) == BR_STATUS_OK);
 
-  empty_old = br_bytes_replace(
-    BR_BYTES_LIT("ab"), BR_BYTES_LIT(""), BR_BYTES_LIT("."), -1, br_allocator_heap());
+  empty_old = br_bytes_replace(utf8, BR_BYTES_LIT(""), BR_BYTES_LIT("."), -1, br_allocator_heap());
   assert(empty_old.status == BR_STATUS_OK);
   assert(empty_old.allocated);
-  assert(br_bytes_equal(empty_old.value, BR_BYTES_LIT(".a.b.")));
+  assert(br_bytes_equal(empty_old.value, expected_inserted_view));
   assert(br_bytes_rewrite_free(empty_old, br_allocator_heap()) == BR_STATUS_OK);
 }
 

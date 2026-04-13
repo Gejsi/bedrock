@@ -9,7 +9,7 @@ Detailed status for the currently active module ports lives in
 | Odin package | Decision | Notes |
 | --- | --- | --- |
 | `core/unicode/utf8` | partial v1 | Self-contained UTF-8 encode/decode/validate/count foundation landed without vendor dependencies; higher Unicode tables and case folding are still separate work. |
-| `core/bytes` | partial v1 | Slice/view model, buffer, reader, split, and replace/remove family landed; remaining gaps are mostly Unicode/rune-heavy helpers and some convenience APIs. |
+| `core/bytes` | partial v1 | Slice/view model, buffer, reader, split, and replace/remove family landed, including Odin-style rune-aware empty-substring behavior; remaining gaps are mostly explicit rune helpers and some convenience APIs. |
 | `core/strings` | partial v1 | String view/owned string layer, builder, reader, split, and replace/remove helpers landed with UTF-8-aware rune search/count behavior; broader conversion, iterator, and Unicode-table work still remains. |
 | `core/io` | v1 | Maps well to function-pointer plus userdata streams. |
 | `core/bufio` | v1 | Good on top of `io`. |

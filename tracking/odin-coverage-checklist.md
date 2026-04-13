@@ -79,8 +79,8 @@ Current Bedrock files:
 | index / last_index / index_byte / last_index_byte / index_any / count | `done` | `bytes.h`, `bytes.c` | Implemented. |
 | truncate_to_byte / trim_prefix / trim_suffix | `done` | `bytes.h`, `bytes.c` | Implemented. |
 | join / concatenate / repeat | `adapted` | `bytes.h`, `bytes.c` | Implemented as explicit allocating helpers. |
-| split / split_n / split_after / split_after_n | `adapted` | `bytes.h`, `bytes.c` | Implemented, but empty-separator behavior is byte-oriented rather than Odin's Unicode-aware nil behavior. |
-| replace / replace_all / remove / remove_all | `adapted` | `bytes.h`, `bytes.c` | Implemented, but empty-old semantics are byte-oriented. |
+| split / split_n / split_after / split_after_n | `adapted` | `bytes.h`, `bytes.c` | Implemented; empty-separator behavior now follows Odin's rune-aware semantics. |
+| replace / replace_all / remove / remove_all | `adapted` | `bytes.h`, `bytes.c` | Implemented; empty-old replacement now follows Odin's rune-boundary semantics. |
 | `bytes.Buffer` core | `adapted` | `byte_buffer.h`, `byte_buffer.c` | Init, reset, reserve, truncate, write, next, read, read_byte, unread_byte are implemented. |
 | `bytes.Reader` core | `adapted` | `byte_reader.h`, `byte_reader.c` | Init, read, read_at, read_byte, unread_byte, seek are implemented. |
 | rune_count / truncate_to_rune / contains_rune / index_rune | `planned` | none | Not implemented yet. |
