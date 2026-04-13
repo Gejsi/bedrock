@@ -2,6 +2,7 @@
 #define BEDROCK_IO_IO_H
 
 #include <bedrock/base.h>
+#include <bedrock/unicode/utf8.h>
 
 BR_EXTERN_C_BEGIN
 
@@ -36,6 +37,17 @@ typedef struct br_io_size_result {
   i64 size;
   br_status status;
 } br_io_size_result;
+
+typedef struct br_io_byte_result {
+  u8 value;
+  br_status status;
+} br_io_byte_result;
+
+typedef struct br_io_rune_result {
+  br_rune value;
+  usize width;
+  br_status status;
+} br_io_rune_result;
 
 /*
 Seek origin shared by byte and string readers and generic streams.
@@ -116,6 +128,24 @@ static inline br_io_size_result br_io_size_result_make(i64 size, br_status statu
   br_io_size_result result;
 
   result.size = size;
+  result.status = status;
+  return result;
+}
+
+static inline br_io_byte_result br_io_byte_result_make(u8 value, br_status status) {
+  br_io_byte_result result;
+
+  result.value = value;
+  result.status = status;
+  return result;
+}
+
+static inline br_io_rune_result
+br_io_rune_result_make(br_rune value, usize width, br_status status) {
+  br_io_rune_result result;
+
+  result.value = value;
+  result.width = width;
   result.status = status;
   return result;
 }
@@ -216,6 +246,44 @@ br_io_size_result br_size(br_stream stream);
 Query supported stream modes.
 */
 br_io_query_result br_query(br_stream stream);
+
+/*
+Read and return one byte from a generic stream.
+*/
+br_io_byte_result br_read_byte(br_stream stream);
+
+/*
+Write one byte to a generic stream.
+*/
+br_status br_write_byte(br_stream stream, u8 value);
+
+/*
+Read and decode one UTF-8 rune from a generic stream.
+
+The reported width is the number of bytes consumed from the stream. For
+malformed multi-byte prefixes this may be larger than the decoder's logical
+replacement-rune width, because generic streams cannot necessarily unread or
+peek ahead.
+*/
+br_io_rune_result br_read_rune(br_stream stream);
+
+/*
+Write one rune to a generic stream encoded as UTF-8.
+*/
+br_io_result br_write_rune(br_stream stream, br_rune value);
+
+/*
+Copy all remaining bytes from `src` to `dst` through an internal stack buffer.
+EOF from the source is treated as a successful end-of-copy.
+*/
+br_i64_result br_copy(br_stream dst, br_stream src);
+
+/*
+Copy all remaining bytes from `src` to `dst` using caller-provided scratch
+storage. `buffer` must be non-NULL and `buffer_len` must be greater than zero.
+EOF from the source is treated as a successful end-of-copy.
+*/
+br_i64_result br_copy_buffer(br_stream dst, br_stream src, void *buffer, usize buffer_len);
 
 /*
 Compatibility wrappers around the old split-trait helper names.
