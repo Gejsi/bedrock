@@ -1,4 +1,11 @@
-CC ?= cc
+ifeq ($(origin CC), default)
+ifneq ($(shell command -v clang 2>/dev/null),)
+CC := clang
+else
+CC := cc
+endif
+endif
+
 AR ?= ar
 ARFLAGS ?= rcs
 MODE ?= debug
