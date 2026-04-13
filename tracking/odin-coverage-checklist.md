@@ -135,8 +135,9 @@ Current Bedrock files:
 | contains_any / index_any / last_index / last_index_any / index_byte / last_index_byte | `done` | `strings.h`, `strings.c` | Implemented. |
 | prefix_length / common_prefix | `planned` | none | Not landed. |
 | join / concatenate / count / repeat | `adapted` | `strings.h`, `strings.c` | Implemented as explicit allocating helpers plus substring counting. |
-| replace / remove family | `planned` | none | Not landed. |
-| split family / line split / iterators | `planned` | none | Not landed. |
+| replace / remove family | `adapted` | `strings.h`, `strings.c` | Implemented with explicit rewrite results; empty-old replacement follows rune boundaries. |
+| split family | `adapted` | `strings.h`, `strings.c` | Implemented; empty-separator behavior follows Odin's rune-aware string semantics. |
+| line split / iterators | `planned` | none | Not landed. |
 | cut / substring helpers | `planned` | none | Not landed. |
 | equal_fold | `planned` | none | Depends on higher Unicode case-folding support. |
 | trim cutset / trim_space / trim_null | `planned` | none | Not landed. |
@@ -148,6 +149,7 @@ Current Bedrock files:
 
 Summary:
 - `strings` has the core operational slice.
+- Split and rewrite helpers are now part of that slice.
 - It should not yet be described as a broad port of Odin `core/strings`.
-- The next safe growth area is convenience helpers, then `io` adapters, then
-  table-driven Unicode behavior.
+- The next safe growth area is the remaining convenience helpers, then `io`
+  adapters, then table-driven Unicode behavior.

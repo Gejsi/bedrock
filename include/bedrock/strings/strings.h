@@ -20,6 +20,23 @@ typedef struct br_string_result {
   br_status status;
 } br_string_result;
 
+typedef struct br_string_view_list {
+  br_string_view *data;
+  usize len;
+} br_string_view_list;
+
+typedef struct br_string_view_list_result {
+  br_string_view_list value;
+  br_status status;
+} br_string_view_list_result;
+
+typedef struct br_string_rewrite_result {
+  br_string_view value;
+  br_string owned;
+  bool allocated;
+  br_status status;
+} br_string_rewrite_result;
+
 #define BR_STR_LIT(s) br_string_view_make((s), sizeof(s) - 1u)
 
 static inline br_string br_string_make(void *data, usize len) {
@@ -54,6 +71,8 @@ static inline br_bytes_view br_string_view_as_bytes(br_string_view s) {
 Free an owned string allocation.
 */
 br_status br_string_free(br_string string, br_allocator allocator);
+br_status br_string_view_list_free(br_string_view_list list, br_allocator allocator);
+br_status br_string_rewrite_free(br_string_rewrite_result result, br_allocator allocator);
 
 /*
 Clone `s` into an owned string allocation.
@@ -131,6 +150,45 @@ br_string_result br_string_join(const br_string_view *parts,
 br_string_result
 br_string_concat(const br_string_view *parts, usize part_count, br_allocator allocator);
 br_string_result br_string_repeat(br_string_view s, usize count, br_allocator allocator);
+
+/*
+Split `s` around separator `sep`.
+
+Unlike the current byte-oriented `bytes` layer, an empty separator follows
+Odin's string behavior and splits on UTF-8 rune boundaries.
+*/
+br_string_view_list_result
+br_string_split(br_string_view s, br_string_view sep, br_allocator allocator);
+br_string_view_list_result
+br_string_split_n(br_string_view s, br_string_view sep, isize n, br_allocator allocator);
+br_string_view_list_result
+br_string_split_after(br_string_view s, br_string_view sep, br_allocator allocator);
+br_string_view_list_result
+br_string_split_after_n(br_string_view s, br_string_view sep, isize n, br_allocator allocator);
+
+/*
+Replace up to `n` occurrences of `old_string` with `new_string`.
+
+If no rewrite is needed, `allocated` will be false and `value` will alias the
+original input. If a rewrite allocates, `allocated` will be true, `owned` will
+hold the allocation, and `value` will view that owned storage.
+
+When `old_string` is empty, replacements are inserted at UTF-8 rune
+boundaries, following Odin's string semantics.
+*/
+br_string_rewrite_result br_string_replace(br_string_view s,
+                                           br_string_view old_string,
+                                           br_string_view new_string,
+                                           isize n,
+                                           br_allocator allocator);
+br_string_rewrite_result br_string_replace_all(br_string_view s,
+                                               br_string_view old_string,
+                                               br_string_view new_string,
+                                               br_allocator allocator);
+br_string_rewrite_result
+br_string_remove(br_string_view s, br_string_view key, isize n, br_allocator allocator);
+br_string_rewrite_result
+br_string_remove_all(br_string_view s, br_string_view key, br_allocator allocator);
 
 /*
 Truncate `s` at the first occurrence of byte `byte_value`.
