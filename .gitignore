@@ -1,5 +1,6 @@
 .codex
 .codex/
+.cache/
 upstream/typescript-go/
 build/
 out/

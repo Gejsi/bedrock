@@ -7,5 +7,6 @@
 #include <bedrock/arena.h>
 #include <bedrock/bytes.h>
 #include <bedrock/byte_buffer.h>
+#include <bedrock/byte_reader.h>
 
 #endif

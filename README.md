@@ -29,8 +29,9 @@ Current implemented bootstrap:
 - fixed-buffer arena in `include/bedrock/arena.h` and `src/arena.c`
 - `bytes` slice/view helpers in `include/bedrock/bytes.h` and `src/bytes.c`
 - `bytes.Buffer`-style mutable storage in `include/bedrock/byte_buffer.h` and `src/byte_buffer.c`
+- `bytes.Reader`-style read-only cursor in `include/bedrock/byte_reader.h` and `src/byte_reader.c`
 - typed vector template in `include/bedrock/template/vec.h`
-- smoke tests in `tests/test_bootstrap.c`, `tests/test_bytes.c`, and `tests/test_byte_buffer.c`
+- smoke tests in `tests/test_bootstrap.c`, `tests/test_bytes.c`, `tests/test_byte_buffer.c`, and `tests/test_byte_reader.c`
 
 Build and test:
 
