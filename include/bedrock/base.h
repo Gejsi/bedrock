@@ -28,6 +28,12 @@ typedef enum br_status {
     BR_STATUS_INVALID_STATE = 5
 } br_status;
 
+typedef enum br_seek_from {
+    BR_SEEK_FROM_START = 0,
+    BR_SEEK_FROM_CURRENT = 1,
+    BR_SEEK_FROM_END = 2
+} br_seek_from;
+
 static inline bool br_is_power_of_two_size(usize value) {
     return value != 0u && (value & (value - 1u)) == 0u;
 }

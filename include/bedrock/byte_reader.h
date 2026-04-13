@@ -17,12 +17,6 @@ typedef struct br_byte_reader {
     i64 index;
 } br_byte_reader;
 
-typedef enum br_seek_from {
-    BR_SEEK_FROM_START = 0,
-    BR_SEEK_FROM_CURRENT = 1,
-    BR_SEEK_FROM_END = 2
-} br_seek_from;
-
 typedef struct br_byte_reader_io_result {
     usize count;
     br_status status;
