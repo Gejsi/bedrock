@@ -2,6 +2,13 @@
 
 #include <bedrock.h>
 
+static void assert_bytes_view_list_eq(br_bytes_view_list list, const br_bytes_view *expected, usize expected_len) {
+    assert(list.len == expected_len);
+    for (usize i = 0; i < expected_len; ++i) {
+        assert(br_bytes_equal(list.data[i], expected[i]));
+    }
+}
+
 static void test_bytes_compare_and_search(void) {
     br_bytes_view abc = BR_BYTES_LIT("abc");
     br_bytes_view abcabc = BR_BYTES_LIT("abcabc");
@@ -34,6 +41,9 @@ static void test_bytes_compare_and_search(void) {
     assert(br_bytes_index_any(abcabc, BR_BYTES_LIT("xz")) == -1);
     assert(br_bytes_index_any(abcabc, BR_BYTES_LIT("zx")) == -1);
     assert(br_bytes_index_any(abcabc, BR_BYTES_LIT("zb")) == 1);
+    assert(br_bytes_count(abcabc, BR_BYTES_LIT("abc")) == 2);
+    assert(br_bytes_count(abcabc, BR_BYTES_LIT("b")) == 2);
+    assert(br_bytes_count(abcabc, empty) == 7);
 }
 
 static void test_bytes_views(void) {
@@ -87,9 +97,66 @@ static void test_bytes_allocating_helpers(void) {
     assert(failed_clone.status == BR_STATUS_OUT_OF_MEMORY);
 }
 
+static void test_bytes_split_helpers(void) {
+    br_bytes_view_list_result split;
+    br_bytes_view_list_result split_n;
+    br_bytes_view_list_result split_after;
+    br_bytes_view_list_result split_after_n;
+    br_bytes_view_list_result invalid;
+    const br_bytes_view expected_split[] = {
+        BR_BYTES_LIT("alpha"),
+        BR_BYTES_LIT("beta"),
+        BR_BYTES_LIT("gamma"),
+    };
+    const br_bytes_view expected_split_n[] = {
+        BR_BYTES_LIT("alpha"),
+        BR_BYTES_LIT("beta,gamma"),
+    };
+    const br_bytes_view expected_split_after[] = {
+        BR_BYTES_LIT("alpha,"),
+        BR_BYTES_LIT("beta,"),
+        BR_BYTES_LIT("gamma"),
+    };
+    const br_bytes_view expected_split_after_n[] = {
+        BR_BYTES_LIT("alpha,"),
+        BR_BYTES_LIT("beta,gamma"),
+    };
+
+    split = br_bytes_split(BR_BYTES_LIT("alpha,beta,gamma"), BR_BYTES_LIT(","), br_allocator_heap());
+    assert(split.status == BR_STATUS_OK);
+    assert_bytes_view_list_eq(split.value, expected_split, BR_ARRAY_COUNT(expected_split));
+    assert(br_bytes_view_list_free(split.value, br_allocator_heap()) == BR_STATUS_OK);
+
+    split_n = br_bytes_split_n(BR_BYTES_LIT("alpha,beta,gamma"), BR_BYTES_LIT(","), 2, br_allocator_heap());
+    assert(split_n.status == BR_STATUS_OK);
+    assert_bytes_view_list_eq(split_n.value, expected_split_n, BR_ARRAY_COUNT(expected_split_n));
+    assert(br_bytes_view_list_free(split_n.value, br_allocator_heap()) == BR_STATUS_OK);
+
+    split_after = br_bytes_split_after(BR_BYTES_LIT("alpha,beta,gamma"), BR_BYTES_LIT(","), br_allocator_heap());
+    assert(split_after.status == BR_STATUS_OK);
+    assert_bytes_view_list_eq(split_after.value, expected_split_after, BR_ARRAY_COUNT(expected_split_after));
+    assert(br_bytes_view_list_free(split_after.value, br_allocator_heap()) == BR_STATUS_OK);
+
+    split_after_n = br_bytes_split_after_n(BR_BYTES_LIT("alpha,beta,gamma"), BR_BYTES_LIT(","), 2, br_allocator_heap());
+    assert(split_after_n.status == BR_STATUS_OK);
+    assert_bytes_view_list_eq(split_after_n.value, expected_split_after_n, BR_ARRAY_COUNT(expected_split_after_n));
+    assert(br_bytes_view_list_free(split_after_n.value, br_allocator_heap()) == BR_STATUS_OK);
+
+    invalid = br_bytes_split(BR_BYTES_LIT("abc"), BR_BYTES_LIT(""), br_allocator_heap());
+    assert(invalid.status == BR_STATUS_INVALID_ARGUMENT);
+    assert(invalid.value.data == NULL);
+    assert(invalid.value.len == 0u);
+
+    split_n = br_bytes_split_n(BR_BYTES_LIT("a,b,c"), BR_BYTES_LIT(","), 0, br_allocator_heap());
+    assert(split_n.status == BR_STATUS_OK);
+    assert(split_n.value.data == NULL);
+    assert(split_n.value.len == 0u);
+}
+
 int main(void) {
     test_bytes_compare_and_search();
     test_bytes_views();
     test_bytes_allocating_helpers();
+    test_bytes_split_helpers();
     return 0;
 }

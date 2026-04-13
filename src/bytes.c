@@ -8,6 +8,19 @@ static br_bytes_result br__bytes_result(void *data, usize len, br_status status)
     return result;
 }
 
+static br_bytes_view_list_result br__bytes_view_list_result(
+    br_bytes_view *data,
+    usize len,
+    br_status status
+) {
+    br_bytes_view_list_result result;
+
+    result.value.data = data;
+    result.value.len = len;
+    result.status = status;
+    return result;
+}
+
 static int br__bytes_contains_byte(br_bytes_view chars, u8 byte_value) {
     for (usize i = 0; i < chars.len; ++i) {
         if (chars.data[i] == byte_value) {
@@ -29,6 +42,10 @@ static int br__bytes_add_overflow(usize lhs, usize rhs, usize *out) {
 
 br_status br_bytes_free(br_bytes bytes, br_allocator allocator) {
     return br_allocator_free(allocator, bytes.data, bytes.len);
+}
+
+br_status br_bytes_view_list_free(br_bytes_view_list list, br_allocator allocator) {
+    return br_allocator_free(allocator, list.data, list.len * sizeof(br_bytes_view));
 }
 
 br_bytes_result br_bytes_clone(br_bytes_view src, br_allocator allocator) {
@@ -192,6 +209,33 @@ isize br_bytes_index_any(br_bytes_view s, br_bytes_view chars) {
     return -1;
 }
 
+isize br_bytes_count(br_bytes_view s, br_bytes_view needle) {
+    isize count = 0;
+    isize index;
+
+    if (needle.len == 0u) {
+        return (isize)s.len + 1;
+    }
+    if (needle.len == 1u) {
+        for (usize i = 0; i < s.len; ++i) {
+            if (s.data[i] == needle.data[0]) {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
+    while ((index = br_bytes_index(s, needle)) >= 0) {
+        count += 1;
+        s = br_bytes_view_make(
+            s.data + (usize)index + needle.len,
+            s.len - ((usize)index + needle.len)
+        );
+    }
+
+    return count;
+}
+
 br_bytes_view br_bytes_truncate_to_byte(br_bytes_view s, u8 byte_value) {
     isize index = br_bytes_index_byte(s, byte_value);
 
@@ -311,4 +355,97 @@ br_bytes_result br_bytes_repeat(br_bytes_view s, usize count, br_allocator alloc
     }
 
     return br__bytes_result(alloc.ptr, total, BR_STATUS_OK);
+}
+
+static br_bytes_view_list_result br__bytes_split_impl(
+    br_bytes_view s,
+    br_bytes_view sep,
+    usize sep_save,
+    isize n,
+    br_allocator allocator
+) {
+    br_alloc_result alloc;
+    br_bytes_view *parts;
+    usize target_count;
+    usize part_index = 0u;
+
+    if (sep.len == 0u) {
+        return br__bytes_view_list_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+    }
+    if (n == 0) {
+        return br__bytes_view_list_result(NULL, 0u, BR_STATUS_OK);
+    }
+
+    if (n < 0) {
+        target_count = (usize)br_bytes_count(s, sep) + 1u;
+    } else {
+        target_count = (usize)n;
+    }
+
+    if (target_count == 0u) {
+        return br__bytes_view_list_result(NULL, 0u, BR_STATUS_OK);
+    }
+
+    alloc = br_allocator_alloc_uninit(
+        allocator,
+        target_count * sizeof(br_bytes_view),
+        _Alignof(br_bytes_view)
+    );
+    if (alloc.status != BR_STATUS_OK) {
+        return br__bytes_view_list_result(NULL, 0u, alloc.status);
+    }
+
+    parts = alloc.ptr;
+    if (target_count > 0u) {
+        usize remaining_slots = target_count - 1u;
+
+        while (part_index < remaining_slots) {
+            isize split_at = br_bytes_index(s, sep);
+            if (split_at < 0) {
+                break;
+            }
+
+            parts[part_index] = br_bytes_view_make(s.data, (usize)split_at + sep_save);
+            s = br_bytes_view_make(s.data + (usize)split_at + sep.len, s.len - ((usize)split_at + sep.len));
+            part_index += 1u;
+        }
+    }
+
+    parts[part_index] = s;
+    part_index += 1u;
+    return br__bytes_view_list_result(parts, part_index, BR_STATUS_OK);
+}
+
+br_bytes_view_list_result br_bytes_split(
+    br_bytes_view s,
+    br_bytes_view sep,
+    br_allocator allocator
+) {
+    return br__bytes_split_impl(s, sep, 0u, -1, allocator);
+}
+
+br_bytes_view_list_result br_bytes_split_n(
+    br_bytes_view s,
+    br_bytes_view sep,
+    isize n,
+    br_allocator allocator
+) {
+    return br__bytes_split_impl(s, sep, 0u, n, allocator);
+}
+
+br_bytes_view_list_result br_bytes_split_after(
+    br_bytes_view s,
+    br_bytes_view sep,
+    br_allocator allocator
+) {
+    return br__bytes_split_impl(s, sep, sep.len, -1, allocator);
+}
+
+br_bytes_view_list_result br_bytes_split_after_n(
+    br_bytes_view s,
+    br_bytes_view sep,
+    isize n,
+    br_allocator allocator
+) {
+    return br__bytes_split_impl(s, sep, sep.len, n, allocator);
 }
