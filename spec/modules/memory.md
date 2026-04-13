@@ -1,0 +1,116 @@
+# Memory
+
+## Status
+
+`core:mem` is in scope for v1, but only the parts that fit cleanly into C
+without hidden ambient context.
+
+## Keep In V1
+
+- allocator abstraction
+- fixed-buffer arena allocator
+- arena savepoints / rewind markers
+- null allocator
+- panic/fail-fast allocator
+- debug wrappers such as tracking or guard allocators
+
+## Defer
+
+- virtual-memory-backed growing arenas
+- TLSF and other specialized allocators
+- file mapping
+- platform-specific page reservation APIs
+
+Those features are valuable, but they belong after the basic allocator contract
+is stable.
+
+## Proposed Core Allocator Shape
+
+Bedrock should not expose `malloc`-shaped callbacks as the only abstraction.
+Odin's single-dispatch allocator model is better, but the C API should use
+plain request/response structs rather than language magic.
+
+Example direction:
+
+```c
+typedef enum br_alloc_op {
+    BR_ALLOC_OP_ALLOC,
+    BR_ALLOC_OP_ALLOC_UNINIT,
+    BR_ALLOC_OP_RESIZE,
+    BR_ALLOC_OP_RESIZE_UNINIT,
+    BR_ALLOC_OP_FREE,
+    BR_ALLOC_OP_RESET
+} br_alloc_op;
+
+typedef struct br_alloc_request {
+    br_alloc_op op;
+    void *ptr;
+    size_t old_size;
+    size_t size;
+    size_t alignment;
+} br_alloc_request;
+
+typedef struct br_alloc_result {
+    void *ptr;
+    size_t size;
+    int status;
+} br_alloc_result;
+
+typedef br_alloc_result (*br_allocator_fn)(void *ctx, const br_alloc_request *req);
+
+typedef struct br_allocator {
+    br_allocator_fn fn;
+    void *ctx;
+} br_allocator;
+```
+
+The exact spellings can change, but the design intent should not:
+
+- one allocator object
+- one dispatch point
+- explicit op and alignment
+- no hidden global allocator lookup
+
+## Arena Design
+
+The first arena implementation should be a plain fixed-buffer bump allocator.
+
+Needed operations:
+
+- `br_arena_init`
+- `br_arena_alloc`
+- `br_arena_alloc_uninit`
+- `br_arena_mark`
+- `br_arena_rewind`
+- `br_arena_reset`
+
+Important semantics:
+
+- alignment is explicit
+- individual frees are unsupported
+- rewind is only valid to a previously returned mark
+- allocators are not thread-safe unless wrapped explicitly
+
+## Temporary Allocation
+
+Odin gets excellent mileage from temporary allocators because the language helps
+propagate them. C does not.
+
+Bedrock should solve this with explicit arenas and savepoints instead:
+
+- create a scratch arena per subsystem or frame
+- pass the arena explicitly
+- rewind at a clear ownership boundary
+
+This gives most of the practical upside without any hidden thread-local rules.
+
+## Thread Safety
+
+Allocator objects should be non-thread-safe by default.
+
+If callers want sharing, provide wrappers such as:
+
+- `br_locked_allocator`
+- per-thread arenas owned by user code
+
+Do not make every allocator pay synchronization costs by default.
