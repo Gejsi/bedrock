@@ -1,4 +1,4 @@
-#include <bedrock/strings.h>
+#include <bedrock/strings/strings.h>
 
 static br_string_result br__string_result(void *data, usize len, br_status status) {
     br_string_result result;

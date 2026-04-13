@@ -1,4 +1,4 @@
-#include <bedrock/byte_buffer.h>
+#include <bedrock/bytes/buffer.h>
 
 enum {
     BR__BYTE_BUFFER_MIN_CAPACITY = 64

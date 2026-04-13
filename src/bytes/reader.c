@@ -1,4 +1,4 @@
-#include <bedrock/byte_reader.h>
+#include <bedrock/bytes/reader.h>
 
 static br_byte_reader_io_result br__byte_reader_io_result(usize count, br_status status) {
     br_byte_reader_io_result result;

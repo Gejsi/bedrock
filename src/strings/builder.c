@@ -1,4 +1,4 @@
-#include <bedrock/string_builder.h>
+#include <bedrock/strings/builder.h>
 
 enum {
     BR__STRING_BUILDER_MIN_CAPACITY = 64

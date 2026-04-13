@@ -26,10 +26,10 @@ Why this label:
   virtual-memory-backed infrastructure that Bedrock has not started.
 
 Current Bedrock files:
-- `include/bedrock/alloc.h`
-- `include/bedrock/arena.h`
-- `src/alloc.c`
-- `src/arena.c`
+- `include/bedrock/mem/alloc.h`
+- `include/bedrock/mem/arena.h`
+- `src/mem/alloc.c`
+- `src/mem/arena.c`
 
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
@@ -64,12 +64,12 @@ Why this label:
   missing.
 
 Current Bedrock files:
-- `include/bedrock/bytes.h`
-- `include/bedrock/byte_buffer.h`
-- `include/bedrock/byte_reader.h`
-- `src/bytes.c`
-- `src/byte_buffer.c`
-- `src/byte_reader.c`
+- `include/bedrock/bytes/bytes.h`
+- `include/bedrock/bytes/buffer.h`
+- `include/bedrock/bytes/reader.h`
+- `src/bytes/bytes.c`
+- `src/bytes/buffer.c`
+- `src/bytes/reader.c`
 
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
@@ -112,12 +112,12 @@ Why this label:
   package breadth.
 
 Current Bedrock files:
-- `include/bedrock/strings.h`
-- `include/bedrock/string_builder.h`
-- `include/bedrock/string_reader.h`
-- `src/strings.c`
-- `src/string_builder.c`
-- `src/string_reader.c`
+- `include/bedrock/strings/strings.h`
+- `include/bedrock/strings/builder.h`
+- `include/bedrock/strings/reader.h`
+- `src/strings/strings.c`
+- `src/strings/builder.c`
+- `src/strings/reader.c`
 
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |

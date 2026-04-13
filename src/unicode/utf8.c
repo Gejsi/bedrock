@@ -1,4 +1,4 @@
-#include <bedrock/utf8.h>
+#include <bedrock/unicode/utf8.h>
 
 #define BR__UTF8_LOCB ((u8)0x80)
 #define BR__UTF8_HICB ((u8)0xbf)

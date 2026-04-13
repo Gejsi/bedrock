@@ -25,13 +25,18 @@ Current direction:
 Current implemented bootstrap:
 
 - central short-type aliases in `include/bedrock/types.h`
-- allocator ABI in `include/bedrock/alloc.h` and `src/alloc.c`
-- fixed-buffer arena in `include/bedrock/arena.h` and `src/arena.c`
-- `bytes` slice/view helpers in `include/bedrock/bytes.h` and `src/bytes.c`
-- `bytes.Buffer`-style mutable storage in `include/bedrock/byte_buffer.h` and `src/byte_buffer.c`
-- `bytes.Reader`-style read-only cursor in `include/bedrock/byte_reader.h` and `src/byte_reader.c`
+- allocator ABI in `include/bedrock/mem/alloc.h` and `src/mem/alloc.c`
+- fixed-buffer arena in `include/bedrock/mem/arena.h` and `src/mem/arena.c`
+- UTF-8 foundation in `include/bedrock/unicode/utf8.h` and `src/unicode/utf8.c`
+- `bytes` slice/view helpers in `include/bedrock/bytes/bytes.h` and `src/bytes/bytes.c`
+- `bytes.Buffer`-style mutable storage in `include/bedrock/bytes/buffer.h` and `src/bytes/buffer.c`
+- `bytes.Reader`-style read-only cursor in `include/bedrock/bytes/reader.h` and `src/bytes/reader.c`
+- `strings` slice/view helpers in `include/bedrock/strings/strings.h` and `src/strings/strings.c`
+- `strings.Builder`-style mutable storage in `include/bedrock/strings/builder.h` and `src/strings/builder.c`
+- `strings.Reader`-style read-only cursor in `include/bedrock/strings/reader.h` and `src/strings/reader.c`
 - typed vector template in `include/bedrock/template/vec.h`
-- smoke tests in `tests/test_bootstrap.c`, `tests/test_bytes.c`, `tests/test_byte_buffer.c`, and `tests/test_byte_reader.c`
+- compatibility forwarding headers remain at the old flat include paths like `include/bedrock/bytes.h`
+- smoke and module tests live under `tests/`
 
 Build and test:
 

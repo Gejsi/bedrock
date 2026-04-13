@@ -1,4 +1,4 @@
-#include <bedrock/bytes.h>
+#include <bedrock/bytes/bytes.h>
 
 static br_bytes_result br__bytes_result(void *data, usize len, br_status status) {
     br_bytes_result result;

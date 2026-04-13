@@ -1,4 +1,4 @@
-#include <bedrock/string_reader.h>
+#include <bedrock/strings/reader.h>
 
 static br_string_reader_io_result br__string_reader_io_result(usize count, br_status status) {
     br_string_reader_io_result result;
