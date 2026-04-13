@@ -330,22 +330,34 @@ br_status br_byte_buffer_unread_byte(br_byte_buffer *buffer) {
   return BR_STATUS_OK;
 }
 
-static br_io_result br__byte_buffer_read_adapter(void *context, void *dst, usize dst_len) {
-  return br_byte_buffer_read((br_byte_buffer *)context, dst, dst_len);
-}
+static br_i64_result br__byte_buffer_stream_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  br_byte_buffer *buffer;
+  br_byte_buffer_io_result io_result;
+  br_io_mode_set modes;
 
-static br_io_result br__byte_buffer_write_adapter(void *context, const void *src, usize src_len) {
-  if (src == NULL && src_len > 0u) {
-    return br_io_result_make(0u, BR_STATUS_INVALID_ARGUMENT);
+  (void)offset;
+  (void)whence;
+
+  buffer = (br_byte_buffer *)context;
+  switch (mode) {
+    case BR_IO_MODE_READ:
+      io_result = br_byte_buffer_read(buffer, data, data_len);
+      return br_i64_result_make((i64)io_result.count, io_result.status);
+    case BR_IO_MODE_WRITE:
+      io_result = br_byte_buffer_write(buffer, br_bytes_view_make(data, data_len));
+      return br_i64_result_make((i64)io_result.count, io_result.status);
+    case BR_IO_MODE_SIZE:
+      return br_i64_result_make((i64)br_byte_buffer_len(buffer), BR_STATUS_OK);
+    case BR_IO_MODE_QUERY:
+      modes = br_io_mode_bit(BR_IO_MODE_READ) | br_io_mode_bit(BR_IO_MODE_WRITE) |
+              br_io_mode_bit(BR_IO_MODE_SIZE);
+      return br_stream_query_utility(modes);
+    default:
+      return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
   }
-
-  return br_byte_buffer_write((br_byte_buffer *)context, br_bytes_view_make(src, src_len));
 }
 
-br_reader br_byte_buffer_as_reader(br_byte_buffer *buffer) {
-  return br_reader_make(buffer, br__byte_buffer_read_adapter);
-}
-
-br_writer br_byte_buffer_as_writer(br_byte_buffer *buffer) {
-  return br_writer_make(buffer, br__byte_buffer_write_adapter);
+br_stream br_byte_buffer_as_stream(br_byte_buffer *buffer) {
+  return br_stream_make(buffer, br__byte_buffer_stream_proc);
 }

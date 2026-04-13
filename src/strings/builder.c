@@ -290,15 +290,30 @@ br_string_builder_rune_result br_string_builder_pop_rune(br_string_builder *buil
   return br__string_builder_rune_result(decoded.value, decoded.width, BR_STATUS_OK);
 }
 
-static br_io_result
-br__string_builder_write_adapter(void *context, const void *src, usize src_len) {
-  if (src == NULL && src_len > 0u) {
-    return br_io_result_make(0u, BR_STATUS_INVALID_ARGUMENT);
-  }
+static br_i64_result br__string_builder_stream_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  br_string_builder *builder;
+  br_string_builder_io_result io_result;
+  br_io_mode_set modes;
 
-  return br_string_builder_write((br_string_builder *)context, br_string_view_make(src, src_len));
+  (void)offset;
+  (void)whence;
+
+  builder = (br_string_builder *)context;
+  switch (mode) {
+    case BR_IO_MODE_WRITE:
+      io_result = br_string_builder_write(builder, br_string_view_make(data, data_len));
+      return br_i64_result_make((i64)io_result.count, io_result.status);
+    case BR_IO_MODE_SIZE:
+      return br_i64_result_make((i64)br_string_builder_len(builder), BR_STATUS_OK);
+    case BR_IO_MODE_QUERY:
+      modes = br_io_mode_bit(BR_IO_MODE_WRITE) | br_io_mode_bit(BR_IO_MODE_SIZE);
+      return br_stream_query_utility(modes);
+    default:
+      return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+  }
 }
 
-br_writer br_string_builder_as_writer(br_string_builder *builder) {
-  return br_writer_make(builder, br__string_builder_write_adapter);
+br_stream br_string_builder_as_stream(br_string_builder *builder) {
+  return br_stream_make(builder, br__string_builder_stream_proc);
 }

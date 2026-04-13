@@ -46,10 +46,17 @@ br_byte_buffer_byte_result br_byte_buffer_read_byte(br_byte_buffer *buffer);
 br_status br_byte_buffer_unread_byte(br_byte_buffer *buffer);
 
 /*
-Expose this buffer through the generic byte-oriented IO traits.
+Expose this buffer through the generic stream interface.
 */
-br_reader br_byte_buffer_as_reader(br_byte_buffer *buffer);
-br_writer br_byte_buffer_as_writer(br_byte_buffer *buffer);
+br_stream br_byte_buffer_as_stream(br_byte_buffer *buffer);
+
+static inline br_reader br_byte_buffer_as_reader(br_byte_buffer *buffer) {
+  return br_byte_buffer_as_stream(buffer);
+}
+
+static inline br_writer br_byte_buffer_as_writer(br_byte_buffer *buffer) {
+  return br_byte_buffer_as_stream(buffer);
+}
 
 BR_EXTERN_C_END
 

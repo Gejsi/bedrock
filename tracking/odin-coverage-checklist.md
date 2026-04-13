@@ -89,7 +89,7 @@ Current Bedrock files:
 | `bytes.Buffer` rune operations | `planned` | none | `read_rune`, `unread_rune`, `write_rune` not landed. |
 | `bytes.Buffer` random access / stream helpers | `planned` | none | `read_at`, `write_at`, `write_to`, `read_from`, delimiter reads are not landed. |
 | `bytes.Reader` rune operations | `planned` | none | `read_rune`, `unread_rune` not landed. |
-| `bytes.Reader` `io` adapters | `planned` | none | Deferred until Bedrock `io` exists. |
+| `bytes.Reader` `io` adapters | `adapted` | `bytes/reader.h`, `bytes/reader.c` | Exposed as a generic stream with read/read_at/seek/size/query support. |
 | predicate / proc-based scans and trims | `planned` | none | `index_proc`, `trim_left_proc`, etc. not started. |
 | trim cutset / trim_space / trim_null | `planned` | none | Not started. |
 | split iterators / split_multi / fields | `planned` | none | Not started. |
@@ -98,7 +98,7 @@ Current Bedrock files:
 Summary:
 - `bytes` is a real middle slice of the Odin module.
 - It is not near parity.
-- The missing work clusters around Unicode-aware helpers and `io` integration.
+- The missing work clusters around Unicode-aware helpers and additional buffer/reader convenience APIs.
 
 ## `core/strings`
 
@@ -151,18 +151,18 @@ Summary:
 - `strings` has the core operational slice.
 - Split and rewrite helpers are now part of that slice.
 - It should not yet be described as a broad port of Odin `core/strings`.
-- The next safe growth area is the remaining convenience helpers, then `io`
-  adapters, then table-driven Unicode behavior.
+- The next safe growth area is the remaining convenience helpers, then
+  table-driven Unicode behavior.
 
 ## `core/io`
 
 Current label: `partial v1`
 
 Why this label:
-- Bedrock now has a minimal generic IO layer with separate reader, writer, and
-  seeker traits.
-- The in-memory byte and string types can be exposed through those traits.
-- This is intentionally much smaller than Odin's full `core/io` surface.
+- Bedrock now has a minimal generic IO layer built around a single stream proc,
+  closer to Odin's model than the earlier split-trait experiment.
+- The in-memory byte and string types can be exposed through that stream shape.
+- This is intentionally smaller than Odin's full `core/io` surface.
 
 Current Bedrock files:
 - `include/bedrock/io/io.h`
@@ -179,19 +179,19 @@ Current Bedrock files:
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
 | `Seek_From` / shared seek origin | `adapted` | `io.h` | Moved out of `base.h` into the IO module. |
-| generic reader / writer / seeker traits | `adapted` | `io.h`, `io.c` | Minimal `fn + context` traits landed. |
-| shared IO result / seek result types | `done` | `io.h` | Shared across generic IO and concrete adapters. |
-| byte reader adapters | `adapted` | `bytes/reader.h`, `bytes/reader.c` | `bytes.Reader` now exposes generic reader/seeker traits. |
-| byte buffer adapters | `adapted` | `bytes/buffer.h`, `bytes/buffer.c` | `bytes.Buffer` now exposes generic reader/writer traits. |
-| string reader adapters | `adapted` | `strings/reader.h`, `strings/reader.c` | Exposed as byte-oriented generic reader/seeker traits. |
-| string builder adapters | `adapted` | `strings/builder.h`, `strings/builder.c` | Exposed as a byte-oriented generic writer trait. |
-| read-at / write-at generic traits | `planned` | none | Concrete types support some random access, but the generic IO layer does not yet. |
-| close / flush lifecycle traits | `excluded` | none | Intentionally out of the minimal v1 shape. |
+| `Stream_Mode` / mode-set query model | `adapted` | `io.h`, `io.c` | Single stream proc with explicit mode dispatch and query support. |
+| generic stream wrapper and aliases (`Reader`, `Writer`, `Seeker`) | `adapted` | `io.h`, `io.c` | Implemented as one `br_stream` plus alias typedefs. |
+| shared IO result / seek result / size result types | `done` | `io.h` | Shared across generic IO and concrete adapters. |
+| byte reader adapters | `adapted` | `bytes/reader.h`, `bytes/reader.c` | `bytes.Reader` now exposes a stream with read/read_at/seek/size support. |
+| byte buffer adapters | `adapted` | `bytes/buffer.h`, `bytes/buffer.c` | `bytes.Buffer` now exposes a stream with read/write/size support. |
+| string reader adapters | `adapted` | `strings/reader.h`, `strings/reader.c` | Exposed as a stream with read/read_at/seek/size support. |
+| string builder adapters | `adapted` | `strings/builder.h`, `strings/builder.c` | Exposed as a stream with write/size support. |
+| generic `read_at` / `write_at` / `size` fallbacks | `adapted` | `io.c`, `tests/test_io.c` | Falls back through `seek` when a stream does not implement those modes directly. |
+| close / flush / destroy lifecycle operations | `adapted` | `io.h`, `io.c` | Present in the generic stream API; current in-memory streams mostly report unsupported. |
 | buffered IO / scanners / pipes | `planned` | none | Future `bufio` work, not part of the base IO traits. |
 
 Summary:
 - `io` now exists as a real foundational module.
-- The current Bedrock shape is intentionally smaller than Odin's broader IO
-  package.
-- The next growth area is buffered utilities and deciding whether random-access
-  traits belong in the generic layer.
+- Bedrock now follows Odin's single-stream direction more closely than before.
+- The next growth area is higher-level helpers like `read_rune`, `write_rune`,
+  `copy`, and then `bufio`.

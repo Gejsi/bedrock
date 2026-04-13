@@ -123,10 +123,17 @@ br_string_reader_seek_result
 br_string_reader_seek(br_string_reader *reader, i64 offset, br_seek_from whence);
 
 /*
-Expose this reader through the generic byte-oriented IO traits.
+Expose this reader through the generic stream interface.
 */
-br_reader br_string_reader_as_reader(br_string_reader *reader);
-br_seeker br_string_reader_as_seeker(br_string_reader *reader);
+br_stream br_string_reader_as_stream(br_string_reader *reader);
+
+static inline br_reader br_string_reader_as_reader(br_string_reader *reader) {
+  return br_string_reader_as_stream(reader);
+}
+
+static inline br_seeker br_string_reader_as_seeker(br_string_reader *reader) {
+  return br_string_reader_as_stream(reader);
+}
 
 BR_EXTERN_C_END
 

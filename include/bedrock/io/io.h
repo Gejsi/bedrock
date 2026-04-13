@@ -6,7 +6,7 @@
 BR_EXTERN_C_BEGIN
 
 /*
-Shared byte-count plus status result used by Bedrock IO traits.
+Shared byte-count plus status result used by Bedrock IO operations.
 */
 typedef struct br_io_result {
   usize count;
@@ -14,7 +14,15 @@ typedef struct br_io_result {
 } br_io_result;
 
 /*
-Shared seek result used by Bedrock IO traits.
+Shared 64-bit integer plus status result used by stream procedures.
+*/
+typedef struct br_i64_result {
+  i64 value;
+  br_status status;
+} br_i64_result;
+
+/*
+Shared seek result used by Bedrock IO operations.
 */
 typedef struct br_io_seek_result {
   i64 offset;
@@ -22,7 +30,15 @@ typedef struct br_io_seek_result {
 } br_io_seek_result;
 
 /*
-Seek origin shared by byte and string readers and the generic seeker trait.
+Shared size result used by Bedrock IO operations.
+*/
+typedef struct br_io_size_result {
+  i64 size;
+  br_status status;
+} br_io_size_result;
+
+/*
+Seek origin shared by byte and string readers and generic streams.
 */
 typedef enum br_seek_from {
   BR_SEEK_FROM_START = 0,
@@ -30,29 +46,60 @@ typedef enum br_seek_from {
   BR_SEEK_FROM_END = 2
 } br_seek_from;
 
-typedef br_io_result (*br_reader_read_fn)(void *context, void *dst, usize dst_len);
-typedef br_io_result (*br_writer_write_fn)(void *context, const void *src, usize src_len);
-typedef br_io_seek_result (*br_seeker_seek_fn)(void *context, i64 offset, br_seek_from whence);
+/*
+Stream operations follow Odin's single stream proc shape. Unsupported modes
+return `BR_STATUS_NOT_SUPPORTED`.
+*/
+typedef enum br_io_mode {
+  BR_IO_MODE_CLOSE = 0,
+  BR_IO_MODE_FLUSH = 1,
+  BR_IO_MODE_READ = 2,
+  BR_IO_MODE_READ_AT = 3,
+  BR_IO_MODE_WRITE = 4,
+  BR_IO_MODE_WRITE_AT = 5,
+  BR_IO_MODE_SEEK = 6,
+  BR_IO_MODE_SIZE = 7,
+  BR_IO_MODE_DESTROY = 8,
+  BR_IO_MODE_QUERY = 9,
+  BR_IO_MODE_COUNT = 10
+} br_io_mode;
 
-typedef struct br_reader {
-  void *context;
-  br_reader_read_fn read;
-} br_reader;
+typedef u64 br_io_mode_set;
+BR_STATIC_ASSERT(BR_IO_MODE_COUNT <= 64, "br_io_mode_set must fit all io mode bits");
 
-typedef struct br_writer {
-  void *context;
-  br_writer_write_fn write;
-} br_writer;
+typedef struct br_io_query_result {
+  br_io_mode_set modes;
+  br_status status;
+} br_io_query_result;
 
-typedef struct br_seeker {
+typedef br_i64_result (*br_stream_proc)(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence);
+
+typedef struct br_stream {
+  br_stream_proc procedure;
   void *context;
-  br_seeker_seek_fn seek;
-} br_seeker;
+} br_stream;
+
+typedef br_stream br_reader;
+typedef br_stream br_writer;
+typedef br_stream br_closer;
+typedef br_stream br_flusher;
+typedef br_stream br_seeker;
+typedef br_stream br_reader_at;
+typedef br_stream br_writer_at;
 
 static inline br_io_result br_io_result_make(usize count, br_status status) {
   br_io_result result;
 
   result.count = count;
+  result.status = status;
+  return result;
+}
+
+static inline br_i64_result br_i64_result_make(i64 value, br_status status) {
+  br_i64_result result;
+
+  result.value = value;
   result.status = status;
   return result;
 }
@@ -65,56 +112,125 @@ static inline br_io_seek_result br_io_seek_result_make(i64 offset, br_status sta
   return result;
 }
 
-static inline br_reader br_reader_make(void *context, br_reader_read_fn read) {
-  br_reader reader;
+static inline br_io_size_result br_io_size_result_make(i64 size, br_status status) {
+  br_io_size_result result;
 
-  reader.context = context;
-  reader.read = read;
-  return reader;
+  result.size = size;
+  result.status = status;
+  return result;
 }
 
-static inline br_writer br_writer_make(void *context, br_writer_write_fn write) {
-  br_writer writer;
+static inline br_io_query_result br_io_query_result_make(br_io_mode_set modes, br_status status) {
+  br_io_query_result result;
 
-  writer.context = context;
-  writer.write = write;
-  return writer;
+  result.modes = modes;
+  result.status = status;
+  return result;
 }
 
-static inline br_seeker br_seeker_make(void *context, br_seeker_seek_fn seek) {
-  br_seeker seeker;
+static inline br_io_mode_set br_io_mode_bit(br_io_mode mode) {
+  return ((br_io_mode_set)1u) << (unsigned)mode;
+}
 
-  seeker.context = context;
-  seeker.seek = seek;
-  return seeker;
+static inline br_i64_result br_stream_query_utility(br_io_mode_set modes) {
+  return br_i64_result_make((i64)modes, BR_STATUS_OK);
+}
+
+static inline br_stream br_stream_make(void *context, br_stream_proc procedure) {
+  br_stream stream;
+
+  stream.procedure = procedure;
+  stream.context = context;
+  return stream;
+}
+
+static inline bool br_stream_is_valid(br_stream stream) {
+  return stream.procedure != NULL;
+}
+
+static inline br_reader br_reader_make(void *context, br_stream_proc procedure) {
+  return br_stream_make(context, procedure);
+}
+
+static inline br_writer br_writer_make(void *context, br_stream_proc procedure) {
+  return br_stream_make(context, procedure);
+}
+
+static inline br_seeker br_seeker_make(void *context, br_stream_proc procedure) {
+  return br_stream_make(context, procedure);
 }
 
 static inline bool br_reader_is_valid(br_reader reader) {
-  return reader.read != NULL;
+  return br_stream_is_valid(reader);
 }
 
 static inline bool br_writer_is_valid(br_writer writer) {
-  return writer.write != NULL;
+  return br_stream_is_valid(writer);
 }
 
 static inline bool br_seeker_is_valid(br_seeker seeker) {
-  return seeker.seek != NULL;
+  return br_stream_is_valid(seeker);
 }
 
 /*
-Read bytes using a generic reader trait.
+Read bytes using a generic stream.
 */
-br_io_result br_reader_read(br_reader reader, void *dst, usize dst_len);
+br_io_result br_read(br_stream stream, void *dst, usize dst_len);
 
 /*
-Write bytes using a generic writer trait.
+Write bytes using a generic stream.
 */
-br_io_result br_writer_write(br_writer writer, const void *src, usize src_len);
+br_io_result br_write(br_stream stream, const void *src, usize src_len);
 
 /*
-Seek using a generic seeker trait.
+Read from an explicit offset. If the stream does not implement `READ_AT`,
+Bedrock falls back to `SEEK + READ + SEEK`.
 */
-br_io_seek_result br_seeker_seek(br_seeker seeker, i64 offset, br_seek_from whence);
+br_io_result br_read_at(br_stream stream, void *dst, usize dst_len, i64 offset);
+
+/*
+Write to an explicit offset. If the stream does not implement `WRITE_AT`,
+Bedrock falls back to `SEEK + WRITE + SEEK`.
+*/
+br_io_result br_write_at(br_stream stream, const void *src, usize src_len, i64 offset);
+
+/*
+Seek using a generic stream.
+*/
+br_io_seek_result br_seek(br_stream stream, i64 offset, br_seek_from whence);
+
+/*
+Close, flush, or destroy a generic stream.
+*/
+br_status br_close(br_stream stream);
+br_status br_flush(br_stream stream);
+br_status br_destroy(br_stream stream);
+
+/*
+Return the size of a generic stream. If `SIZE` is unsupported and `SEEK`
+exists, Bedrock falls back to querying the current offset and end offset.
+*/
+br_io_size_result br_size(br_stream stream);
+
+/*
+Query supported stream modes.
+*/
+br_io_query_result br_query(br_stream stream);
+
+/*
+Compatibility wrappers around the old split-trait helper names.
+*/
+static inline br_io_result br_reader_read(br_reader reader, void *dst, usize dst_len) {
+  return br_read(reader, dst, dst_len);
+}
+
+static inline br_io_result br_writer_write(br_writer writer, const void *src, usize src_len) {
+  return br_write(writer, src, src_len);
+}
+
+static inline br_io_seek_result br_seeker_seek(br_seeker seeker, i64 offset, br_seek_from whence) {
+  return br_seek(seeker, offset, whence);
+}
 
 BR_EXTERN_C_END
 

@@ -135,9 +135,13 @@ replacement rune of width 1.
 br_string_builder_rune_result br_string_builder_pop_rune(br_string_builder *builder);
 
 /*
-Expose this builder through the generic byte-oriented writer trait.
+Expose this builder through the generic stream interface.
 */
-br_writer br_string_builder_as_writer(br_string_builder *builder);
+br_stream br_string_builder_as_stream(br_string_builder *builder);
+
+static inline br_writer br_string_builder_as_writer(br_string_builder *builder) {
+  return br_string_builder_as_stream(builder);
+}
 
 BR_EXTERN_C_END
 
