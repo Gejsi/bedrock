@@ -23,7 +23,9 @@ typedef enum br_status {
     BR_STATUS_OK = 0,
     BR_STATUS_INVALID_ARGUMENT = 1,
     BR_STATUS_OUT_OF_MEMORY = 2,
-    BR_STATUS_NOT_SUPPORTED = 3
+    BR_STATUS_NOT_SUPPORTED = 3,
+    BR_STATUS_EOF = 4,
+    BR_STATUS_INVALID_STATE = 5
 } br_status;
 
 static inline int br_is_power_of_two_size(usize value) {

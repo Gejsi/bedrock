@@ -5,7 +5,7 @@ redesign, and which ones should stay out of scope.
 
 | Odin package | Decision | Notes |
 | --- | --- | --- |
-| `core/bytes` | partial v1 | Slice/view model, clone/search/join/repeat landed; buffer/reader and Unicode-heavy parts still pending. |
+| `core/bytes` | partial v1 | Slice/view model plus buffer landed; reader, split/replace family, and Unicode-heavy parts still pending. |
 | `core/strings` | v1 | Good fit; string views and builders should be explicit. |
 | `core/io` | v1 | Maps well to function-pointer plus userdata streams. |
 | `core/bufio` | v1 | Good on top of `io`. |

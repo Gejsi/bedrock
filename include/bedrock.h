@@ -6,5 +6,6 @@
 #include <bedrock/alloc.h>
 #include <bedrock/arena.h>
 #include <bedrock/bytes.h>
+#include <bedrock/byte_buffer.h>
 
 #endif

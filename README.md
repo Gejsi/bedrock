@@ -28,8 +28,9 @@ Current implemented bootstrap:
 - allocator ABI in `include/bedrock/alloc.h` and `src/alloc.c`
 - fixed-buffer arena in `include/bedrock/arena.h` and `src/arena.c`
 - `bytes` slice/view helpers in `include/bedrock/bytes.h` and `src/bytes.c`
+- `bytes.Buffer`-style mutable storage in `include/bedrock/byte_buffer.h` and `src/byte_buffer.c`
 - typed vector template in `include/bedrock/template/vec.h`
-- smoke tests in `tests/test_bootstrap.c` and `tests/test_bytes.c`
+- smoke tests in `tests/test_bootstrap.c`, `tests/test_bytes.c`, and `tests/test_byte_buffer.c`
 
 Build and test:
 
