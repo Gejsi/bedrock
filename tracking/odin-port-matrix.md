@@ -3,6 +3,9 @@
 This file tracks which Odin packages are candidates for Bedrock, which ones need
 redesign, and which ones should stay out of scope.
 
+Detailed status for the currently active module ports lives in
+`tracking/odin-coverage-checklist.md`.
+
 | Odin package | Decision | Notes |
 | --- | --- | --- |
 | `core/unicode/utf8` | partial v1 | Self-contained UTF-8 encode/decode/validate/count foundation landed without vendor dependencies; higher Unicode tables and case folding are still separate work. |
