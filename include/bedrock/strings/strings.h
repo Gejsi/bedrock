@@ -124,17 +124,12 @@ Return the number of UTF-8 runes in `s`.
 */
 usize br_string_rune_count(br_string_view s);
 
-br_string_result br_string_join(
-    const br_string_view *parts,
-    usize part_count,
-    br_string_view sep,
-    br_allocator allocator
-);
-br_string_result br_string_concat(
-    const br_string_view *parts,
-    usize part_count,
-    br_allocator allocator
-);
+br_string_result br_string_join(const br_string_view *parts,
+                                usize part_count,
+                                br_string_view sep,
+                                br_allocator allocator);
+br_string_result
+br_string_concat(const br_string_view *parts, usize part_count, br_allocator allocator);
 br_string_result br_string_repeat(br_string_view s, usize count, br_allocator allocator);
 
 /*

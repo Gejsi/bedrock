@@ -65,12 +65,7 @@ BR_VEC_API br_status BR_CONCAT(BR_VEC_NAME, _reserve)(BR_VEC_NAME *vec, usize ne
         res = br_allocator_alloc_uninit(vec->allocator, new_size, _Alignof(BR_VEC_T));
     } else {
         res = br_allocator_resize_uninit(
-            vec->allocator,
-            vec->data,
-            vec->cap * sizeof(BR_VEC_T),
-            new_size,
-            _Alignof(BR_VEC_T)
-        );
+            vec->allocator, vec->data, vec->cap * sizeof(BR_VEC_T), new_size, _Alignof(BR_VEC_T));
     }
 
     if (res.status != BR_STATUS_OK) {

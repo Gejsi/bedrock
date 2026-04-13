@@ -65,31 +65,33 @@ static br_alloc_result br__arena_allocator_fn(void *ctx, const br_alloc_request 
     }
 
     switch (req->op) {
-    case BR_ALLOC_OP_ALLOC:
-        return br__arena_alloc(arena, req->size, req->alignment, 1);
-    case BR_ALLOC_OP_ALLOC_UNINIT:
-        return br__arena_alloc(arena, req->size, req->alignment, 0);
-    case BR_ALLOC_OP_RESIZE:
-    case BR_ALLOC_OP_RESIZE_UNINIT:
-        if (req->ptr == NULL) {
-            return br__arena_alloc(arena, req->size, req->alignment, req->op == BR_ALLOC_OP_RESIZE);
-        }
-        if (req->old_size == 0u) {
-            return br__arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
-        }
+        case BR_ALLOC_OP_ALLOC:
+            return br__arena_alloc(arena, req->size, req->alignment, 1);
+        case BR_ALLOC_OP_ALLOC_UNINIT:
+            return br__arena_alloc(arena, req->size, req->alignment, 0);
+        case BR_ALLOC_OP_RESIZE:
+        case BR_ALLOC_OP_RESIZE_UNINIT:
+            if (req->ptr == NULL) {
+                return br__arena_alloc(
+                    arena, req->size, req->alignment, req->op == BR_ALLOC_OP_RESIZE);
+            }
+            if (req->old_size == 0u) {
+                return br__arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+            }
 
-        result = br__arena_alloc(arena, req->size, req->alignment, req->op == BR_ALLOC_OP_RESIZE);
-        if (result.status != BR_STATUS_OK) {
+            result =
+                br__arena_alloc(arena, req->size, req->alignment, req->op == BR_ALLOC_OP_RESIZE);
+            if (result.status != BR_STATUS_OK) {
+                return result;
+            }
+
+            memcpy(result.ptr, req->ptr, br_min_size(req->old_size, req->size));
             return result;
-        }
-
-        memcpy(result.ptr, req->ptr, br_min_size(req->old_size, req->size));
-        return result;
-    case BR_ALLOC_OP_FREE:
-        return br__arena_result(NULL, 0u, BR_STATUS_OK);
-    case BR_ALLOC_OP_RESET:
-        br_arena_reset(arena);
-        return br__arena_result(NULL, 0u, BR_STATUS_OK);
+        case BR_ALLOC_OP_FREE:
+            return br__arena_result(NULL, 0u, BR_STATUS_OK);
+        case BR_ALLOC_OP_RESET:
+            br_arena_reset(arena);
+            return br__arena_result(NULL, 0u, BR_STATUS_OK);
     }
 
     return br__arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);

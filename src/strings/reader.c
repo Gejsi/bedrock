@@ -16,11 +16,8 @@ static br_string_reader_byte_result br__string_reader_byte_result(u8 value, br_s
     return result;
 }
 
-static br_string_reader_rune_result br__string_reader_rune_result(
-    br_rune value,
-    usize width,
-    br_status status
-) {
+static br_string_reader_rune_result
+br__string_reader_rune_result(br_rune value, usize width, br_status status) {
     br_string_reader_rune_result result;
 
     result.value = value;
@@ -86,7 +83,8 @@ usize br_string_reader_size(const br_string_reader *reader) {
     return reader != NULL ? reader->source.len : 0u;
 }
 
-br_string_reader_io_result br_string_reader_read(br_string_reader *reader, void *dst, usize dst_len) {
+br_string_reader_io_result
+br_string_reader_read(br_string_reader *reader, void *dst, usize dst_len) {
     usize count;
 
     if (reader == NULL || (dst == NULL && dst_len > 0u)) {
@@ -107,12 +105,8 @@ br_string_reader_io_result br_string_reader_read(br_string_reader *reader, void 
     return br__string_reader_io_result(count, BR_STATUS_OK);
 }
 
-br_string_reader_io_result br_string_reader_read_at(
-    const br_string_reader *reader,
-    void *dst,
-    usize dst_len,
-    i64 offset
-) {
+br_string_reader_io_result
+br_string_reader_read_at(const br_string_reader *reader, void *dst, usize dst_len, i64 offset) {
     usize count;
 
     if (reader == NULL || (dst == NULL && dst_len > 0u)) {
@@ -147,7 +141,8 @@ br_string_reader_byte_result br_string_reader_read_byte(br_string_reader *reader
     }
 
     reader->index += 1;
-    return br__string_reader_byte_result((u8)reader->source.data[(usize)reader->index - 1u], BR_STATUS_OK);
+    return br__string_reader_byte_result((u8)reader->source.data[(usize)reader->index - 1u],
+                                         BR_STATUS_OK);
 }
 
 br_status br_string_reader_unread_byte(br_string_reader *reader) {
@@ -202,11 +197,8 @@ br_status br_string_reader_unread_rune(br_string_reader *reader) {
     return BR_STATUS_OK;
 }
 
-br_string_reader_seek_result br_string_reader_seek(
-    br_string_reader *reader,
-    i64 offset,
-    br_seek_from whence
-) {
+br_string_reader_seek_result
+br_string_reader_seek(br_string_reader *reader, i64 offset, br_seek_from whence) {
     i64 absolute;
 
     if (reader == NULL) {
@@ -215,17 +207,17 @@ br_string_reader_seek_result br_string_reader_seek(
 
     reader->prev_rune = -1;
     switch (whence) {
-    case BR_SEEK_FROM_START:
-        absolute = offset;
-        break;
-    case BR_SEEK_FROM_CURRENT:
-        absolute = reader->index + offset;
-        break;
-    case BR_SEEK_FROM_END:
-        absolute = (i64)reader->source.len + offset;
-        break;
-    default:
-        return br__string_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);
+        case BR_SEEK_FROM_START:
+            absolute = offset;
+            break;
+        case BR_SEEK_FROM_CURRENT:
+            absolute = reader->index + offset;
+            break;
+        case BR_SEEK_FROM_END:
+            absolute = (i64)reader->source.len + offset;
+            break;
+        default:
+            return br__string_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);
     }
 
     if (absolute < 0) {

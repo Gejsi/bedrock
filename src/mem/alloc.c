@@ -17,7 +17,7 @@ static br_alloc_result br__alloc_result(void *ptr, usize size, br_status status)
 }
 
 static usize br__normalize_alignment(usize alignment) {
-    usize min_alignment = (usize)_Alignof(br__heap_header);
+    usize min_alignment = (usize) _Alignof(br__heap_header);
 
     if (alignment == 0u) {
         alignment = BR_DEFAULT_ALIGNMENT;
@@ -69,13 +69,8 @@ static br_alloc_result br__heap_alloc(usize size, usize alignment, int zeroed) {
     return br__alloc_result((void *)aligned_addr, size, BR_STATUS_OK);
 }
 
-static br_alloc_result br__heap_resize(
-    void *ptr,
-    usize old_size,
-    usize new_size,
-    usize alignment,
-    int zeroed
-) {
+static br_alloc_result
+br__heap_resize(void *ptr, usize old_size, usize new_size, usize alignment, int zeroed) {
     br__heap_header *header;
     br_alloc_result result;
 
@@ -112,22 +107,22 @@ static br_alloc_result br__heap_allocator_fn(void *ctx, const br_alloc_request *
     }
 
     switch (req->op) {
-    case BR_ALLOC_OP_ALLOC:
-        return br__heap_alloc(req->size, req->alignment, 1);
-    case BR_ALLOC_OP_ALLOC_UNINIT:
-        return br__heap_alloc(req->size, req->alignment, 0);
-    case BR_ALLOC_OP_RESIZE:
-        return br__heap_resize(req->ptr, req->old_size, req->size, req->alignment, 1);
-    case BR_ALLOC_OP_RESIZE_UNINIT:
-        return br__heap_resize(req->ptr, req->old_size, req->size, req->alignment, 0);
-    case BR_ALLOC_OP_FREE:
-        if (req->ptr != NULL) {
-            br__heap_header *header = (br__heap_header *)req->ptr - 1;
-            free(header->base);
-        }
-        return br__alloc_result(NULL, 0u, BR_STATUS_OK);
-    case BR_ALLOC_OP_RESET:
-        return br__alloc_result(NULL, 0u, BR_STATUS_OK);
+        case BR_ALLOC_OP_ALLOC:
+            return br__heap_alloc(req->size, req->alignment, 1);
+        case BR_ALLOC_OP_ALLOC_UNINIT:
+            return br__heap_alloc(req->size, req->alignment, 0);
+        case BR_ALLOC_OP_RESIZE:
+            return br__heap_resize(req->ptr, req->old_size, req->size, req->alignment, 1);
+        case BR_ALLOC_OP_RESIZE_UNINIT:
+            return br__heap_resize(req->ptr, req->old_size, req->size, req->alignment, 0);
+        case BR_ALLOC_OP_FREE:
+            if (req->ptr != NULL) {
+                br__heap_header *header = (br__heap_header *)req->ptr - 1;
+                free(header->base);
+            }
+            return br__alloc_result(NULL, 0u, BR_STATUS_OK);
+        case BR_ALLOC_OP_RESET:
+            return br__alloc_result(NULL, 0u, BR_STATUS_OK);
     }
 
     return br__alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
@@ -147,14 +142,14 @@ static br_alloc_result br__fail_allocator_fn(void *ctx, const br_alloc_request *
     }
 
     switch (req->op) {
-    case BR_ALLOC_OP_ALLOC:
-    case BR_ALLOC_OP_ALLOC_UNINIT:
-    case BR_ALLOC_OP_RESIZE:
-    case BR_ALLOC_OP_RESIZE_UNINIT:
-        return br__alloc_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
-    case BR_ALLOC_OP_FREE:
-    case BR_ALLOC_OP_RESET:
-        return br__alloc_result(NULL, 0u, BR_STATUS_OK);
+        case BR_ALLOC_OP_ALLOC:
+        case BR_ALLOC_OP_ALLOC_UNINIT:
+        case BR_ALLOC_OP_RESIZE:
+        case BR_ALLOC_OP_RESIZE_UNINIT:
+            return br__alloc_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+        case BR_ALLOC_OP_FREE:
+        case BR_ALLOC_OP_RESET:
+            return br__alloc_result(NULL, 0u, BR_STATUS_OK);
     }
 
     return br__alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
@@ -191,12 +186,7 @@ br_alloc_result br_allocator_alloc_uninit(br_allocator allocator, usize size, us
 }
 
 br_alloc_result br_allocator_resize(
-    br_allocator allocator,
-    void *ptr,
-    usize old_size,
-    usize new_size,
-    usize alignment
-) {
+    br_allocator allocator, void *ptr, usize old_size, usize new_size, usize alignment) {
     br_alloc_request req;
 
     req.op = BR_ALLOC_OP_RESIZE;
@@ -208,12 +198,7 @@ br_alloc_result br_allocator_resize(
 }
 
 br_alloc_result br_allocator_resize_uninit(
-    br_allocator allocator,
-    void *ptr,
-    usize old_size,
-    usize new_size,
-    usize alignment
-) {
+    br_allocator allocator, void *ptr, usize old_size, usize new_size, usize alignment) {
     br_alloc_request req;
 
     req.op = BR_ALLOC_OP_RESIZE_UNINIT;

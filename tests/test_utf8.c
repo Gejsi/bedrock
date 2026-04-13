@@ -2,14 +2,16 @@
 
 #include <bedrock.h>
 
-static void assert_decode_eq(br_utf8_decode_result result, br_rune expected_value, usize expected_width) {
+static void
+assert_decode_eq(br_utf8_decode_result result, br_rune expected_value, usize expected_width) {
     assert(result.value == expected_value);
     assert(result.width == expected_width);
 }
 
 static void assert_encode_eq(br_utf8_encode_result result, const u8 *expected, usize expected_len) {
     assert(result.len == expected_len);
-    assert(br_bytes_equal(br_bytes_view_make(result.bytes, result.len), br_bytes_view_make(expected, expected_len)));
+    assert(br_bytes_equal(br_bytes_view_make(result.bytes, result.len),
+                          br_bytes_view_make(expected, expected_len)));
 }
 
 static void test_utf8_encode(void) {
@@ -34,14 +36,16 @@ static void test_utf8_decode(void) {
 
     assert_decode_eq(br_utf8_decode(BR_BYTES_LIT("A")), (br_rune)'A', 1u);
     assert_decode_eq(
-        br_utf8_decode(br_bytes_view_make(euro, BR_ARRAY_COUNT(euro))),
-        (br_rune)0x20ac,
-        3u
-    );
+        br_utf8_decode(br_bytes_view_make(euro, BR_ARRAY_COUNT(euro))), (br_rune)0x20ac, 3u);
     assert_decode_eq(br_utf8_decode(br_bytes_view_make(NULL, 0u)), BR_RUNE_ERROR, 0u);
-    assert_decode_eq(br_utf8_decode(br_bytes_view_make(truncated, BR_ARRAY_COUNT(truncated))), BR_RUNE_ERROR, 1u);
-    assert_decode_eq(br_utf8_decode(br_bytes_view_make(invalid_cont, BR_ARRAY_COUNT(invalid_cont))), BR_RUNE_ERROR, 1u);
-    assert_decode_eq(br_utf8_decode(br_bytes_view_make(overlong, BR_ARRAY_COUNT(overlong))), BR_RUNE_ERROR, 1u);
+    assert_decode_eq(br_utf8_decode(br_bytes_view_make(truncated, BR_ARRAY_COUNT(truncated))),
+                     BR_RUNE_ERROR,
+                     1u);
+    assert_decode_eq(br_utf8_decode(br_bytes_view_make(invalid_cont, BR_ARRAY_COUNT(invalid_cont))),
+                     BR_RUNE_ERROR,
+                     1u);
+    assert_decode_eq(
+        br_utf8_decode(br_bytes_view_make(overlong, BR_ARRAY_COUNT(overlong))), BR_RUNE_ERROR, 1u);
 }
 
 static void test_utf8_decode_last(void) {
@@ -52,14 +56,14 @@ static void test_utf8_decode_last(void) {
     assert_decode_eq(
         br_utf8_decode_last(br_bytes_view_make(ascii_then_euro, BR_ARRAY_COUNT(ascii_then_euro))),
         (br_rune)0x20ac,
-        3u
-    );
-    assert_decode_eq(br_utf8_decode_last(br_bytes_view_make(truncated, BR_ARRAY_COUNT(truncated))), BR_RUNE_ERROR, 1u);
+        3u);
+    assert_decode_eq(br_utf8_decode_last(br_bytes_view_make(truncated, BR_ARRAY_COUNT(truncated))),
+                     BR_RUNE_ERROR,
+                     1u);
     assert_decode_eq(
         br_utf8_decode_last(br_bytes_view_make(ascii_then_cont, BR_ARRAY_COUNT(ascii_then_cont))),
         BR_RUNE_ERROR,
-        1u
-    );
+        1u);
     assert_decode_eq(br_utf8_decode_last(br_bytes_view_make(NULL, 0u)), BR_RUNE_ERROR, 0u);
 }
 
@@ -70,7 +74,8 @@ static void test_utf8_validation_and_sizes(void) {
     static const u8 invalid_cont[] = {0xe2u, 0x28u, 0xa1u};
 
     assert(br_utf8_valid(br_bytes_view_make(valid, BR_ARRAY_COUNT(valid))));
-    assert(!br_utf8_valid(br_bytes_view_make(invalid_surrogate, BR_ARRAY_COUNT(invalid_surrogate))));
+    assert(
+        !br_utf8_valid(br_bytes_view_make(invalid_surrogate, BR_ARRAY_COUNT(invalid_surrogate))));
     assert(!br_utf8_valid(br_bytes_view_make(truncated, BR_ARRAY_COUNT(truncated))));
     assert(!br_utf8_valid(br_bytes_view_make(invalid_cont, BR_ARRAY_COUNT(invalid_cont))));
 

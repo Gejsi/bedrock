@@ -16,7 +16,7 @@
 #define BR_ARRAY_COUNT(a) (sizeof(a) / sizeof((a)[0]))
 #define BR_CONCAT_INNER(a, b) a##b
 #define BR_CONCAT(a, b) BR_CONCAT_INNER(a, b)
-#define BR_DEFAULT_ALIGNMENT ((usize)_Alignof(max_align_t))
+#define BR_DEFAULT_ALIGNMENT ((usize) _Alignof(max_align_t))
 #define BR_STATIC_ASSERT(cond, msg) _Static_assert(cond, msg)
 
 typedef enum br_status {

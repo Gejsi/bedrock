@@ -13,7 +13,7 @@ static void test_heap_allocator(void) {
     br_alloc_result resized;
     int *values;
 
-    alloc = br_allocator_alloc(br_allocator_heap(), sizeof(int) * 4u, (usize)_Alignof(int));
+    alloc = br_allocator_alloc(br_allocator_heap(), sizeof(int) * 4u, (usize) _Alignof(int));
     assert(alloc.status == BR_STATUS_OK);
     assert(alloc.ptr != NULL);
 
@@ -23,7 +23,8 @@ static void test_heap_allocator(void) {
         values[i] = (int)(i + 1u);
     }
 
-    resized = br_allocator_resize(br_allocator_heap(), values, sizeof(int) * 4u, sizeof(int) * 8u, (usize)_Alignof(int));
+    resized = br_allocator_resize(
+        br_allocator_heap(), values, sizeof(int) * 4u, sizeof(int) * 8u, (usize) _Alignof(int));
     assert(resized.status == BR_STATUS_OK);
     assert(resized.ptr != NULL);
 
@@ -61,7 +62,7 @@ static void test_arena(void) {
 
     assert(br_arena_rewind(&arena, mark) == BR_STATUS_OK);
 
-    third = br_allocator_alloc(br_arena_allocator(&arena), sizeof(u32), (usize)_Alignof(u32));
+    third = br_allocator_alloc(br_arena_allocator(&arena), sizeof(u32), (usize) _Alignof(u32));
     assert(third.status == BR_STATUS_OK);
     assert(third.ptr != NULL);
 

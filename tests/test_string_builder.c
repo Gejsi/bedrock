@@ -18,7 +18,8 @@ static void test_string_builder_heap_backing(void) {
     assert(io_result.status == BR_STATUS_OK);
     assert(io_result.count == 2u);
     assert(br_string_builder_len(&builder) == 8u);
-    assert(br_string_equal(br_string_builder_view(&builder), br_string_view_make("hello \xc3\xa4", 8u)));
+    assert(br_string_equal(br_string_builder_view(&builder),
+                           br_string_view_make("hello \xc3\xa4", 8u)));
 
     rune_result = br_string_builder_pop_rune(&builder);
     assert(rune_result.status == BR_STATUS_OK);
@@ -73,13 +74,15 @@ static void test_string_builder_init_with_capacity_and_invalid_pop(void) {
     br_string_builder_byte_result byte_result;
     br_string_builder_rune_result rune_result;
 
-    assert(br_string_builder_init_with_capacity(&builder, 32u, br_allocator_heap()) == BR_STATUS_OK);
+    assert(br_string_builder_init_with_capacity(&builder, 32u, br_allocator_heap()) ==
+           BR_STATUS_OK);
     assert(br_string_builder_capacity(&builder) >= 32u);
 
     byte_result = br_string_builder_pop_byte(&builder);
     assert(byte_result.status == BR_STATUS_INVALID_STATE);
 
-    assert(br_string_builder_write(&builder, br_string_view_make("a\x80", 2u)).status == BR_STATUS_OK);
+    assert(br_string_builder_write(&builder, br_string_view_make("a\x80", 2u)).status ==
+           BR_STATUS_OK);
     rune_result = br_string_builder_pop_rune(&builder);
     assert(rune_result.status == BR_STATUS_OK);
     assert(rune_result.value == BR_RUNE_ERROR);

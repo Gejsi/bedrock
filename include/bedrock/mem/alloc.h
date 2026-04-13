@@ -40,19 +40,9 @@ br_alloc_result br_allocator_call(br_allocator allocator, const br_alloc_request
 br_alloc_result br_allocator_alloc(br_allocator allocator, usize size, usize alignment);
 br_alloc_result br_allocator_alloc_uninit(br_allocator allocator, usize size, usize alignment);
 br_alloc_result br_allocator_resize(
-    br_allocator allocator,
-    void *ptr,
-    usize old_size,
-    usize new_size,
-    usize alignment
-);
+    br_allocator allocator, void *ptr, usize old_size, usize new_size, usize alignment);
 br_alloc_result br_allocator_resize_uninit(
-    br_allocator allocator,
-    void *ptr,
-    usize old_size,
-    usize new_size,
-    usize alignment
-);
+    br_allocator allocator, void *ptr, usize old_size, usize new_size, usize alignment);
 br_status br_allocator_free(br_allocator allocator, void *ptr, usize old_size);
 br_status br_allocator_reset(br_allocator allocator);
 

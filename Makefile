@@ -8,10 +8,12 @@ endif
 
 AR ?= ar
 ARFLAGS ?= rcs
+CLANG_FORMAT ?= clang-format
 MODE ?= debug
 
 SRC_DIR := src
 TEST_DIR := tests
+FORMAT_DIRS := include src tests
 BUILD_ROOT := build/$(MODE)
 OBJ_DIR := $(BUILD_ROOT)/obj
 BIN_DIR := $(BUILD_ROOT)/bin
@@ -35,10 +37,10 @@ ifeq ($(COMPILER_FAMILY),clang)
 CLANG_ONLY_CFLAGS += -Wnewline-eof -Wno-unsafe-buffer-usage
 endif
 
-DEBUG_CFLAGS := -O0 -g3 -DDEBUG
-RELEASE_CFLAGS := -O3 -DNDEBUG
-ASAN_CFLAGS := -O1 -g3 -DDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer
-UBSAN_CFLAGS := -O1 -g3 -DDEBUG -fsanitize=undefined -fno-omit-frame-pointer
+DEBUG_CFLAGS := -O0 -g3 -DDEBUG -fno-omit-frame-pointer -fno-optimize-sibling-calls
+RELEASE_CFLAGS := -O2 -DNDEBUG
+ASAN_CFLAGS := -O1 -g3 -DDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls
+UBSAN_CFLAGS := -O1 -g3 -DDEBUG -fsanitize=undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls
 
 DEBUG_LDFLAGS :=
 RELEASE_LDFLAGS :=
@@ -77,11 +79,12 @@ endif
 
 SRC_FILES := $(shell find $(SRC_DIR) -type f -name '*.c' | sort)
 TEST_FILES := $(shell find $(TEST_DIR) -type f -name '*.c' | sort)
+FORMAT_FILES := $(shell find $(FORMAT_DIRS) -type f \( -name '*.c' -o -name '*.h' \) | sort)
 
 LIB_OBJS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRC_FILES))
 TEST_BINS := $(patsubst $(TEST_DIR)/%.c,$(BIN_DIR)/%,$(TEST_FILES))
 
-.PHONY: all clean test check debug release asan ubsan print-config
+.PHONY: all clean test check debug release asan ubsan format check-format print-config
 
 all: $(LIB_TARGET)
 
@@ -98,6 +101,12 @@ asan:
 
 ubsan:
 	$(MAKE) MODE=ubsan test
+
+format:
+	$(CLANG_FORMAT) -i $(FORMAT_FILES)
+
+check-format:
+	$(CLANG_FORMAT) --dry-run --Werror $(FORMAT_FILES)
 
 print-config:
 	@printf 'MODE=%s\n' '$(MODE)'

@@ -77,7 +77,8 @@ bytes copied.
 This mirrors Odin's `reader_read`: reaching the end after a partial read does
 not itself produce EOF. EOF is reported only when no bytes can be read.
 */
-br_string_reader_io_result br_string_reader_read(br_string_reader *reader, void *dst, usize dst_len);
+br_string_reader_io_result
+br_string_reader_read(br_string_reader *reader, void *dst, usize dst_len);
 
 /*
 Read from an explicit `offset` without changing the main cursor.
@@ -85,12 +86,8 @@ Read from an explicit `offset` without changing the main cursor.
 This mirrors Odin's `reader_read_at`: a short read at the end of the source
 returns the bytes that were copied and also reports EOF.
 */
-br_string_reader_io_result br_string_reader_read_at(
-    const br_string_reader *reader,
-    void *dst,
-    usize dst_len,
-    i64 offset
-);
+br_string_reader_io_result
+br_string_reader_read_at(const br_string_reader *reader, void *dst, usize dst_len, i64 offset);
 
 /*
 Read one byte and advance the cursor by one.
@@ -127,11 +124,8 @@ Seek relative to the start, current cursor, or end of the source.
 Like Odin's `reader_seek`, seeking past the end is allowed. Only negative final
 offsets are rejected.
 */
-br_string_reader_seek_result br_string_reader_seek(
-    br_string_reader *reader,
-    i64 offset,
-    br_seek_from whence
-);
+br_string_reader_seek_result
+br_string_reader_seek(br_string_reader *reader, i64 offset, br_seek_from whence);
 
 BR_EXTERN_C_END
 

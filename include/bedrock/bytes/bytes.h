@@ -86,17 +86,12 @@ br_bytes_view br_bytes_truncate_to_byte(br_bytes_view s, u8 byte_value);
 br_bytes_view br_bytes_trim_prefix(br_bytes_view s, br_bytes_view prefix);
 br_bytes_view br_bytes_trim_suffix(br_bytes_view s, br_bytes_view suffix);
 
-br_bytes_result br_bytes_join(
-    const br_bytes_view *parts,
-    usize part_count,
-    br_bytes_view sep,
-    br_allocator allocator
-);
-br_bytes_result br_bytes_concat(
-    const br_bytes_view *parts,
-    usize part_count,
-    br_allocator allocator
-);
+br_bytes_result br_bytes_join(const br_bytes_view *parts,
+                              usize part_count,
+                              br_bytes_view sep,
+                              br_allocator allocator);
+br_bytes_result
+br_bytes_concat(const br_bytes_view *parts, usize part_count, br_allocator allocator);
 br_bytes_result br_bytes_repeat(br_bytes_view s, usize count, br_allocator allocator);
 
 /*
@@ -106,28 +101,14 @@ This follows the broad shape of Odin's `split` family, but this first C pass is
 strictly byte-oriented: an empty separator is rejected instead of triggering the
 Unicode-aware rune splitting behavior Odin supports with `nil`.
 */
-br_bytes_view_list_result br_bytes_split(
-    br_bytes_view s,
-    br_bytes_view sep,
-    br_allocator allocator
-);
-br_bytes_view_list_result br_bytes_split_n(
-    br_bytes_view s,
-    br_bytes_view sep,
-    isize n,
-    br_allocator allocator
-);
-br_bytes_view_list_result br_bytes_split_after(
-    br_bytes_view s,
-    br_bytes_view sep,
-    br_allocator allocator
-);
-br_bytes_view_list_result br_bytes_split_after_n(
-    br_bytes_view s,
-    br_bytes_view sep,
-    isize n,
-    br_allocator allocator
-);
+br_bytes_view_list_result
+br_bytes_split(br_bytes_view s, br_bytes_view sep, br_allocator allocator);
+br_bytes_view_list_result
+br_bytes_split_n(br_bytes_view s, br_bytes_view sep, isize n, br_allocator allocator);
+br_bytes_view_list_result
+br_bytes_split_after(br_bytes_view s, br_bytes_view sep, br_allocator allocator);
+br_bytes_view_list_result
+br_bytes_split_after_n(br_bytes_view s, br_bytes_view sep, isize n, br_allocator allocator);
 
 /*
 Replace up to `n` occurrences of `old_bytes` with `new_bytes`.
@@ -139,30 +120,19 @@ hold the allocation, and `value` will view that owned storage.
 This first C pass is byte-oriented. When `old_bytes` is empty, replacements are
 inserted at byte boundaries rather than Unicode rune boundaries.
 */
-br_bytes_rewrite_result br_bytes_replace(
-    br_bytes_view s,
-    br_bytes_view old_bytes,
-    br_bytes_view new_bytes,
-    isize n,
-    br_allocator allocator
-);
-br_bytes_rewrite_result br_bytes_replace_all(
-    br_bytes_view s,
-    br_bytes_view old_bytes,
-    br_bytes_view new_bytes,
-    br_allocator allocator
-);
-br_bytes_rewrite_result br_bytes_remove(
-    br_bytes_view s,
-    br_bytes_view key,
-    isize n,
-    br_allocator allocator
-);
-br_bytes_rewrite_result br_bytes_remove_all(
-    br_bytes_view s,
-    br_bytes_view key,
-    br_allocator allocator
-);
+br_bytes_rewrite_result br_bytes_replace(br_bytes_view s,
+                                         br_bytes_view old_bytes,
+                                         br_bytes_view new_bytes,
+                                         isize n,
+                                         br_allocator allocator);
+br_bytes_rewrite_result br_bytes_replace_all(br_bytes_view s,
+                                             br_bytes_view old_bytes,
+                                             br_bytes_view new_bytes,
+                                             br_allocator allocator);
+br_bytes_rewrite_result
+br_bytes_remove(br_bytes_view s, br_bytes_view key, isize n, br_allocator allocator);
+br_bytes_rewrite_result
+br_bytes_remove_all(br_bytes_view s, br_bytes_view key, br_allocator allocator);
 
 BR_EXTERN_C_END
 

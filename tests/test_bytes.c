@@ -2,7 +2,9 @@
 
 #include <bedrock.h>
 
-static void assert_bytes_view_list_eq(br_bytes_view_list list, const br_bytes_view *expected, usize expected_len) {
+static void assert_bytes_view_list_eq(br_bytes_view_list list,
+                                      const br_bytes_view *expected,
+                                      usize expected_len) {
     assert(list.len == expected_len);
     for (usize i = 0; i < expected_len; ++i) {
         assert(br_bytes_equal(list.data[i], expected[i]));
@@ -49,15 +51,19 @@ static void test_bytes_compare_and_search(void) {
 static void test_bytes_views(void) {
     br_bytes_view truncated = br_bytes_truncate_to_byte(BR_BYTES_LIT("name=value"), (u8)'=');
     br_bytes_view no_match = br_bytes_truncate_to_byte(BR_BYTES_LIT("plain"), (u8)'=');
-    br_bytes_view trimmed_prefix = br_bytes_trim_prefix(BR_BYTES_LIT("foobar"), BR_BYTES_LIT("foo"));
-    br_bytes_view trimmed_suffix = br_bytes_trim_suffix(BR_BYTES_LIT("foobar"), BR_BYTES_LIT("bar"));
+    br_bytes_view trimmed_prefix =
+        br_bytes_trim_prefix(BR_BYTES_LIT("foobar"), BR_BYTES_LIT("foo"));
+    br_bytes_view trimmed_suffix =
+        br_bytes_trim_suffix(BR_BYTES_LIT("foobar"), BR_BYTES_LIT("bar"));
 
     assert(br_bytes_equal(truncated, BR_BYTES_LIT("name")));
     assert(br_bytes_equal(no_match, BR_BYTES_LIT("plain")));
     assert(br_bytes_equal(trimmed_prefix, BR_BYTES_LIT("bar")));
     assert(br_bytes_equal(trimmed_suffix, BR_BYTES_LIT("foo")));
-    assert(br_bytes_equal(br_bytes_trim_prefix(BR_BYTES_LIT("foobar"), BR_BYTES_LIT("zzz")), BR_BYTES_LIT("foobar")));
-    assert(br_bytes_equal(br_bytes_trim_suffix(BR_BYTES_LIT("foobar"), BR_BYTES_LIT("zzz")), BR_BYTES_LIT("foobar")));
+    assert(br_bytes_equal(br_bytes_trim_prefix(BR_BYTES_LIT("foobar"), BR_BYTES_LIT("zzz")),
+                          BR_BYTES_LIT("foobar")));
+    assert(br_bytes_equal(br_bytes_trim_suffix(BR_BYTES_LIT("foobar"), BR_BYTES_LIT("zzz")),
+                          BR_BYTES_LIT("foobar")));
 }
 
 static void test_bytes_allocating_helpers(void) {
@@ -80,12 +86,14 @@ static void test_bytes_allocating_helpers(void) {
 
     joined = br_bytes_join(parts, BR_ARRAY_COUNT(parts), BR_BYTES_LIT("|"), br_allocator_heap());
     assert(joined.status == BR_STATUS_OK);
-    assert(br_bytes_equal(br_bytes_view_from_bytes(joined.value), BR_BYTES_LIT("alpha|beta|gamma")));
+    assert(
+        br_bytes_equal(br_bytes_view_from_bytes(joined.value), BR_BYTES_LIT("alpha|beta|gamma")));
     assert(br_bytes_free(joined.value, br_allocator_heap()) == BR_STATUS_OK);
 
     concatenated = br_bytes_concat(parts, BR_ARRAY_COUNT(parts), br_allocator_heap());
     assert(concatenated.status == BR_STATUS_OK);
-    assert(br_bytes_equal(br_bytes_view_from_bytes(concatenated.value), BR_BYTES_LIT("alphabetagamma")));
+    assert(br_bytes_equal(br_bytes_view_from_bytes(concatenated.value),
+                          BR_BYTES_LIT("alphabetagamma")));
     assert(br_bytes_free(concatenated.value, br_allocator_heap()) == BR_STATUS_OK);
 
     repeated = br_bytes_repeat(BR_BYTES_LIT("ab"), 3u, br_allocator_heap());
@@ -122,24 +130,30 @@ static void test_bytes_split_helpers(void) {
         BR_BYTES_LIT("beta,gamma"),
     };
 
-    split = br_bytes_split(BR_BYTES_LIT("alpha,beta,gamma"), BR_BYTES_LIT(","), br_allocator_heap());
+    split =
+        br_bytes_split(BR_BYTES_LIT("alpha,beta,gamma"), BR_BYTES_LIT(","), br_allocator_heap());
     assert(split.status == BR_STATUS_OK);
     assert_bytes_view_list_eq(split.value, expected_split, BR_ARRAY_COUNT(expected_split));
     assert(br_bytes_view_list_free(split.value, br_allocator_heap()) == BR_STATUS_OK);
 
-    split_n = br_bytes_split_n(BR_BYTES_LIT("alpha,beta,gamma"), BR_BYTES_LIT(","), 2, br_allocator_heap());
+    split_n = br_bytes_split_n(
+        BR_BYTES_LIT("alpha,beta,gamma"), BR_BYTES_LIT(","), 2, br_allocator_heap());
     assert(split_n.status == BR_STATUS_OK);
     assert_bytes_view_list_eq(split_n.value, expected_split_n, BR_ARRAY_COUNT(expected_split_n));
     assert(br_bytes_view_list_free(split_n.value, br_allocator_heap()) == BR_STATUS_OK);
 
-    split_after = br_bytes_split_after(BR_BYTES_LIT("alpha,beta,gamma"), BR_BYTES_LIT(","), br_allocator_heap());
+    split_after = br_bytes_split_after(
+        BR_BYTES_LIT("alpha,beta,gamma"), BR_BYTES_LIT(","), br_allocator_heap());
     assert(split_after.status == BR_STATUS_OK);
-    assert_bytes_view_list_eq(split_after.value, expected_split_after, BR_ARRAY_COUNT(expected_split_after));
+    assert_bytes_view_list_eq(
+        split_after.value, expected_split_after, BR_ARRAY_COUNT(expected_split_after));
     assert(br_bytes_view_list_free(split_after.value, br_allocator_heap()) == BR_STATUS_OK);
 
-    split_after_n = br_bytes_split_after_n(BR_BYTES_LIT("alpha,beta,gamma"), BR_BYTES_LIT(","), 2, br_allocator_heap());
+    split_after_n = br_bytes_split_after_n(
+        BR_BYTES_LIT("alpha,beta,gamma"), BR_BYTES_LIT(","), 2, br_allocator_heap());
     assert(split_after_n.status == BR_STATUS_OK);
-    assert_bytes_view_list_eq(split_after_n.value, expected_split_after_n, BR_ARRAY_COUNT(expected_split_after_n));
+    assert_bytes_view_list_eq(
+        split_after_n.value, expected_split_after_n, BR_ARRAY_COUNT(expected_split_after_n));
     assert(br_bytes_view_list_free(split_after_n.value, br_allocator_heap()) == BR_STATUS_OK);
 
     invalid = br_bytes_split(BR_BYTES_LIT("abc"), BR_BYTES_LIT(""), br_allocator_heap());
@@ -160,24 +174,17 @@ static void test_bytes_replace_helpers(void) {
     br_bytes_rewrite_result noop;
     br_bytes_rewrite_result empty_old;
 
-    replaced = br_bytes_replace_all(
-        BR_BYTES_LIT("alpha,beta,gamma"),
-        BR_BYTES_LIT(","),
-        BR_BYTES_LIT("|"),
-        br_allocator_heap()
-    );
+    replaced = br_bytes_replace_all(BR_BYTES_LIT("alpha,beta,gamma"),
+                                    BR_BYTES_LIT(","),
+                                    BR_BYTES_LIT("|"),
+                                    br_allocator_heap());
     assert(replaced.status == BR_STATUS_OK);
     assert(replaced.allocated);
     assert(br_bytes_equal(replaced.value, BR_BYTES_LIT("alpha|beta|gamma")));
     assert(br_bytes_rewrite_free(replaced, br_allocator_heap()) == BR_STATUS_OK);
 
     replaced_n = br_bytes_replace(
-        BR_BYTES_LIT("foofoofoo"),
-        BR_BYTES_LIT("foo"),
-        BR_BYTES_LIT("x"),
-        2,
-        br_allocator_heap()
-    );
+        BR_BYTES_LIT("foofoofoo"), BR_BYTES_LIT("foo"), BR_BYTES_LIT("x"), 2, br_allocator_heap());
     assert(replaced_n.status == BR_STATUS_OK);
     assert(replaced_n.allocated);
     assert(br_bytes_equal(replaced_n.value, BR_BYTES_LIT("xxfoo")));
@@ -190,23 +197,14 @@ static void test_bytes_replace_helpers(void) {
     assert(br_bytes_rewrite_free(removed, br_allocator_heap()) == BR_STATUS_OK);
 
     noop = br_bytes_replace_all(
-        BR_BYTES_LIT("unchanged"),
-        BR_BYTES_LIT("zzz"),
-        BR_BYTES_LIT("x"),
-        br_allocator_heap()
-    );
+        BR_BYTES_LIT("unchanged"), BR_BYTES_LIT("zzz"), BR_BYTES_LIT("x"), br_allocator_heap());
     assert(noop.status == BR_STATUS_OK);
     assert(!noop.allocated);
     assert(br_bytes_equal(noop.value, BR_BYTES_LIT("unchanged")));
     assert(br_bytes_rewrite_free(noop, br_allocator_heap()) == BR_STATUS_OK);
 
     empty_old = br_bytes_replace(
-        BR_BYTES_LIT("ab"),
-        BR_BYTES_LIT(""),
-        BR_BYTES_LIT("."),
-        -1,
-        br_allocator_heap()
-    );
+        BR_BYTES_LIT("ab"), BR_BYTES_LIT(""), BR_BYTES_LIT("."), -1, br_allocator_heap());
     assert(empty_old.status == BR_STATUS_OK);
     assert(empty_old.allocated);
     assert(br_bytes_equal(empty_old.value, BR_BYTES_LIT(".a.b.")));

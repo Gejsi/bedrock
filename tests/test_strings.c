@@ -38,10 +38,13 @@ static void test_strings_views(void) {
     static const u8 utf8_name[] = {'a', 'b', 'c', 0xc3u, 0xa4u, 'd', 'e', 'f'};
     br_string_view s = br_string_view_make(utf8_name, BR_ARRAY_COUNT(utf8_name));
 
-    assert(br_string_equal(br_string_truncate_to_byte(BR_STR_LIT("name=value"), (u8)'='), BR_STR_LIT("name")));
+    assert(br_string_equal(br_string_truncate_to_byte(BR_STR_LIT("name=value"), (u8)'='),
+                           BR_STR_LIT("name")));
     assert(br_string_equal(br_string_truncate_to_rune(s, (br_rune)0x00e4), BR_STR_LIT("abc")));
-    assert(br_string_equal(br_string_trim_prefix(BR_STR_LIT("foobar"), BR_STR_LIT("foo")), BR_STR_LIT("bar")));
-    assert(br_string_equal(br_string_trim_suffix(BR_STR_LIT("foobar"), BR_STR_LIT("bar")), BR_STR_LIT("foo")));
+    assert(br_string_equal(br_string_trim_prefix(BR_STR_LIT("foobar"), BR_STR_LIT("foo")),
+                           BR_STR_LIT("bar")));
+    assert(br_string_equal(br_string_trim_suffix(BR_STR_LIT("foobar"), BR_STR_LIT("bar")),
+                           BR_STR_LIT("foo")));
 }
 
 static void test_strings_utf8_helpers(void) {
@@ -75,12 +78,14 @@ static void test_strings_allocating_helpers(void) {
 
     joined = br_string_join(parts, BR_ARRAY_COUNT(parts), BR_STR_LIT("|"), br_allocator_heap());
     assert(joined.status == BR_STATUS_OK);
-    assert(br_string_equal(br_string_view_from_string(joined.value), BR_STR_LIT("alpha|beta|gamma")));
+    assert(
+        br_string_equal(br_string_view_from_string(joined.value), BR_STR_LIT("alpha|beta|gamma")));
     assert(br_string_free(joined.value, br_allocator_heap()) == BR_STATUS_OK);
 
     concatenated = br_string_concat(parts, BR_ARRAY_COUNT(parts), br_allocator_heap());
     assert(concatenated.status == BR_STATUS_OK);
-    assert(br_string_equal(br_string_view_from_string(concatenated.value), BR_STR_LIT("alphabetagamma")));
+    assert(br_string_equal(br_string_view_from_string(concatenated.value),
+                           BR_STR_LIT("alphabetagamma")));
     assert(br_string_free(concatenated.value, br_allocator_heap()) == BR_STATUS_OK);
 
     repeated = br_string_repeat(BR_STR_LIT("ab"), 3u, br_allocator_heap());

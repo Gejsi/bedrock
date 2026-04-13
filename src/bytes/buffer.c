@@ -1,8 +1,6 @@
 #include <bedrock/bytes/buffer.h>
 
-enum {
-    BR__BYTE_BUFFER_MIN_CAPACITY = 64
-};
+enum { BR__BYTE_BUFFER_MIN_CAPACITY = 64 };
 
 static br_byte_buffer_io_result br__byte_buffer_io_result(usize count, br_status status) {
     br_byte_buffer_io_result result;
@@ -99,13 +97,8 @@ static br_status br__byte_buffer_grow(br_byte_buffer *buffer, usize additional) 
         }
     } else {
         br__byte_buffer_compact(buffer);
-        resized = br_allocator_resize_uninit(
-            buffer->allocator,
-            buffer->data,
-            buffer->cap,
-            new_cap,
-            1u
-        );
+        resized =
+            br_allocator_resize_uninit(buffer->allocator, buffer->data, buffer->cap, new_cap, 1u);
         if (resized.status != BR_STATUS_OK) {
             return resized.status;
         }
@@ -127,11 +120,9 @@ void br_byte_buffer_init(br_byte_buffer *buffer, br_allocator allocator) {
     br__byte_buffer_clear_state(buffer);
 }
 
-br_status br_byte_buffer_init_copy(
-    br_byte_buffer *buffer,
-    br_bytes_view initial_data,
-    br_allocator allocator
-) {
+br_status br_byte_buffer_init_copy(br_byte_buffer *buffer,
+                                   br_bytes_view initial_data,
+                                   br_allocator allocator) {
     br_alloc_result alloc;
 
     if (buffer == NULL) {

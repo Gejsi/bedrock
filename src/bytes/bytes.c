@@ -8,11 +8,8 @@ static br_bytes_result br__bytes_result(void *data, usize len, br_status status)
     return result;
 }
 
-static br_bytes_view_list_result br__bytes_view_list_result(
-    br_bytes_view *data,
-    usize len,
-    br_status status
-) {
+static br_bytes_view_list_result
+br__bytes_view_list_result(br_bytes_view *data, usize len, br_status status) {
     br_bytes_view_list_result result;
 
     result.value.data = data;
@@ -31,11 +28,8 @@ static br_bytes_rewrite_result br__bytes_rewrite_alias_result(br_bytes_view valu
     return result;
 }
 
-static br_bytes_rewrite_result br__bytes_rewrite_owned_result(
-    void *data,
-    usize len,
-    br_status status
-) {
+static br_bytes_rewrite_result
+br__bytes_rewrite_owned_result(void *data, usize len, br_status status) {
     br_bytes_rewrite_result result;
 
     result.owned = br_bytes_make(data, len);
@@ -192,8 +186,7 @@ isize br_bytes_index(br_bytes_view s, br_bytes_view needle) {
     }
 
     for (usize i = 0; i <= s.len - needle.len; ++i) {
-        if (s.data[i] == needle.data[0] &&
-            memcmp(s.data + i, needle.data, needle.len) == 0) {
+        if (s.data[i] == needle.data[0] && memcmp(s.data + i, needle.data, needle.len) == 0) {
             return (isize)i;
         }
     }
@@ -217,8 +210,7 @@ isize br_bytes_last_index(br_bytes_view s, br_bytes_view needle) {
 
     for (usize i = s.len - needle.len + 1u; i > 0u; --i) {
         usize pos = i - 1u;
-        if (s.data[pos] == needle.data[0] &&
-            memcmp(s.data + pos, needle.data, needle.len) == 0) {
+        if (s.data[pos] == needle.data[0] && memcmp(s.data + pos, needle.data, needle.len) == 0) {
             return (isize)pos;
         }
     }
@@ -258,10 +250,8 @@ isize br_bytes_count(br_bytes_view s, br_bytes_view needle) {
 
     while ((index = br_bytes_index(s, needle)) >= 0) {
         count += 1;
-        s = br_bytes_view_make(
-            s.data + (usize)index + needle.len,
-            s.len - ((usize)index + needle.len)
-        );
+        s = br_bytes_view_make(s.data + (usize)index + needle.len,
+                               s.len - ((usize)index + needle.len));
     }
 
     return count;
@@ -293,12 +283,10 @@ br_bytes_view br_bytes_trim_suffix(br_bytes_view s, br_bytes_view suffix) {
     return s;
 }
 
-br_bytes_result br_bytes_join(
-    const br_bytes_view *parts,
-    usize part_count,
-    br_bytes_view sep,
-    br_allocator allocator
-) {
+br_bytes_result br_bytes_join(const br_bytes_view *parts,
+                              usize part_count,
+                              br_bytes_view sep,
+                              br_allocator allocator) {
     br_alloc_result alloc;
     usize total = 0u;
     usize offset = 0u;
@@ -351,11 +339,8 @@ br_bytes_result br_bytes_join(
     return br__bytes_result(alloc.ptr, total, BR_STATUS_OK);
 }
 
-br_bytes_result br_bytes_concat(
-    const br_bytes_view *parts,
-    usize part_count,
-    br_allocator allocator
-) {
+br_bytes_result
+br_bytes_concat(const br_bytes_view *parts, usize part_count, br_allocator allocator) {
     return br_bytes_join(parts, part_count, br_bytes_view_make(NULL, 0u), allocator);
 }
 
@@ -389,12 +374,7 @@ br_bytes_result br_bytes_repeat(br_bytes_view s, usize count, br_allocator alloc
 }
 
 static br_bytes_view_list_result br__bytes_split_impl(
-    br_bytes_view s,
-    br_bytes_view sep,
-    usize sep_save,
-    isize n,
-    br_allocator allocator
-) {
+    br_bytes_view s, br_bytes_view sep, usize sep_save, isize n, br_allocator allocator) {
     br_alloc_result alloc;
     br_bytes_view *parts;
     usize target_count;
@@ -418,10 +398,7 @@ static br_bytes_view_list_result br__bytes_split_impl(
     }
 
     alloc = br_allocator_alloc_uninit(
-        allocator,
-        target_count * sizeof(br_bytes_view),
-        _Alignof(br_bytes_view)
-    );
+        allocator, target_count * sizeof(br_bytes_view), _Alignof(br_bytes_view));
     if (alloc.status != BR_STATUS_OK) {
         return br__bytes_view_list_result(NULL, 0u, alloc.status);
     }
@@ -437,7 +414,8 @@ static br_bytes_view_list_result br__bytes_split_impl(
             }
 
             parts[part_index] = br_bytes_view_make(s.data, (usize)split_at + sep_save);
-            s = br_bytes_view_make(s.data + (usize)split_at + sep.len, s.len - ((usize)split_at + sep.len));
+            s = br_bytes_view_make(s.data + (usize)split_at + sep.len,
+                                   s.len - ((usize)split_at + sep.len));
             part_index += 1u;
         }
     }
@@ -447,47 +425,31 @@ static br_bytes_view_list_result br__bytes_split_impl(
     return br__bytes_view_list_result(parts, part_index, BR_STATUS_OK);
 }
 
-br_bytes_view_list_result br_bytes_split(
-    br_bytes_view s,
-    br_bytes_view sep,
-    br_allocator allocator
-) {
+br_bytes_view_list_result
+br_bytes_split(br_bytes_view s, br_bytes_view sep, br_allocator allocator) {
     return br__bytes_split_impl(s, sep, 0u, -1, allocator);
 }
 
-br_bytes_view_list_result br_bytes_split_n(
-    br_bytes_view s,
-    br_bytes_view sep,
-    isize n,
-    br_allocator allocator
-) {
+br_bytes_view_list_result
+br_bytes_split_n(br_bytes_view s, br_bytes_view sep, isize n, br_allocator allocator) {
     return br__bytes_split_impl(s, sep, 0u, n, allocator);
 }
 
-br_bytes_view_list_result br_bytes_split_after(
-    br_bytes_view s,
-    br_bytes_view sep,
-    br_allocator allocator
-) {
+br_bytes_view_list_result
+br_bytes_split_after(br_bytes_view s, br_bytes_view sep, br_allocator allocator) {
     return br__bytes_split_impl(s, sep, sep.len, -1, allocator);
 }
 
-br_bytes_view_list_result br_bytes_split_after_n(
-    br_bytes_view s,
-    br_bytes_view sep,
-    isize n,
-    br_allocator allocator
-) {
+br_bytes_view_list_result
+br_bytes_split_after_n(br_bytes_view s, br_bytes_view sep, isize n, br_allocator allocator) {
     return br__bytes_split_impl(s, sep, sep.len, n, allocator);
 }
 
-br_bytes_rewrite_result br_bytes_replace(
-    br_bytes_view s,
-    br_bytes_view old_bytes,
-    br_bytes_view new_bytes,
-    isize n,
-    br_allocator allocator
-) {
+br_bytes_rewrite_result br_bytes_replace(br_bytes_view s,
+                                         br_bytes_view old_bytes,
+                                         br_bytes_view new_bytes,
+                                         isize n,
+                                         br_allocator allocator) {
     br_alloc_result alloc;
     isize match_count;
     isize replace_count;
@@ -496,10 +458,8 @@ br_bytes_rewrite_result br_bytes_replace(
     usize write_offset = 0u;
 
     if ((old_bytes.len == new_bytes.len &&
-         (old_bytes.len == 0u ||
-          (old_bytes.data != NULL &&
-           new_bytes.data != NULL &&
-           memcmp(old_bytes.data, new_bytes.data, old_bytes.len) == 0))) ||
+         (old_bytes.len == 0u || (old_bytes.data != NULL && new_bytes.data != NULL &&
+                                  memcmp(old_bytes.data, new_bytes.data, old_bytes.len) == 0))) ||
         n == 0) {
         return br__bytes_rewrite_alias_result(s);
     }
@@ -547,10 +507,8 @@ br_bytes_rewrite_result br_bytes_replace(
             }
             next_start = split_at;
         } else {
-            isize local_index = br_bytes_index(
-                br_bytes_view_make(s.data + start, s.len - start),
-                old_bytes
-            );
+            isize local_index =
+                br_bytes_index(br_bytes_view_make(s.data + start, s.len - start), old_bytes);
             split_at = start + (usize)local_index;
             next_start = split_at + old_bytes.len;
         }
@@ -574,28 +532,19 @@ br_bytes_rewrite_result br_bytes_replace(
     return br__bytes_rewrite_owned_result(alloc.ptr, write_offset, BR_STATUS_OK);
 }
 
-br_bytes_rewrite_result br_bytes_replace_all(
-    br_bytes_view s,
-    br_bytes_view old_bytes,
-    br_bytes_view new_bytes,
-    br_allocator allocator
-) {
+br_bytes_rewrite_result br_bytes_replace_all(br_bytes_view s,
+                                             br_bytes_view old_bytes,
+                                             br_bytes_view new_bytes,
+                                             br_allocator allocator) {
     return br_bytes_replace(s, old_bytes, new_bytes, -1, allocator);
 }
 
-br_bytes_rewrite_result br_bytes_remove(
-    br_bytes_view s,
-    br_bytes_view key,
-    isize n,
-    br_allocator allocator
-) {
+br_bytes_rewrite_result
+br_bytes_remove(br_bytes_view s, br_bytes_view key, isize n, br_allocator allocator) {
     return br_bytes_replace(s, key, br_bytes_view_make(NULL, 0u), n, allocator);
 }
 
-br_bytes_rewrite_result br_bytes_remove_all(
-    br_bytes_view s,
-    br_bytes_view key,
-    br_allocator allocator
-) {
+br_bytes_rewrite_result
+br_bytes_remove_all(br_bytes_view s, br_bytes_view key, br_allocator allocator) {
     return br_bytes_remove(s, key, -1, allocator);
 }

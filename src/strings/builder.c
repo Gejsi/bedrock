@@ -1,8 +1,6 @@
 #include <bedrock/strings/builder.h>
 
-enum {
-    BR__STRING_BUILDER_MIN_CAPACITY = 64
-};
+enum { BR__STRING_BUILDER_MIN_CAPACITY = 64 };
 
 static br_string_builder_io_result br__string_builder_io_result(usize count, br_status status) {
     br_string_builder_io_result result;
@@ -20,11 +18,8 @@ static br_string_builder_byte_result br__string_builder_byte_result(u8 value, br
     return result;
 }
 
-static br_string_builder_rune_result br__string_builder_rune_result(
-    br_rune value,
-    usize width,
-    br_status status
-) {
+static br_string_builder_rune_result
+br__string_builder_rune_result(br_rune value, usize width, br_status status) {
     br_string_builder_rune_result result;
 
     result.value = value;
@@ -81,12 +76,7 @@ static br_status br__string_builder_grow(br_string_builder *builder, usize addit
         resized = br_allocator_alloc_uninit(builder->allocator, new_cap, 1u);
     } else {
         resized = br_allocator_resize_uninit(
-            builder->allocator,
-            builder->data,
-            builder->cap,
-            new_cap,
-            1u
-        );
+            builder->allocator, builder->data, builder->cap, new_cap, 1u);
     }
     if (resized.status != BR_STATUS_OK) {
         return resized.status;
@@ -109,11 +99,9 @@ void br_string_builder_init(br_string_builder *builder, br_allocator allocator) 
     builder->owns_storage = 1;
 }
 
-br_status br_string_builder_init_with_capacity(
-    br_string_builder *builder,
-    usize initial_capacity,
-    br_allocator allocator
-) {
+br_status br_string_builder_init_with_capacity(br_string_builder *builder,
+                                               usize initial_capacity,
+                                               br_allocator allocator) {
     br_status status;
 
     if (builder == NULL) {
@@ -128,11 +116,9 @@ br_status br_string_builder_init_with_capacity(
     return status;
 }
 
-void br_string_builder_init_with_backing(
-    br_string_builder *builder,
-    void *backing,
-    usize backing_len
-) {
+void br_string_builder_init_with_backing(br_string_builder *builder,
+                                         void *backing,
+                                         usize backing_len) {
     if (builder == NULL) {
         return;
     }
@@ -219,7 +205,8 @@ br_string_result br_string_builder_clone(const br_string_builder *builder, br_al
     return br_string_clone(br_string_builder_view(builder), allocator);
 }
 
-br_string_builder_io_result br_string_builder_write(br_string_builder *builder, br_string_view src) {
+br_string_builder_io_result br_string_builder_write(br_string_builder *builder,
+                                                    br_string_view src) {
     br_status status;
 
     if (builder == NULL) {
@@ -256,10 +243,8 @@ br_status br_string_builder_write_byte(br_string_builder *builder, u8 byte_value
     return BR_STATUS_OK;
 }
 
-br_string_builder_io_result br_string_builder_write_rune(
-    br_string_builder *builder,
-    br_rune value
-) {
+br_string_builder_io_result br_string_builder_write_rune(br_string_builder *builder,
+                                                         br_rune value) {
     br_utf8_encode_result encoded;
     br_status status;
 

@@ -10,7 +10,7 @@ typedef i32 br_rune;
 #define BR_RUNE_ERROR ((br_rune)0xfffd)
 #define BR_RUNE_SELF ((br_rune)0x80)
 #define BR_RUNE_BOM ((br_rune)0xfeff)
-#define BR_RUNE_EOF ((br_rune)-1)
+#define BR_RUNE_EOF ((br_rune) - 1)
 #define BR_RUNE_MAX ((br_rune)0x10ffff)
 #define BR_UTF8_MAX 4
 

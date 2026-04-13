@@ -74,7 +74,8 @@ static void test_byte_buffer_compaction_and_copy_init(void) {
     u8 scratch[2];
     br_byte_buffer_io_result io_result;
 
-    assert(br_byte_buffer_init_copy(&buffer, BR_BYTES_LIT("abcd"), br_allocator_heap()) == BR_STATUS_OK);
+    assert(br_byte_buffer_init_copy(&buffer, BR_BYTES_LIT("abcd"), br_allocator_heap()) ==
+           BR_STATUS_OK);
     assert(br_bytes_equal(br_byte_buffer_view(&buffer), BR_BYTES_LIT("abcd")));
 
     io_result = br_byte_buffer_read(&buffer, scratch, 2u);
@@ -82,7 +83,8 @@ static void test_byte_buffer_compaction_and_copy_init(void) {
     assert(io_result.count == 2u);
     assert(br_bytes_equal(br_bytes_view_make(scratch, 2u), BR_BYTES_LIT("ab")));
 
-    assert(br_byte_buffer_write(&buffer, BR_BYTES_LIT("efghijklmnopqrstuvwxyz")).status == BR_STATUS_OK);
+    assert(br_byte_buffer_write(&buffer, BR_BYTES_LIT("efghijklmnopqrstuvwxyz")).status ==
+           BR_STATUS_OK);
     assert(br_bytes_equal(br_byte_buffer_view(&buffer), BR_BYTES_LIT("cdefghijklmnopqrstuvwxyz")));
 
     br_byte_buffer_destroy(&buffer);

@@ -25,11 +25,9 @@ typedef struct br_byte_buffer_byte_result {
 } br_byte_buffer_byte_result;
 
 void br_byte_buffer_init(br_byte_buffer *buffer, br_allocator allocator);
-br_status br_byte_buffer_init_copy(
-    br_byte_buffer *buffer,
-    br_bytes_view initial_data,
-    br_allocator allocator
-);
+br_status br_byte_buffer_init_copy(br_byte_buffer *buffer,
+                                   br_bytes_view initial_data,
+                                   br_allocator allocator);
 void br_byte_buffer_destroy(br_byte_buffer *buffer);
 void br_byte_buffer_reset(br_byte_buffer *buffer);
 

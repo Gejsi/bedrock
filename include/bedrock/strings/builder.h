@@ -44,11 +44,9 @@ void br_string_builder_init(br_string_builder *builder, br_allocator allocator);
 /*
 Initialize a heap-backed builder with at least `initial_capacity` bytes.
 */
-br_status br_string_builder_init_with_capacity(
-    br_string_builder *builder,
-    usize initial_capacity,
-    br_allocator allocator
-);
+br_status br_string_builder_init_with_capacity(br_string_builder *builder,
+                                               usize initial_capacity,
+                                               br_allocator allocator);
 
 /*
 Initialize a builder over caller-provided storage.
@@ -56,11 +54,9 @@ Initialize a builder over caller-provided storage.
 This follows the intent of Odin's `builder_from_bytes`: the builder does not
 own the storage and cannot grow past `backing_len`.
 */
-void br_string_builder_init_with_backing(
-    br_string_builder *builder,
-    void *backing,
-    usize backing_len
-);
+void br_string_builder_init_with_backing(br_string_builder *builder,
+                                         void *backing,
+                                         usize backing_len);
 
 /*
 Release any owned storage and reset the builder to empty.
@@ -125,10 +121,7 @@ br_status br_string_builder_write_byte(br_string_builder *builder, u8 byte_value
 /*
 Append one rune to the builder encoded as UTF-8.
 */
-br_string_builder_io_result br_string_builder_write_rune(
-    br_string_builder *builder,
-    br_rune value
-);
+br_string_builder_io_result br_string_builder_write_rune(br_string_builder *builder, br_rune value);
 
 /*
 Pop and return the last byte from the builder.

@@ -25,13 +25,7 @@ static br_utf8_decode_result br__utf8_decode_result(br_rune value, usize width) 
     return result;
 }
 
-static br_utf8_encode_result br__utf8_encode_result(
-    u8 b0,
-    u8 b1,
-    u8 b2,
-    u8 b3,
-    usize len
-) {
+static br_utf8_encode_result br__utf8_encode_result(u8 b0, u8 b1, u8 b2, u8 b3, usize len) {
     br_utf8_encode_result result;
 
     result.bytes[0] = b0;
@@ -116,31 +110,25 @@ br_utf8_encode_result br_utf8_encode(br_rune value) {
         return br__utf8_encode_result((u8)rune_value, 0u, 0u, 0u, 1u);
     }
     if (rune_value <= 0x7ffu) {
-        return br__utf8_encode_result(
-            (u8)(0xc0u | (rune_value >> 6)),
-            (u8)(0x80u | (rune_value & BR__UTF8_MASKX)),
-            0u,
-            0u,
-            2u
-        );
+        return br__utf8_encode_result((u8)(0xc0u | (rune_value >> 6)),
+                                      (u8)(0x80u | (rune_value & BR__UTF8_MASKX)),
+                                      0u,
+                                      0u,
+                                      2u);
     }
     if (rune_value <= 0xffffu) {
-        return br__utf8_encode_result(
-            (u8)(0xe0u | (rune_value >> 12)),
-            (u8)(0x80u | ((rune_value >> 6) & BR__UTF8_MASKX)),
-            (u8)(0x80u | (rune_value & BR__UTF8_MASKX)),
-            0u,
-            3u
-        );
+        return br__utf8_encode_result((u8)(0xe0u | (rune_value >> 12)),
+                                      (u8)(0x80u | ((rune_value >> 6) & BR__UTF8_MASKX)),
+                                      (u8)(0x80u | (rune_value & BR__UTF8_MASKX)),
+                                      0u,
+                                      3u);
     }
 
-    return br__utf8_encode_result(
-        (u8)(0xf0u | (rune_value >> 18)),
-        (u8)(0x80u | ((rune_value >> 12) & BR__UTF8_MASKX)),
-        (u8)(0x80u | ((rune_value >> 6) & BR__UTF8_MASKX)),
-        (u8)(0x80u | (rune_value & BR__UTF8_MASKX)),
-        4u
-    );
+    return br__utf8_encode_result((u8)(0xf0u | (rune_value >> 18)),
+                                  (u8)(0x80u | ((rune_value >> 12) & BR__UTF8_MASKX)),
+                                  (u8)(0x80u | ((rune_value >> 6) & BR__UTF8_MASKX)),
+                                  (u8)(0x80u | (rune_value & BR__UTF8_MASKX)),
+                                  4u);
 }
 
 br_utf8_decode_result br_utf8_decode(br_bytes_view s) {
@@ -172,9 +160,7 @@ br_utf8_decode_result br_utf8_decode(br_bytes_view s) {
     }
     if (info.width == 2u) {
         return br__utf8_decode_result(
-            (br_rune)(((u32)(b0 & BR__UTF8_MASK2) << 6) | (u32)(b1 & BR__UTF8_MASKX)),
-            2u
-        );
+            (br_rune)(((u32)(b0 & BR__UTF8_MASK2) << 6) | (u32)(b1 & BR__UTF8_MASKX)), 2u);
     }
 
     b2 = s.data[2];
@@ -182,14 +168,10 @@ br_utf8_decode_result br_utf8_decode(br_bytes_view s) {
         return br__utf8_decode_result(BR_RUNE_ERROR, 1u);
     }
     if (info.width == 3u) {
-        return br__utf8_decode_result(
-            (br_rune)(
-                ((u32)(b0 & BR__UTF8_MASK3) << 12) |
-                ((u32)(b1 & BR__UTF8_MASKX) << 6) |
-                (u32)(b2 & BR__UTF8_MASKX)
-            ),
-            3u
-        );
+        return br__utf8_decode_result((br_rune)(((u32)(b0 & BR__UTF8_MASK3) << 12) |
+                                                ((u32)(b1 & BR__UTF8_MASKX) << 6) |
+                                                (u32)(b2 & BR__UTF8_MASKX)),
+                                      3u);
     }
 
     b3 = s.data[3];
@@ -198,14 +180,9 @@ br_utf8_decode_result br_utf8_decode(br_bytes_view s) {
     }
 
     return br__utf8_decode_result(
-        (br_rune)(
-            ((u32)(b0 & BR__UTF8_MASK4) << 18) |
-            ((u32)(b1 & BR__UTF8_MASKX) << 12) |
-            ((u32)(b2 & BR__UTF8_MASKX) << 6) |
-            (u32)(b3 & BR__UTF8_MASKX)
-        ),
-        4u
-    );
+        (br_rune)(((u32)(b0 & BR__UTF8_MASK4) << 18) | ((u32)(b1 & BR__UTF8_MASKX) << 12) |
+                  ((u32)(b2 & BR__UTF8_MASKX) << 6) | (u32)(b3 & BR__UTF8_MASKX)),
+        4u);
 }
 
 br_utf8_decode_result br_utf8_decode_last(br_bytes_view s) {

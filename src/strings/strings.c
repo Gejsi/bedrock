@@ -166,28 +166,19 @@ usize br_string_rune_count(br_string_view s) {
     return br_utf8_rune_count(br_string_view_as_bytes(s));
 }
 
-br_string_result br_string_join(
-    const br_string_view *parts,
-    usize part_count,
-    br_string_view sep,
-    br_allocator allocator
-) {
+br_string_result br_string_join(const br_string_view *parts,
+                                usize part_count,
+                                br_string_view sep,
+                                br_allocator allocator) {
     br_bytes_result result;
 
     result = br_bytes_join(
-        (const br_bytes_view *)parts,
-        part_count,
-        br_string_view_as_bytes(sep),
-        allocator
-    );
+        (const br_bytes_view *)parts, part_count, br_string_view_as_bytes(sep), allocator);
     return br__string_result(result.value.data, result.value.len, result.status);
 }
 
-br_string_result br_string_concat(
-    const br_string_view *parts,
-    usize part_count,
-    br_allocator allocator
-) {
+br_string_result
+br_string_concat(const br_string_view *parts, usize part_count, br_allocator allocator) {
     br_bytes_result result;
 
     result = br_bytes_concat((const br_bytes_view *)parts, part_count, allocator);
