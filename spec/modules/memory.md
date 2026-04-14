@@ -14,6 +14,7 @@ without hidden ambient context.
 - virtual growing arenas
 - arena savepoints / rewind markers
 - virtual arena temp/watermark helpers
+- trailing guard-page overflow protection for virtual arenas
 - null allocator
 - panic/fail-fast allocator
 - debug wrappers such as tracking or guard allocators
@@ -22,7 +23,7 @@ without hidden ambient context.
 
 - TLSF and other specialized allocators
 - file mapping
-- platform-specific VM extras such as guard pages and overflow-protected blocks
+- platform-specific VM extras beyond the current trailing guard-page support
 
 Those features are valuable, but they belong after the core VM-backed arena
 story is stable.
@@ -107,7 +108,8 @@ Important Bedrock-specific deviations from Odin for now:
 
 - no buffer-backed variant in `virtual_arena`; fixed buffers stay in `br_arena`
 - no built-in mutex; the arena is intentionally single-threaded for now
-- no overflow-protection/guard-page flags yet
+- overflow protection is currently exposed as an arena-level trailing guard page
+  flag, not Odin's broader per-memory-block flag surface
 
 ## Temporary Allocation
 

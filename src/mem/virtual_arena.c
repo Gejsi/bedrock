@@ -101,13 +101,19 @@ static br__virtual_platform_block *br__virtual_platform_from_block(br_virtual_ar
 static br_status br__virtual_block_create(usize committed,
                                           usize reserved,
                                           usize alignment,
+                                          br_virtual_arena_flags flags,
                                           br_virtual_arena_block **out_block) {
   br_vm_region_result region;
   br__virtual_platform_block *platform_block;
   br_status status;
   usize base_offset;
+  usize page_size;
+  usize required_alignment;
   usize total_commit;
   usize total_size;
+  usize payload_limit;
+  usize guard_end;
+  bool overflow_protection;
 
   if (out_block == NULL) {
     return BR_STATUS_INVALID_ARGUMENT;
@@ -122,6 +128,11 @@ static br_status br__virtual_block_create(usize committed,
     return status;
   }
 
+  page_size = br_vm_page_size();
+  if (page_size == 0u) {
+    return BR_STATUS_NOT_SUPPORTED;
+  }
+
   status = br__align_to_pages(committed, &committed);
   if (status != BR_STATUS_OK) {
     return status;
@@ -134,14 +145,18 @@ static br_status br__virtual_block_create(usize committed,
     committed = reserved;
   }
 
-  if (!br__safe_add_size(sizeof(br__virtual_platform_block), alignment, &total_size) ||
-      !br__safe_add_size(total_size, reserved, &total_size)) {
-    return BR_STATUS_OUT_OF_MEMORY;
-  }
+  overflow_protection = (flags & BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION) != 0u;
+  required_alignment = overflow_protection ? br__max_size(alignment, page_size) : alignment;
 
-  status = br__align_up_size(sizeof(br__virtual_platform_block), alignment, &base_offset);
+  status = br__align_up_size(sizeof(br__virtual_platform_block), required_alignment, &base_offset);
   if (status != BR_STATUS_OK) {
     return status;
+  }
+  if (!br__safe_add_size(base_offset, reserved, &total_size)) {
+    return BR_STATUS_OUT_OF_MEMORY;
+  }
+  if (overflow_protection && !br__safe_add_size(total_size, page_size, &total_size)) {
+    return BR_STATUS_OUT_OF_MEMORY;
   }
   if (!br__safe_add_size(base_offset, committed, &total_commit)) {
     return BR_STATUS_OUT_OF_MEMORY;
@@ -164,7 +179,25 @@ static br_status br__virtual_block_create(usize committed,
   platform_block->reserved_total = region.value.size;
   platform_block->block.base = region.value.data + base_offset;
   platform_block->block.committed = committed;
-  platform_block->block.reserved = region.value.size - base_offset;
+  platform_block->block.reserved = reserved;
+
+  if (overflow_protection) {
+    if (!br__safe_add_size(base_offset, reserved, &payload_limit) ||
+        !br__safe_add_size(payload_limit, page_size, &guard_end) || guard_end > region.value.size) {
+      br_vm_release(region.value.data, region.value.size);
+      return BR_STATUS_INVALID_STATE;
+    }
+
+    /*
+    Bedrock keeps overflow protection as a trailing guard page past the usable
+    payload. This stays close to Odin's intent while avoiding exposing the guard
+    page itself as part of `block.reserved`.
+    */
+    if (!br_vm_protect(region.value.data + payload_limit, page_size, BR_VM_PROTECT_NONE)) {
+      br_vm_release(region.value.data, region.value.size);
+      return BR_STATUS_NOT_SUPPORTED;
+    }
+  }
 
   *out_block = &platform_block->block;
   return BR_STATUS_OK;
@@ -189,6 +222,7 @@ static br_status br__virtual_block_commit_if_needed(br_virtual_arena_block *bloc
   usize base_offset;
   usize extra_size;
   usize total_commit;
+  usize payload_limit;
 
   if (block == NULL) {
     return BR_STATUS_OUT_OF_MEMORY;
@@ -218,7 +252,10 @@ static br_status br__virtual_block_commit_if_needed(br_virtual_arena_block *bloc
   bytes.
   */
   total_commit = br__max_size(total_commit, default_commit_size);
-  total_commit = br__min_size(total_commit, platform_block->reserved_total);
+  if (!br__safe_add_size(base_offset, block->reserved, &payload_limit)) {
+    return BR_STATUS_OUT_OF_MEMORY;
+  }
+  total_commit = br__min_size(total_commit, payload_limit);
 
   if (total_commit <= platform_block->committed_total) {
     return BR_STATUS_OK;
@@ -379,7 +416,7 @@ static br_alloc_result br__virtual_arena_alloc_internal(br_virtual_arena *arena,
         needed = br__max_size(needed, default_commit_size);
         block_size = br__max_size(needed, minimum_block_size);
 
-        status = br__virtual_block_create(needed, block_size, alignment, &new_block);
+        status = br__virtual_block_create(needed, block_size, alignment, arena->flags, &new_block);
         if (status != BR_STATUS_OK) {
           return br__virtual_arena_result(NULL, 0u, status);
         }
@@ -529,7 +566,8 @@ br_status br_virtual_arena_init_growing(br_virtual_arena *arena, usize reserved)
     }
   }
 
-  status = br__virtual_block_create(0u, reserved, BR_DEFAULT_ALIGNMENT, &arena->curr_block);
+  status =
+    br__virtual_block_create(0u, reserved, BR_DEFAULT_ALIGNMENT, arena->flags, &arena->curr_block);
   if (status != BR_STATUS_OK) {
     return status;
   }
@@ -575,8 +613,8 @@ br_status br_virtual_arena_init_static(br_virtual_arena *arena, usize reserved, 
     }
   }
 
-  status =
-    br__virtual_block_create(commit_size, reserved, BR_DEFAULT_ALIGNMENT, &arena->curr_block);
+  status = br__virtual_block_create(
+    commit_size, reserved, BR_DEFAULT_ALIGNMENT, arena->flags, &arena->curr_block);
   if (status != BR_STATUS_OK) {
     return status;
   }

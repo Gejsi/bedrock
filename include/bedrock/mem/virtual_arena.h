@@ -7,6 +7,9 @@
 BR_EXTERN_C_BEGIN
 
 typedef struct br_virtual_arena_block br_virtual_arena_block;
+typedef u32 br_virtual_arena_flags;
+
+enum { BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION = 1u << 0 };
 
 typedef enum br_virtual_arena_kind {
   BR_VIRTUAL_ARENA_KIND_NONE = 0,
@@ -21,6 +24,7 @@ typedef struct br_virtual_arena {
   usize total_reserved;
   usize default_commit_size;
   usize minimum_block_size;
+  br_virtual_arena_flags flags;
   usize temp_count;
 } br_virtual_arena;
 
@@ -56,6 +60,8 @@ Bedrock v1 only exposes Odin's virtual growing/static variants here. Buffer
 arenas already exist separately as `br_arena`, so this layer stays focused on
 virtual-memory-backed arenas. Unlike Odin's current implementation, Bedrock
 does not add a built-in mutex here yet because `thread`/`sync` has not landed.
+Overflow protection is available as a trailing guard page via `flags`; Bedrock
+does not currently expose Odin's broader memory-block flag surface directly.
 */
 
 void br_virtual_arena_init(br_virtual_arena *arena);

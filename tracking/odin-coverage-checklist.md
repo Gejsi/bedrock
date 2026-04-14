@@ -46,7 +46,7 @@ Current Bedrock files:
 | fixed-buffer arena | `adapted` | `arena.h`, `arena.c` | Implemented as the first arena shape. |
 | arena mark / rewind | `done` | `arena.h`, `arena.c` | Implemented. |
 | virtual memory API | `adapted` | `virtual.h`, `virtual.c` | Reserve/commit/decommit/release/protect landed with Windows and POSIX backends. |
-| virtual growing/static arena core | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Growing and static arenas landed with allocator support, reset/destroy, and mark/rewind. |
+| virtual growing/static arena core | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Growing and static arenas landed with allocator support, reset/destroy, mark/rewind, and optional trailing guard-page overflow protection. |
 | tracking allocator | `planned` | none | Called out in `spec/modules/memory.md`, not implemented. |
 | mutex / locked allocator | `planned` | none | Useful later for shared allocators. |
 | rollback stack allocator | `planned` | none | Not started. |

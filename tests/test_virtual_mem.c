@@ -206,6 +206,50 @@ static void test_virtual_arena_temp_invalid(void) {
   assert(br_virtual_arena_temp_end(temp.value) == BR_STATUS_INVALID_STATE);
 }
 
+static void test_virtual_arena_overflow_protection(void) {
+  br_virtual_arena arena;
+  br_alloc_result full;
+  br_alloc_result overflow;
+  usize page_size = br_vm_page_size();
+  usize reserved;
+
+  if (page_size == 0u) {
+    return;
+  }
+
+  reserved = page_size * 2u;
+
+  br_virtual_arena_init(&arena);
+  arena.flags = BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION;
+  arena.default_commit_size = page_size;
+  assert(br_virtual_arena_init_static(&arena, reserved, page_size) == BR_STATUS_OK);
+  assert(arena.total_reserved == reserved);
+
+  full = br_virtual_arena_alloc_uninit(&arena, reserved, 1u);
+  assert(full.status == BR_STATUS_OK);
+  assert(full.ptr != NULL);
+
+  overflow = br_virtual_arena_alloc(&arena, 1u, 1u);
+  assert(overflow.status == BR_STATUS_OUT_OF_MEMORY);
+  br_virtual_arena_destroy(&arena);
+
+  br_virtual_arena_init(&arena);
+  arena.flags = BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION;
+  arena.default_commit_size = page_size;
+  arena.minimum_block_size = reserved;
+  assert(br_virtual_arena_init_growing(&arena, reserved) == BR_STATUS_OK);
+  assert(arena.total_reserved == reserved);
+
+  full = br_virtual_arena_alloc_uninit(&arena, reserved, 1u);
+  assert(full.status == BR_STATUS_OK);
+  assert(full.ptr != NULL);
+
+  overflow = br_virtual_arena_alloc(&arena, 1u, 1u);
+  assert(overflow.status == BR_STATUS_OK);
+  assert(arena.total_reserved > reserved);
+  br_virtual_arena_destroy(&arena);
+}
+
 int main(void) {
   test_vm_reserve_commit_release();
   test_virtual_arena_static();
@@ -213,5 +257,6 @@ int main(void) {
   test_virtual_arena_temp_end();
   test_virtual_arena_temp_ignore();
   test_virtual_arena_temp_invalid();
+  test_virtual_arena_overflow_protection();
   return 0;
 }
