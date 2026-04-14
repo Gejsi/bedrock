@@ -18,18 +18,24 @@ The comparison target is the Odin checkout currently pinned in
 
 ## `core/mem`
 
-Current label: `bootstrap subset`
+Current label: `partial v1`
 
 Why this label:
-- Bedrock only has the allocator contract and the first arena implementation.
-- Odin `core/mem` is much broader and includes specialized allocators and
-  virtual-memory-backed infrastructure that Bedrock has not started.
+- Bedrock now has the allocator contract, the first fixed arena, and the first
+  cross-platform virtual-memory-backed arena implementation.
+- Odin `core/mem` is still much broader and includes specialized allocators,
+  synchronized wrappers, file mapping, and TLSF work that Bedrock has not
+  ported yet.
 
 Current Bedrock files:
 - `include/bedrock/mem/alloc.h`
 - `include/bedrock/mem/arena.h`
+- `include/bedrock/mem/virtual.h`
+- `include/bedrock/mem/virtual_arena.h`
 - `src/mem/alloc.c`
 - `src/mem/arena.c`
+- `src/mem/virtual.c`
+- `src/mem/virtual_arena.c`
 
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
@@ -39,18 +45,20 @@ Current Bedrock files:
 | fail allocator | `done` | `alloc.c` | Implemented. |
 | fixed-buffer arena | `adapted` | `arena.h`, `arena.c` | Implemented as the first arena shape. |
 | arena mark / rewind | `done` | `arena.h`, `arena.c` | Implemented. |
+| virtual memory API | `adapted` | `virtual.h`, `virtual.c` | Reserve/commit/decommit/release/protect landed with Windows and POSIX backends. |
+| virtual growing/static arena core | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Growing and static arenas landed with allocator support, reset/destroy, and mark/rewind. |
 | tracking allocator | `planned` | none | Called out in `spec/modules/memory.md`, not implemented. |
 | mutex / locked allocator | `planned` | none | Useful later for shared allocators. |
 | rollback stack allocator | `planned` | none | Not started. |
 | raw memory helper layer | `planned` | none | Not started. |
 | TLSF allocator | `deferred` | none | Odin has `tlsf/*`; Bedrock does not. |
-| virtual memory API | `deferred` | none | Odin has `virtual/*`; Bedrock does not. |
-| virtual arena | `deferred` | none | Explicitly deferred in the memory spec. |
+| virtual temp / watermark helpers | `planned` | none | Bedrock currently exposes mark/rewind instead of Odin's temp helper API. |
+| virtual buffer-backed arena variant | `adapted` | `arena.h`, `arena.c` | Bedrock keeps fixed-buffer arenas in `br_arena` instead of duplicating Odin's `.Buffer` variant here. |
 | file mapping / VM-backed file helpers | `deferred` | none | Not started. |
 
 Summary:
-- `mem` is not a broad Odin port yet.
-- It is the minimum allocator foundation needed to let other modules exist.
+- `mem` now includes the VM milestone that started the project.
+- It is still not a broad Odin port yet.
 
 ## `core/bytes`
 

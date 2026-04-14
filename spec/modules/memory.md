@@ -9,6 +9,9 @@ without hidden ambient context.
 
 - allocator abstraction
 - fixed-buffer arena allocator
+- cross-platform virtual memory reserve/commit/decommit/release/protect
+- virtual static arenas
+- virtual growing arenas
 - arena savepoints / rewind markers
 - null allocator
 - panic/fail-fast allocator
@@ -16,13 +19,12 @@ without hidden ambient context.
 
 ## Defer
 
-- virtual-memory-backed growing arenas
 - TLSF and other specialized allocators
 - file mapping
-- platform-specific page reservation APIs
+- platform-specific VM extras such as guard pages and overflow-protected blocks
 
-Those features are valuable, but they belong after the basic allocator contract
-is stable.
+Those features are valuable, but they belong after the core VM-backed arena
+story is stable.
 
 ## Proposed Core Allocator Shape
 
@@ -90,6 +92,21 @@ Important semantics:
 - individual frees are unsupported
 - rewind is only valid to a previously returned mark
 - allocators are not thread-safe unless wrapped explicitly
+
+## Virtual Arena Design
+
+Bedrock now also has a VM-backed arena layer. The intended v1 shape is:
+
+- one cross-platform VM substrate with reserve/commit/decommit/release/protect
+- one static virtual arena
+- one growing virtual arena
+- explicit allocator adapters and rewind markers
+
+Important Bedrock-specific deviations from Odin for now:
+
+- no buffer-backed variant in `virtual_arena`; fixed buffers stay in `br_arena`
+- no built-in mutex; the arena is intentionally single-threaded for now
+- no overflow-protection/guard-page flags yet
 
 ## Temporary Allocation
 

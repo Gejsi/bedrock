@@ -7,6 +7,8 @@
 #include <bedrock/bufio.h>
 #include <bedrock/alloc.h>
 #include <bedrock/arena.h>
+#include <bedrock/virtual.h>
+#include <bedrock/virtual_arena.h>
 #include <bedrock/bytes.h>
 #include <bedrock/utf8.h>
 #include <bedrock/strings.h>
