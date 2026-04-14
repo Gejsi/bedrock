@@ -48,7 +48,7 @@ Current Bedrock files:
 | arena mark / rewind | `done` | `arena.h`, `arena.c` | Implemented. |
 | virtual memory API | `adapted` | `virtual.h`, `virtual.c` | Reserve/commit/decommit/release/protect landed with Windows and POSIX backends. |
 | virtual growing/static arena core | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Growing and static arenas landed with allocator support, reset/destroy, mark/rewind, and optional trailing guard-page overflow protection. |
-| tracking allocator | `adapted` | `tracking_allocator.h`, `tracking_allocator.c` | Landed as a linear live-allocation tracker without Odin's map, mutex, feature-query, or source-location machinery. |
+| tracking allocator | `adapted` | `tracking_allocator.h`, `tracking_allocator.c` | Landed with a dense live-entry list plus a private pointer index; it still omits Odin's mutex, feature-query, and source-location machinery. |
 | mutex / locked allocator | `planned` | none | Useful later for shared allocators. |
 | rollback stack allocator | `planned` | none | Not started. |
 | raw memory helper layer | `planned` | none | Not started. |
