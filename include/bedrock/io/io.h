@@ -54,8 +54,8 @@ Seek origin shared by byte and string readers and generic streams.
 */
 typedef enum br_seek_from {
   BR_SEEK_FROM_START = 0,
-  BR_SEEK_FROM_CURRENT = 1,
-  BR_SEEK_FROM_END = 2
+  BR_SEEK_FROM_CURRENT,
+  BR_SEEK_FROM_END
 } br_seek_from;
 
 /*
@@ -64,16 +64,16 @@ return `BR_STATUS_NOT_SUPPORTED`.
 */
 typedef enum br_io_mode {
   BR_IO_MODE_CLOSE = 0,
-  BR_IO_MODE_FLUSH = 1,
-  BR_IO_MODE_READ = 2,
-  BR_IO_MODE_READ_AT = 3,
-  BR_IO_MODE_WRITE = 4,
-  BR_IO_MODE_WRITE_AT = 5,
-  BR_IO_MODE_SEEK = 6,
-  BR_IO_MODE_SIZE = 7,
-  BR_IO_MODE_DESTROY = 8,
-  BR_IO_MODE_QUERY = 9,
-  BR_IO_MODE_COUNT = 10
+  BR_IO_MODE_FLUSH,
+  BR_IO_MODE_READ,
+  BR_IO_MODE_READ_AT,
+  BR_IO_MODE_WRITE,
+  BR_IO_MODE_WRITE_AT,
+  BR_IO_MODE_SEEK,
+  BR_IO_MODE_SIZE,
+  BR_IO_MODE_DESTROY,
+  BR_IO_MODE_QUERY,
+  BR_IO_MODE_COUNT
 } br_io_mode;
 
 typedef u64 br_io_mode_set;

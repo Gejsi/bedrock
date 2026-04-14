@@ -2,8 +2,8 @@
 
 typedef enum br__tracking_slot_state {
   BR__TRACKING_SLOT_EMPTY = 0,
-  BR__TRACKING_SLOT_FULL = 1,
-  BR__TRACKING_SLOT_TOMBSTONE = 2
+  BR__TRACKING_SLOT_FULL,
+  BR__TRACKING_SLOT_TOMBSTONE
 } br__tracking_slot_state;
 
 typedef struct br__tracking_index_slot {

@@ -13,8 +13,8 @@ enum { BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION = 1u << 0 };
 
 typedef enum br_virtual_arena_kind {
   BR_VIRTUAL_ARENA_KIND_NONE = 0,
-  BR_VIRTUAL_ARENA_KIND_GROWING = 1,
-  BR_VIRTUAL_ARENA_KIND_STATIC = 2
+  BR_VIRTUAL_ARENA_KIND_GROWING,
+  BR_VIRTUAL_ARENA_KIND_STATIC
 } br_virtual_arena_kind;
 
 typedef struct br_virtual_arena {

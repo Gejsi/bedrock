@@ -7,11 +7,11 @@ BR_EXTERN_C_BEGIN
 
 typedef enum br_alloc_op {
   BR_ALLOC_OP_ALLOC = 0,
-  BR_ALLOC_OP_ALLOC_UNINIT = 1,
-  BR_ALLOC_OP_RESIZE = 2,
-  BR_ALLOC_OP_RESIZE_UNINIT = 3,
-  BR_ALLOC_OP_FREE = 4,
-  BR_ALLOC_OP_RESET = 5
+  BR_ALLOC_OP_ALLOC_UNINIT,
+  BR_ALLOC_OP_RESIZE,
+  BR_ALLOC_OP_RESIZE_UNINIT,
+  BR_ALLOC_OP_FREE,
+  BR_ALLOC_OP_RESET
 } br_alloc_op;
 
 typedef struct br_alloc_request {
