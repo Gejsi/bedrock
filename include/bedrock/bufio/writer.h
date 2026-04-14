@@ -14,6 +14,7 @@ typedef struct br_bufio_writer {
   br_allocator allocator;
   br_status err;
   bool owns_storage;
+  usize max_consecutive_empty_writes;
 } br_bufio_writer;
 
 typedef br_io_result br_bufio_writer_io_result;
@@ -61,6 +62,14 @@ br_bufio_writer_write(br_bufio_writer *writer, const void *src, usize src_len);
 br_status br_bufio_writer_write_byte(br_bufio_writer *writer, u8 value);
 br_bufio_writer_io_result br_bufio_writer_write_rune(br_bufio_writer *writer, br_rune value);
 br_bufio_writer_io_result br_bufio_writer_write_string(br_bufio_writer *writer, br_string_view s);
+
+/*
+Read from `source` into the buffered writer until EOF or error.
+
+Unlike Odin's fast path, Bedrock currently always stages through the buffer
+because generic streams do not expose a `READ_FROM` specialization mode yet.
+*/
+br_i64_result br_bufio_writer_read_from(br_bufio_writer *writer, br_stream source);
 
 /*
 Expose this buffered writer through the generic stream interface.

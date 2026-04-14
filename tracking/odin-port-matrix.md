@@ -1,4 +1,4 @@
-# Odin Port Matrix
+#Odin Port Matrix
 
 This file tracks which Odin packages are candidates for Bedrock, which ones need
 redesign, and which ones should stay out of scope.
@@ -8,22 +8,32 @@ Detailed status for the currently active module ports lives in
 
 | Odin package | Decision | Notes |
 | --- | --- | --- |
-| `core/unicode/utf8` | partial v1 | Self-contained UTF-8 encode/decode/validate/count foundation landed without vendor dependencies; higher Unicode tables and case folding are still separate work. |
-| `core/bytes` | partial v1 | Slice/view model, buffer, reader, split, and replace/remove family landed, including Odin-style rune-aware empty-substring behavior; remaining gaps are mostly explicit rune helpers and some convenience APIs. |
-| `core/strings` | partial v1 | String view/owned string layer, builder, reader, split, and replace/remove helpers landed with UTF-8-aware rune search/count behavior; broader conversion, iterator, and Unicode-table work still remains. |
-| `core/io` | partial v1 | Odin-style single stream proc plus in-memory adapters landed, including generic byte/rune/exact-read-write/copy helpers and `read_at`/`write_at`/`size` fallbacks; buffered utilities still remain. |
-| `core/bufio` | partial v1 | Buffered reader, writer, and read-writer landed on top of `io`; scanner, lookahead, and some convenience helpers still remain. |
-| `core/encoding/base64` | v1 | Straightforward table-driven code. |
-| `core/encoding/hex` | v1 | Straightforward. |
-| `core/encoding/endian` | v1 | Straightforward. |
-| `core/encoding/varint` | v1 | Straightforward. |
-| `core/encoding/csv` | v1 | Reasonable parser target. |
-| `core/encoding/ini` | v1 | Reasonable parser target. |
-| `core/path/slashpath` | v1 | Good portable path layer. |
-| `core/time/rfc3339` | v1 | Useful focused formatter/parser. |
-| `core/math/bits` | v1 | Mostly portability shims and bit helpers. |
-| `core/mem` | partial v1 | Keep allocators and fixed arenas; defer virtual memory and specialized allocators. |
-| `core/container/*` | redesign | Keep the ideas; implement as generated typed containers. |
+| `core/unicode/utf8` | partial v1 | Self-contained UTF-8 encode/decode/validate/count foundation landed without vendor dependencies;
+higher Unicode tables and case folding are still separate work.| | `core / bytes` | partial v1 |
+  Slice / view model,
+  buffer, reader, split, and replace / remove family landed,
+  including Odin - style rune - aware empty - substring behavior;
+  remaining gaps are mostly explicit rune helpers and
+    some convenience APIs.| | `core / strings` | partial v1 | String view / owned string layer,
+  builder, reader, split,
+  and replace / remove helpers landed with UTF - 8 - aware rune search / count behavior;
+  broader conversion, iterator,
+  and Unicode - table work still remains.| | `core / io` | partial v1 |
+    Odin - style single stream proc plus in - memory adapters landed,
+  including generic byte / rune / exact - read -
+    write / copy helpers and `read_at`/`write_at`/`size` fallbacks;
+  buffered utilities still remain.| | `core / bufio` | partial v1 | Buffered reader, writer,
+  read - writer, `reader.write_to`, and `writer.read_from` landed on top of `io`;
+  scanner, lookahead,
+  and some convenience helpers still remain.| | `core / encoding / base64` | v1 |
+    Straightforward table - driven code.| | `core / encoding / hex` | v1 | Straightforward.|
+    | `core / encoding / endian` | v1 | Straightforward.| | `core / encoding / varint` | v1 |
+    Straightforward.| | `core / encoding / csv` | v1 | Reasonable parser target.|
+    | `core / encoding / ini` | v1 | Reasonable parser target.| | `core / path / slashpath` | v1 |
+    Good portable path layer.| | `core / time / rfc3339` | v1 | Useful focused formatter / parser.|
+    | `core / math / bits` | v1 | Mostly portability shims and bit helpers.| | `core / mem` |
+    partial v1 | Keep allocators and fixed arenas;
+  defer virtual memory and specialized allocators.| | `core / container/*` | redesign | Keep the ideas; implement as generated typed containers. |
 | `core/sort` | redesign | Use erased generic algorithms plus optional typed sugar. |
 | `core/thread` | defer | Later module; no direct v1 port. |
 | `core/sync` | defer | Useful later, but depends on the thread story. |

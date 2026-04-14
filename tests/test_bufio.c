@@ -197,6 +197,50 @@ static void test_bufio_reader_no_progress(void) {
   assert(source.reads == 2u);
 }
 
+static void test_bufio_reader_write_to(void) {
+  br_byte_reader source;
+  br_bufio_reader reader;
+  br_byte_buffer sink;
+  br_bufio_reader_peek_result peek_result;
+  br_i64_result write_result;
+  br_bytes_view view;
+  test_bufio_short_sink short_sink;
+  u8 backing[4];
+
+  br_byte_reader_init(&source, BR_BYTES_LIT("abcdef"));
+  br_byte_buffer_init(&sink, br_allocator_heap());
+  assert(br_bufio_reader_init_with_buffer(
+           &reader, br_byte_reader_as_stream(&source), backing, BR_ARRAY_COUNT(backing)) ==
+         BR_STATUS_OK);
+
+  peek_result = br_bufio_reader_peek(&reader, 2u);
+  assert(peek_result.status == BR_STATUS_OK);
+  assert(peek_result.value.len == 2u);
+
+  write_result = br_bufio_reader_write_to(&reader, br_byte_buffer_as_stream(&sink));
+  assert(write_result.value == 6);
+  assert(write_result.status == BR_STATUS_OK);
+  assert(br_bufio_reader_buffered(&reader) == 0u);
+  view = br_byte_buffer_view(&sink);
+  assert(view.len == 6u);
+  assert(memcmp(view.data, "abcdef", 6u) == 0);
+  br_byte_buffer_destroy(&sink);
+
+  br_byte_reader_init(&source, BR_BYTES_LIT("abcd"));
+  assert(br_bufio_reader_init_with_buffer(
+           &reader, br_byte_reader_as_stream(&source), backing, BR_ARRAY_COUNT(backing)) ==
+         BR_STATUS_OK);
+  peek_result = br_bufio_reader_peek(&reader, 1u);
+  assert(peek_result.status == BR_STATUS_OK);
+  short_sink.max_per_write = 1u;
+  short_sink.written = 0u;
+  write_result =
+    br_bufio_reader_write_to(&reader, br_stream_make(&short_sink, test_bufio_short_sink_proc));
+  assert(write_result.value == 1);
+  assert(write_result.status == BR_STATUS_SHORT_WRITE);
+  assert(short_sink.written == 1u);
+}
+
 static void test_bufio_writer_basic(void) {
   static const u8 expected[] = {'a', 'b', 'c', 0xc3u, 0xa4u, '!'};
   br_byte_buffer sink;
@@ -261,6 +305,48 @@ static void test_bufio_writer_short_write(void) {
   assert(br_bufio_writer_buffered(&writer) == 3u);
   assert(br_bufio_writer_write_byte(&writer, (u8)'!') == BR_STATUS_SHORT_WRITE);
   assert(sink.written == 1u);
+}
+
+static void test_bufio_writer_read_from(void) {
+  br_byte_reader source;
+  br_byte_buffer sink;
+  br_bufio_writer writer;
+  br_i64_result read_result;
+  br_bytes_view view;
+  test_bufio_no_progress_reader stuck_source;
+  u8 backing[4];
+
+  br_byte_reader_init(&source, BR_BYTES_LIT("abcdef"));
+  br_byte_buffer_init(&sink, br_allocator_heap());
+  assert(br_bufio_writer_init_with_buffer(
+           &writer, br_byte_buffer_as_stream(&sink), backing, BR_ARRAY_COUNT(backing)) ==
+         BR_STATUS_OK);
+
+  read_result = br_bufio_writer_read_from(&writer, br_byte_reader_as_stream(&source));
+  assert(read_result.value == 6);
+  assert(read_result.status == BR_STATUS_OK);
+  assert(br_bufio_writer_buffered(&writer) == 2u);
+  view = br_byte_buffer_view(&sink);
+  assert(view.len == 4u);
+  assert(memcmp(view.data, "abcd", 4u) == 0);
+  assert(br_bufio_writer_flush(&writer) == BR_STATUS_OK);
+  view = br_byte_buffer_view(&sink);
+  assert(view.len == 6u);
+  assert(memcmp(view.data, "abcdef", 6u) == 0);
+  br_byte_buffer_destroy(&sink);
+
+  br_byte_buffer_init(&sink, br_allocator_heap());
+  assert(br_bufio_writer_init_with_buffer(
+           &writer, br_byte_buffer_as_stream(&sink), backing, BR_ARRAY_COUNT(backing)) ==
+         BR_STATUS_OK);
+  memset(&stuck_source, 0, sizeof(stuck_source));
+  writer.max_consecutive_empty_writes = 2u;
+  read_result = br_bufio_writer_read_from(
+    &writer, br_stream_make(&stuck_source, test_bufio_no_progress_reader_proc));
+  assert(read_result.value == 0);
+  assert(read_result.status == BR_STATUS_NO_PROGRESS);
+  assert(stuck_source.reads == 2u);
+  br_byte_buffer_destroy(&sink);
 }
 
 static void test_bufio_read_writer_stream(void) {
@@ -328,7 +414,9 @@ int main(void) {
   test_bufio_reader_basic();
   test_bufio_reader_runes_and_lines();
   test_bufio_reader_no_progress();
+  test_bufio_reader_write_to();
   test_bufio_writer_basic();
+  test_bufio_writer_read_from();
   test_bufio_writer_short_write();
   test_bufio_read_writer_stream();
   return 0;

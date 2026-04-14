@@ -113,6 +113,11 @@ br_string_result
 br_bufio_reader_read_string(br_bufio_reader *reader, u8 delim, br_allocator allocator);
 
 /*
+Write all remaining buffered and source bytes into `sink`.
+*/
+br_i64_result br_bufio_reader_write_to(br_bufio_reader *reader, br_stream sink);
+
+/*
 Expose this buffered reader through the generic stream interface.
 */
 br_stream br_bufio_reader_as_stream(br_bufio_reader *reader);

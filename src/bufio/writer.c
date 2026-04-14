@@ -244,6 +244,74 @@ br_bufio_writer_io_result br_bufio_writer_write_string(br_bufio_writer *writer, 
   return br_bufio_writer_write(writer, s.data, s.len);
 }
 
+br_i64_result br_bufio_writer_read_from(br_bufio_writer *writer, br_stream source) {
+  i64 total;
+  br_status status;
+
+  if (writer == NULL) {
+    return br_i64_result_make(0, BR_STATUS_INVALID_ARGUMENT);
+  }
+  if (writer->err != BR_STATUS_OK) {
+    return br_i64_result_make(0, writer->err);
+  }
+
+  /*
+  Odin can bypass buffering when the underlying writer exposes io.read_from.
+  Bedrock's current stream API has no READ_FROM specialization mode, so this
+  helper always stages through the buffered writer itself.
+  */
+  total = 0;
+  status = BR_STATUS_OK;
+  for (;;) {
+    usize empty_limit;
+    usize empty_reads;
+
+    if (br_bufio_writer_available(writer) == 0u) {
+      status = br_bufio_writer_flush(writer);
+      if (status != BR_STATUS_OK) {
+        return br_i64_result_make(total, status);
+      }
+    }
+
+    empty_limit = writer->max_consecutive_empty_writes;
+    if (empty_limit == 0u) {
+      empty_limit = BR_BUFIO_DEFAULT_MAX_CONSECUTIVE_EMPTY_WRITES;
+    }
+
+    empty_reads = 0u;
+    for (;;) {
+      br_io_result read_result;
+
+      read_result = br_read(source, writer->buf + writer->n, br_bufio_writer_available(writer));
+      if (read_result.count > 0u || read_result.status != BR_STATUS_OK) {
+        writer->n += read_result.count;
+        total += (i64)read_result.count;
+        status = read_result.status;
+        break;
+      }
+
+      empty_reads += 1u;
+      if (empty_reads >= empty_limit) {
+        return br_i64_result_make(total, BR_STATUS_NO_PROGRESS);
+      }
+    }
+
+    if (status != BR_STATUS_OK) {
+      break;
+    }
+  }
+
+  if (status == BR_STATUS_EOF) {
+    if (br_bufio_writer_available(writer) == 0u) {
+      status = br_bufio_writer_flush(writer);
+    } else {
+      status = BR_STATUS_OK;
+    }
+  }
+
+  return br_i64_result_make(total, status);
+}
+
 static br_i64_result br__bufio_writer_stream_proc(
   void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
   br_bufio_writer *writer;

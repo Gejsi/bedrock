@@ -1,4 +1,4 @@
-# Odin Coverage Checklist
+#Odin Coverage Checklist
 
 This file makes the status of the current Odin-inspired work explicit instead of
 describing it with vague labels.
@@ -228,17 +228,17 @@ Current Bedrock files:
 | `bufio.Reader` `read_rune` / `unread_rune` | `done` | `bufio/reader.h`, `bufio/reader.c`, `test_bufio.c` | Landed. |
 | `bufio.Reader` `read_slice` / `read_bytes` / `read_string` | `adapted` | `bufio/reader.h`, `bufio/reader.c`, `test_bufio.c` | Landed with explicit owned result types for bytes and strings. |
 | `bufio.Reader` stream adapter | `adapted` | `bufio/reader.h`, `bufio/reader.c` | Exposed as a generic read stream. |
-| `bufio.Reader` `write_to` | `planned` | none | Not landed. |
+| `bufio.Reader` `write_to` | `adapted` | `bufio/reader.h`, `bufio/reader.c`, `test_bufio.c` | Landed; Bedrock normalizes short successful generic writes into `BR_STATUS_SHORT_WRITE`. |
 | `bufio.Writer` core init/reset/destroy | `adapted` | `bufio/writer.h`, `bufio/writer.c` | Heap-backed and caller-buffer-backed init landed with explicit allocators. |
 | `bufio.Writer` `flush` / `available` / `buffered` | `done` | `bufio/writer.h`, `bufio/writer.c`, `test_bufio.c` | Landed. |
 | `bufio.Writer` `write` / `write_byte` / `write_rune` / `write_string` | `done` | `bufio/writer.h`, `bufio/writer.c`, `test_bufio.c` | Landed with explicit short-write detection. |
 | `bufio.Writer` stream adapter | `adapted` | `bufio/writer.h`, `bufio/writer.c` | Exposed as a generic write/flush stream. |
-| `bufio.Writer` `read_from` | `planned` | none | Not landed. |
+| `bufio.Writer` `read_from` | `adapted` | `bufio/writer.h`, `bufio/writer.c`, `test_bufio.c` | Landed; Bedrock currently always stages through the buffer because generic streams do not expose Odin's `read_from` specialization hook. |
 | `bufio.Read_Writer` | `adapted` | `bufio/read_writer.h`, `bufio/read_writer.c`, `test_bufio.c` | Landed as a tiny combined adapter. |
 | `lookahead_reader` | `planned` | none | Not started. |
 | `scanner` | `planned` | none | Not started. |
 
 Summary:
 - `bufio` is now a real partial module instead of a roadmap placeholder.
-- The safe next growth area is `writer.read_from`, `reader.write_to`, then the
-  higher-level scanner/lookahead utilities.
+- The safe next growth area is scanner/lookahead utilities and any remaining
+  line-oriented convenience helpers.
