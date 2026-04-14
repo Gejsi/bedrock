@@ -23,16 +23,17 @@ higher Unicode tables and case folding are still separate work.| | `core / bytes
   including generic byte / rune / exact - read -
     write / copy helpers and `read_at`/`write_at`/`size` fallbacks;
   buffered utilities still remain.| | `core / bufio` | partial v1 | Buffered reader, writer,
-  read - writer, `reader.write_to`, and `writer.read_from` landed on top of `io`;
-  scanner, lookahead,
-  and some convenience helpers still remain.| | `core / encoding / base64` | v1 |
+  read - writer, `reader.write_to`, `writer.read_from`,
+  and `lookahead_reader` landed on top of `io`;
+  scanner and
+  some convenience helpers still remain.| | `core / encoding / base64` | v1 |
     Straightforward table - driven code.| | `core / encoding / hex` | v1 | Straightforward.|
     | `core / encoding / endian` | v1 | Straightforward.| | `core / encoding / varint` | v1 |
     Straightforward.| | `core / encoding / csv` | v1 | Reasonable parser target.|
     | `core / encoding / ini` | v1 | Reasonable parser target.| | `core / path / slashpath` | v1 |
     Good portable path layer.| | `core / time / rfc3339` | v1 | Useful focused formatter / parser.|
-    | `core / math / bits` | v1 | Mostly portability shims and bit helpers.| | `core / mem` |
-    partial v1 | Keep allocators and fixed arenas;
+    | `core / math / bits` | v1 | Mostly portability shims and
+  bit helpers.| | `core / mem` | partial v1 | Keep allocators and fixed arenas;
   defer virtual memory and specialized allocators.| | `core / container/*` | redesign | Keep the ideas; implement as generated typed containers. |
 | `core/sort` | redesign | Use erased generic algorithms plus optional typed sugar. |
 | `core/thread` | defer | Later module; no direct v1 port. |

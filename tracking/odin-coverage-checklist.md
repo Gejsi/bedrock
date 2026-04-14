@@ -212,13 +212,16 @@ Why this label:
 
 Current Bedrock files:
 - `include/bedrock/bufio/common.h`
+- `include/bedrock/bufio/lookahead_reader.h`
 - `include/bedrock/bufio/reader.h`
 - `include/bedrock/bufio/writer.h`
 - `include/bedrock/bufio/read_writer.h`
+- `src/bufio/lookahead_reader.c`
 - `src/bufio/reader.c`
 - `src/bufio/writer.c`
 - `src/bufio/read_writer.c`
 - `tests/test_bufio.c`
+- `tests/test_bufio_lookahead.c`
 
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
@@ -235,10 +238,10 @@ Current Bedrock files:
 | `bufio.Writer` stream adapter | `adapted` | `bufio/writer.h`, `bufio/writer.c` | Exposed as a generic write/flush stream. |
 | `bufio.Writer` `read_from` | `adapted` | `bufio/writer.h`, `bufio/writer.c`, `test_bufio.c` | Landed; Bedrock currently always stages through the buffer because generic streams do not expose Odin's `read_from` specialization hook. |
 | `bufio.Read_Writer` | `adapted` | `bufio/read_writer.h`, `bufio/read_writer.c`, `test_bufio.c` | Landed as a tiny combined adapter. |
-| `lookahead_reader` | `planned` | none | Not started. |
+| `lookahead_reader` | `adapted` | `bufio/lookahead_reader.h`, `bufio/lookahead_reader.c`, `test_bufio_lookahead.c` | Landed with explicit allocator-backed init options; exact-size semantics and EOF normalization match Odin. |
 | `scanner` | `planned` | none | Not started. |
 
 Summary:
 - `bufio` is now a real partial module instead of a roadmap placeholder.
-- The safe next growth area is scanner/lookahead utilities and any remaining
-  line-oriented convenience helpers.
+- The safe next growth area is `scanner`, then any remaining line-oriented
+  convenience helpers.
