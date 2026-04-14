@@ -189,6 +189,7 @@ Current Bedrock files:
 | generic `read_at` / `write_at` / `size` fallbacks | `adapted` | `io.c`, `tests/test_io.c` | Falls back through `seek` when a stream does not implement those modes directly. |
 | generic `read_byte` / `write_byte` helpers | `done` | `io.h`, `io.c`, `tests/test_io.c` | Landed on top of the stream API. |
 | generic `read_rune` / `write_rune` helpers | `adapted` | `io.h`, `io.c`, `tests/test_io.c` | Landed on top of UTF-8; malformed multi-byte stream reads report consumed bytes because generic streams cannot unread. |
+| generic `read_full` / `read_at_least` / `write_full` / `write_at_least` helpers | `adapted` | `io.h`, `io.c`, `tests/test_io.c` | Landed with Odin-style exact/minimum semantics plus Bedrock `NO_PROGRESS` guards for malformed C callbacks. |
 | generic `copy` / `copy_buffer` helpers | `adapted` | `io.h`, `io.c`, `tests/test_io.c` | Landed with explicit short-write detection. |
 | close / flush / destroy lifecycle operations | `adapted` | `io.h`, `io.c` | Present in the generic stream API; current in-memory streams mostly report unsupported. |
 | buffered IO / scanners / pipes | `adapted` | `bufio/*`, `tests/test_bufio.c` | Core buffered IO has moved into the new `bufio` module. |
@@ -196,8 +197,7 @@ Current Bedrock files:
 Summary:
 - `io` now exists as a real foundational module.
 - Bedrock now follows Odin's single-stream direction more closely than before.
-- The next growth area is `read_full` / `write_full` style helpers and then
-  further `bufio` expansion.
+- The next growth area is further `bufio` expansion and scanner/lookahead work.
 
 ## `core/bufio`
 

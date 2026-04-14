@@ -14,6 +14,18 @@ typedef struct test_short_writer {
   usize written;
 } test_short_writer;
 
+typedef struct test_limited_reader {
+  const u8 *data;
+  usize len;
+  usize pos;
+  usize max_per_read;
+} test_limited_reader;
+
+typedef struct test_no_progress_stream {
+  br_io_mode mode;
+  usize calls;
+} test_no_progress_stream;
+
 static br_i64_result test_memory_stream_proc(
   void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
   test_memory_stream *stream;
@@ -76,6 +88,35 @@ static br_i64_result test_memory_stream_proc(
   }
 }
 
+static br_i64_result test_limited_reader_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  test_limited_reader *reader;
+  usize remaining;
+  usize count;
+
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
+
+  reader = (test_limited_reader *)context;
+  switch (mode) {
+    case BR_IO_MODE_READ:
+      if (reader->pos >= reader->len) {
+        return br_i64_result_make(0, BR_STATUS_EOF);
+      }
+
+      remaining = reader->len - reader->pos;
+      count = br_min_size(data_len, remaining);
+      count = br_min_size(count, reader->max_per_read);
+      memcpy(data, reader->data + reader->pos, count);
+      reader->pos += count;
+      return br_i64_result_make((i64)count, BR_STATUS_OK);
+    case BR_IO_MODE_QUERY:
+      return br_stream_query_utility(br_io_mode_bit(BR_IO_MODE_READ));
+    default:
+      return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+  }
+}
+
 static br_i64_result test_short_writer_proc(
   void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
   test_short_writer *writer;
@@ -93,6 +134,51 @@ static br_i64_result test_short_writer_proc(
       return br_i64_result_make((i64)count, BR_STATUS_OK);
     case BR_IO_MODE_QUERY:
       return br_stream_query_utility(br_io_mode_bit(BR_IO_MODE_WRITE));
+    default:
+      return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+  }
+}
+
+static br_i64_result test_no_progress_stream_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  test_no_progress_stream *stream;
+
+  BR_UNUSED(data);
+  BR_UNUSED(data_len);
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
+
+  stream = (test_no_progress_stream *)context;
+  switch (mode) {
+    case BR_IO_MODE_READ:
+    case BR_IO_MODE_WRITE:
+      if (mode != stream->mode) {
+        return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+      }
+
+      stream->calls += 1u;
+      return br_i64_result_make(0, BR_STATUS_OK);
+    case BR_IO_MODE_QUERY:
+      return br_stream_query_utility(br_io_mode_bit(stream->mode));
+    default:
+      return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+  }
+}
+
+static br_i64_result test_invalid_count_stream_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  BR_UNUSED(context);
+  BR_UNUSED(data);
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
+
+  switch (mode) {
+    case BR_IO_MODE_READ:
+    case BR_IO_MODE_WRITE:
+      return br_i64_result_make((i64)data_len + 1, BR_STATUS_OK);
+    case BR_IO_MODE_QUERY:
+      return br_stream_query_utility(br_io_mode_bit(BR_IO_MODE_READ) |
+                                     br_io_mode_bit(BR_IO_MODE_WRITE));
     default:
       return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
   }
@@ -127,6 +213,50 @@ static void test_io_invalid_stream(void) {
   query_result = br_query(stream);
   assert(query_result.modes == 0u);
   assert(query_result.status == BR_STATUS_NOT_SUPPORTED);
+}
+
+static void test_io_exact_and_at_least_helpers(void) {
+  static const u8 word[] = {'a', 'b', 'c', 'd', 'e', 'f'};
+  test_limited_reader reader;
+  test_no_progress_stream stuck_reader;
+  br_stream stream;
+  br_io_result io_result;
+  char buffer[6];
+
+  reader.data = word;
+  reader.len = BR_ARRAY_COUNT(word);
+  reader.pos = 0u;
+  reader.max_per_read = 2u;
+  stream = br_stream_make(&reader, test_limited_reader_proc);
+
+  io_result = br_read_at_least(stream, buffer, sizeof(buffer), 5u);
+  assert(io_result.count == 6u);
+  assert(io_result.status == BR_STATUS_OK);
+  assert(memcmp(buffer, "abcdef", 6u) == 0);
+
+  reader.pos = 0u;
+  io_result = br_read_full(stream, buffer, 4u);
+  assert(io_result.count == 4u);
+  assert(io_result.status == BR_STATUS_OK);
+  assert(memcmp(buffer, "abcd", 4u) == 0);
+
+  reader.len = 3u;
+  reader.pos = 0u;
+  io_result = br_read_full(stream, buffer, 5u);
+  assert(io_result.count == 3u);
+  assert(io_result.status == BR_STATUS_UNEXPECTED_EOF);
+
+  io_result = br_read_at_least(stream, buffer, 3u, 4u);
+  assert(io_result.count == 0u);
+  assert(io_result.status == BR_STATUS_SHORT_BUFFER);
+
+  stuck_reader.mode = BR_IO_MODE_READ;
+  stuck_reader.calls = 0u;
+  io_result =
+    br_read_at_least(br_stream_make(&stuck_reader, test_no_progress_stream_proc), buffer, 1u, 1u);
+  assert(io_result.count == 0u);
+  assert(io_result.status == BR_STATUS_NO_PROGRESS);
+  assert(stuck_reader.calls == 1u);
 }
 
 static void test_io_stream_fallbacks(void) {
@@ -400,6 +530,39 @@ static void test_io_byte_and_rune_helpers(void) {
   assert(rune_result.status == BR_STATUS_EOF);
 }
 
+static void test_io_write_exact_and_at_least_helpers(void) {
+  test_short_writer short_writer;
+  test_no_progress_stream stuck_writer;
+  br_io_result io_result;
+
+  short_writer.max_per_write = 2u;
+  short_writer.written = 0u;
+  io_result =
+    br_write_at_least(br_stream_make(&short_writer, test_short_writer_proc), "hello", 5u, 4u);
+  assert(io_result.count == 4u);
+  assert(io_result.status == BR_STATUS_OK);
+  assert(short_writer.written == 4u);
+
+  short_writer.max_per_write = 2u;
+  short_writer.written = 0u;
+  io_result = br_write_full(br_stream_make(&short_writer, test_short_writer_proc), "hello", 5u);
+  assert(io_result.count == 5u);
+  assert(io_result.status == BR_STATUS_OK);
+  assert(short_writer.written == 5u);
+
+  io_result =
+    br_write_at_least(br_stream_make(&short_writer, test_short_writer_proc), "abc", 3u, 4u);
+  assert(io_result.count == 0u);
+  assert(io_result.status == BR_STATUS_SHORT_BUFFER);
+
+  stuck_writer.mode = BR_IO_MODE_WRITE;
+  stuck_writer.calls = 0u;
+  io_result = br_write_full(br_stream_make(&stuck_writer, test_no_progress_stream_proc), "a", 1u);
+  assert(io_result.count == 0u);
+  assert(io_result.status == BR_STATUS_NO_PROGRESS);
+  assert(stuck_writer.calls == 1u);
+}
+
 static void test_io_copy_helpers(void) {
   br_byte_reader src_reader;
   br_byte_buffer dst_buffer;
@@ -447,13 +610,32 @@ static void test_io_copy_helpers(void) {
   assert(copy_result.status == BR_STATUS_SHORT_WRITE);
 }
 
+static void test_io_invalid_callback_counts(void) {
+  br_stream stream;
+  br_io_result io_result;
+  char buffer[4];
+
+  stream = br_stream_make(NULL, test_invalid_count_stream_proc);
+
+  io_result = br_read(stream, buffer, sizeof(buffer));
+  assert(io_result.count == 0u);
+  assert(io_result.status == BR_STATUS_INVALID_STATE);
+
+  io_result = br_write(stream, buffer, sizeof(buffer));
+  assert(io_result.count == 0u);
+  assert(io_result.status == BR_STATUS_INVALID_STATE);
+}
+
 int main(void) {
   test_io_invalid_stream();
+  test_io_exact_and_at_least_helpers();
   test_io_stream_fallbacks();
   test_io_byte_reader_stream();
   test_io_byte_buffer_stream();
   test_io_string_streams();
   test_io_byte_and_rune_helpers();
+  test_io_write_exact_and_at_least_helpers();
   test_io_copy_helpers();
+  test_io_invalid_callback_counts();
   return 0;
 }

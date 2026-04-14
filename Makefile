@@ -37,6 +37,8 @@ ifeq ($(COMPILER_FAMILY),clang)
 CLANG_ONLY_CFLAGS += -Wnewline-eof -Wno-unsafe-buffer-usage
 endif
 
+DEPFLAGS := -MMD -MP
+
 DEBUG_CFLAGS := -O0 -g3 -DDEBUG -fno-omit-frame-pointer -fno-optimize-sibling-calls
 RELEASE_CFLAGS := -O3 -DNDEBUG
 SANITIZE_CFLAGS := -O1 -g3 -DDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls
@@ -81,6 +83,8 @@ FORMAT_FILES := $(shell find $(FORMAT_DIRS) -type f \( -name '*.c' -o -name '*.h
 
 LIB_OBJS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRC_FILES))
 TEST_BINS := $(patsubst $(TEST_DIR)/%.c,$(BIN_DIR)/%,$(TEST_FILES))
+LIB_DEPS := $(LIB_OBJS:.o=.d)
+TEST_DEPS := $(addsuffix .d,$(TEST_BINS))
 
 .PHONY: all clean test check debug release sanitize asan format check-format print-config
 
@@ -115,7 +119,7 @@ print-config:
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -MF $(@:.o=.d) -MT $@ -c $< -o $@
 
 $(LIB_TARGET): $(LIB_OBJS)
 	@mkdir -p $(dir $@)
@@ -124,7 +128,7 @@ $(LIB_TARGET): $(LIB_OBJS)
 
 $(BIN_DIR)/%: $(TEST_DIR)/%.c $(LIB_TARGET)
 	@mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(TEST_CFLAGS) $< $(LIB_TARGET) $(LDFLAGS) -o $@
+	$(CC) $(CPPFLAGS) $(TEST_CFLAGS) $(DEPFLAGS) -MF $@.d -MT $@ $< $(LIB_TARGET) $(LDFLAGS) -o $@
 
 test: $(TEST_BINS)
 	@set -e; \
@@ -135,3 +139,5 @@ test: $(TEST_BINS)
 
 clean:
 	rm -rf build
+
+-include $(LIB_DEPS) $(TEST_DEPS)

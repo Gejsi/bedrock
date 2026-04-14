@@ -208,9 +208,35 @@ Read bytes using a generic stream.
 br_io_result br_read(br_stream stream, void *dst, usize dst_len);
 
 /*
+Read until at least `min_len` bytes have been copied into `dst`.
+
+If `dst_len` is smaller than `min_len`, `BR_STATUS_SHORT_BUFFER` is returned.
+If EOF happens after some bytes but before `min_len` bytes are read,
+`BR_STATUS_UNEXPECTED_EOF` is returned.
+*/
+br_io_result br_read_at_least(br_stream stream, void *dst, usize dst_len, usize min_len);
+
+/*
+Read exactly `dst_len` bytes into `dst`.
+*/
+br_io_result br_read_full(br_stream stream, void *dst, usize dst_len);
+
+/*
 Write bytes using a generic stream.
 */
 br_io_result br_write(br_stream stream, const void *src, usize src_len);
+
+/*
+Write until at least `min_len` bytes from `src` have been accepted.
+
+If `src_len` is smaller than `min_len`, `BR_STATUS_SHORT_BUFFER` is returned.
+*/
+br_io_result br_write_at_least(br_stream stream, const void *src, usize src_len, usize min_len);
+
+/*
+Write exactly `src_len` bytes from `src`.
+*/
+br_io_result br_write_full(br_stream stream, const void *src, usize src_len);
 
 /*
 Read from an explicit offset. If the stream does not implement `READ_AT`,

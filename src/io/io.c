@@ -4,11 +4,18 @@
 
 enum { BR__IO_COPY_BUFFER_SIZE = 4096 };
 
-static br_io_result br__io_result_from_i64(br_i64_result result) {
+/*
+Odin relies on stream proc contracts to report sane byte counts. Bedrock
+validates them here because arbitrary C callbacks can return impossible values.
+*/
+static br_io_result br__io_result_from_i64(br_i64_result result, usize requested) {
   if (result.value < 0) {
     return br_io_result_make(0u, BR_STATUS_INVALID_STATE);
   }
   if ((u64)result.value > (u64)SIZE_MAX) {
+    return br_io_result_make(0u, BR_STATUS_INVALID_STATE);
+  }
+  if ((usize)result.value > requested) {
     return br_io_result_make(0u, BR_STATUS_INVALID_STATE);
   }
 
@@ -107,7 +114,55 @@ br_io_result br_read(br_stream stream, void *dst, usize dst_len) {
   }
 
   return br__io_result_from_i64(
-    br__stream_call(stream, BR_IO_MODE_READ, dst, dst_len, 0, BR_SEEK_FROM_START));
+    br__stream_call(stream, BR_IO_MODE_READ, dst, dst_len, 0, BR_SEEK_FROM_START), dst_len);
+}
+
+br_io_result br_read_at_least(br_stream stream, void *dst, usize dst_len, usize min_len) {
+  u8 *cursor;
+  usize total;
+  br_status status;
+
+  if (dst == NULL && dst_len > 0u) {
+    return br_io_result_make(0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+  if (dst_len < min_len) {
+    return br_io_result_make(0u, BR_STATUS_SHORT_BUFFER);
+  }
+
+  cursor = (u8 *)dst;
+  total = 0u;
+  status = BR_STATUS_OK;
+  while (total < min_len && status == BR_STATUS_OK) {
+    br_io_result result;
+
+    result = br_read(stream, cursor + total, dst_len - total);
+    total += result.count;
+    if (result.status != BR_STATUS_OK) {
+      status = result.status;
+      break;
+    }
+    /*
+    Odin assumes well-behaved readers here. Bedrock treats a zero-byte success
+    as no progress so a buggy C callback cannot spin forever.
+    */
+    if (result.count == 0u) {
+      status = BR_STATUS_NO_PROGRESS;
+      break;
+    }
+  }
+
+  if (total >= min_len) {
+    return br_io_result_make(total, BR_STATUS_OK);
+  }
+  if (total > 0u && status == BR_STATUS_EOF) {
+    return br_io_result_make(total, BR_STATUS_UNEXPECTED_EOF);
+  }
+
+  return br_io_result_make(total, status);
+}
+
+br_io_result br_read_full(br_stream stream, void *dst, usize dst_len) {
+  return br_read_at_least(stream, dst, dst_len, dst_len);
 }
 
 br_io_result br_write(br_stream stream, const void *src, usize src_len) {
@@ -116,7 +171,49 @@ br_io_result br_write(br_stream stream, const void *src, usize src_len) {
   }
 
   return br__io_result_from_i64(
-    br__stream_call(stream, BR_IO_MODE_WRITE, (void *)src, src_len, 0, BR_SEEK_FROM_START));
+    br__stream_call(stream, BR_IO_MODE_WRITE, (void *)src, src_len, 0, BR_SEEK_FROM_START),
+    src_len);
+}
+
+br_io_result br_write_at_least(br_stream stream, const void *src, usize src_len, usize min_len) {
+  const u8 *cursor;
+  usize total;
+  br_status status;
+
+  if (src == NULL && src_len > 0u) {
+    return br_io_result_make(0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+  if (src_len < min_len) {
+    return br_io_result_make(0u, BR_STATUS_SHORT_BUFFER);
+  }
+
+  cursor = (const u8 *)src;
+  total = 0u;
+  status = BR_STATUS_OK;
+  while (total < min_len && status == BR_STATUS_OK) {
+    br_io_result result;
+
+    result = br_write(stream, cursor + total, src_len - total);
+    total += result.count;
+    if (result.status != BR_STATUS_OK) {
+      status = result.status;
+      break;
+    }
+    /*
+    Same reasoning as br_read_at_least: a zero-byte successful write would
+    otherwise loop forever on a malformed C callback.
+    */
+    if (result.count == 0u) {
+      status = BR_STATUS_NO_PROGRESS;
+      break;
+    }
+  }
+
+  return br_io_result_make(total, status);
+}
+
+br_io_result br_write_full(br_stream stream, const void *src, usize src_len) {
+  return br_write_at_least(stream, src, src_len, src_len);
 }
 
 br_io_result br_read_at(br_stream stream, void *dst, usize dst_len, i64 offset) {
@@ -134,7 +231,7 @@ br_io_result br_read_at(br_stream stream, void *dst, usize dst_len, i64 offset) 
     return br__read_at_fallback(stream, dst, dst_len, offset);
   }
 
-  return br__io_result_from_i64(raw);
+  return br__io_result_from_i64(raw, dst_len);
 }
 
 br_io_result br_write_at(br_stream stream, const void *src, usize src_len, i64 offset) {
@@ -153,7 +250,7 @@ br_io_result br_write_at(br_stream stream, const void *src, usize src_len, i64 o
     return br__write_at_fallback(stream, src, src_len, offset);
   }
 
-  return br__io_result_from_i64(raw);
+  return br__io_result_from_i64(raw, src_len);
 }
 
 br_io_seek_result br_seek(br_stream stream, i64 offset, br_seek_from whence) {
