@@ -16,9 +16,10 @@ without hidden ambient context.
 - virtual arena temp/watermark helpers
 - trailing guard-page overflow protection for virtual arenas
 - file mapping / unmapping
+- tracking allocator
 - null allocator
 - panic/fail-fast allocator
-- debug wrappers such as tracking or guard allocators
+- future debug wrappers such as guard allocators
 
 ## Defer
 
@@ -110,6 +111,22 @@ Important Bedrock-specific deviations from Odin for now:
 - no built-in mutex; the arena is intentionally single-threaded for now
 - overflow protection is currently exposed as an arena-level trailing guard page
   flag, not Odin's broader per-memory-block flag surface
+
+## Tracking Allocator
+
+Bedrock now also has a first tracking allocator layer. The intended v1 shape is:
+
+- wrap an existing allocator
+- track live allocations and cumulative totals
+- record bad frees for later inspection
+- keep the wrapper explicit instead of relying on ambient context
+
+Important Bedrock-specific deviations from Odin for now:
+
+- no built-in mutex yet
+- no hash-map-backed live allocation table; tracking is currently linear
+- no allocator feature queries, so `clear_on_reset` is an explicit policy flag
+- no source-location tracking yet
 
 ## Temporary Allocation
 

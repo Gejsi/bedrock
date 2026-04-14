@@ -29,10 +29,12 @@ Why this label:
 Current Bedrock files:
 - `include/bedrock/mem/alloc.h`
 - `include/bedrock/mem/arena.h`
+- `include/bedrock/mem/tracking_allocator.h`
 - `include/bedrock/mem/virtual.h`
 - `include/bedrock/mem/virtual_arena.h`
 - `src/mem/alloc.c`
 - `src/mem/arena.c`
+- `src/mem/tracking_allocator.c`
 - `src/mem/virtual.c`
 - `src/mem/virtual_arena.c`
 
@@ -46,7 +48,7 @@ Current Bedrock files:
 | arena mark / rewind | `done` | `arena.h`, `arena.c` | Implemented. |
 | virtual memory API | `adapted` | `virtual.h`, `virtual.c` | Reserve/commit/decommit/release/protect landed with Windows and POSIX backends. |
 | virtual growing/static arena core | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Growing and static arenas landed with allocator support, reset/destroy, mark/rewind, and optional trailing guard-page overflow protection. |
-| tracking allocator | `planned` | none | Called out in `spec/modules/memory.md`, not implemented. |
+| tracking allocator | `adapted` | `tracking_allocator.h`, `tracking_allocator.c` | Landed as a linear live-allocation tracker without Odin's map, mutex, feature-query, or source-location machinery. |
 | mutex / locked allocator | `planned` | none | Useful later for shared allocators. |
 | rollback stack allocator | `planned` | none | Not started. |
 | raw memory helper layer | `planned` | none | Not started. |
