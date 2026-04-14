@@ -14,6 +14,19 @@ typedef struct br__virtual_platform_block {
   usize reserved_total;
 } br__virtual_platform_block;
 
+static br_virtual_arena_temp_result br__virtual_arena_temp_result(br_virtual_arena *arena,
+                                                                  br_virtual_arena_block *block,
+                                                                  usize used,
+                                                                  br_status status) {
+  br_virtual_arena_temp_result result;
+
+  result.value.arena = arena;
+  result.value.block = block;
+  result.value.used = used;
+  result.status = status;
+  return result;
+}
+
 static br_alloc_result br__virtual_arena_result(void *ptr, usize size, br_status status) {
   br_alloc_result result;
 
@@ -283,6 +296,23 @@ static void br__virtual_arena_free_last_block(br_virtual_arena *arena) {
   arena->total_reserved -= free_block->reserved;
   arena->curr_block = free_block->prev;
   br__virtual_block_destroy(free_block);
+}
+
+static bool br__virtual_arena_has_block(const br_virtual_arena *arena,
+                                        const br_virtual_arena_block *target) {
+  const br_virtual_arena_block *block;
+
+  if (arena == NULL || target == NULL) {
+    return false;
+  }
+
+  for (block = arena->curr_block; block != NULL; block = block->prev) {
+    if (block == target) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 static br_alloc_result br__virtual_arena_alloc_internal(br_virtual_arena *arena,
@@ -682,6 +712,74 @@ br_status br_virtual_arena_rewind(br_virtual_arena *arena, br_virtual_arena_mark
   }
 
   return BR_STATUS_INVALID_STATE;
+}
+
+br_virtual_arena_temp_result br_virtual_arena_temp_begin(br_virtual_arena *arena) {
+  if (arena == NULL) {
+    return br__virtual_arena_temp_result(NULL, NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+  if (arena->curr_block == NULL || arena->kind == BR_VIRTUAL_ARENA_KIND_NONE) {
+    return br__virtual_arena_temp_result(arena, NULL, 0u, BR_STATUS_INVALID_STATE);
+  }
+
+  arena->temp_count += 1u;
+  return br__virtual_arena_temp_result(
+    arena, arena->curr_block, arena->curr_block->used, BR_STATUS_OK);
+}
+
+br_status br_virtual_arena_temp_end(br_virtual_arena_temp temp) {
+  br_virtual_arena *arena;
+  usize old_used;
+
+  if (temp.arena == NULL || temp.block == NULL) {
+    return BR_STATUS_INVALID_ARGUMENT;
+  }
+
+  arena = temp.arena;
+  if (arena->temp_count == 0u) {
+    return BR_STATUS_INVALID_STATE;
+  }
+  if (!br__virtual_arena_has_block(arena, temp.block)) {
+    return BR_STATUS_INVALID_STATE;
+  }
+
+  while (arena->curr_block != temp.block) {
+    br__virtual_arena_free_last_block(arena);
+  }
+
+  if (arena->curr_block == NULL || temp.used > arena->curr_block->used) {
+    return BR_STATUS_INVALID_STATE;
+  }
+
+  old_used = arena->curr_block->used;
+  if (old_used > temp.used) {
+    memset(arena->curr_block->base + temp.used, 0, old_used - temp.used);
+    arena->curr_block->used = temp.used;
+    arena->total_used -= old_used - temp.used;
+  }
+
+  arena->temp_count -= 1u;
+  return BR_STATUS_OK;
+}
+
+br_status br_virtual_arena_temp_ignore(br_virtual_arena_temp temp) {
+  if (temp.arena == NULL) {
+    return BR_STATUS_INVALID_ARGUMENT;
+  }
+  if (temp.arena->temp_count == 0u) {
+    return BR_STATUS_INVALID_STATE;
+  }
+
+  temp.arena->temp_count -= 1u;
+  return BR_STATUS_OK;
+}
+
+br_status br_virtual_arena_check_temp(const br_virtual_arena *arena) {
+  if (arena == NULL) {
+    return BR_STATUS_INVALID_ARGUMENT;
+  }
+
+  return arena->temp_count == 0u ? BR_STATUS_OK : BR_STATUS_INVALID_STATE;
 }
 
 br_alloc_result br_virtual_arena_alloc(br_virtual_arena *arena, usize size, usize alignment) {

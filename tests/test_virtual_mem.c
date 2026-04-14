@@ -110,9 +110,108 @@ static void test_virtual_arena_growing(void) {
   br_virtual_arena_destroy(&arena);
 }
 
+static void test_virtual_arena_temp_end(void) {
+  br_virtual_arena arena;
+  br_virtual_arena_temp_result temp;
+  br_alloc_result first;
+  br_alloc_result second;
+  usize page_size = br_vm_page_size();
+  usize initial_reserved;
+  usize initial_used;
+
+  if (page_size == 0u) {
+    return;
+  }
+
+  br_virtual_arena_init(&arena);
+  arena.default_commit_size = page_size;
+  arena.minimum_block_size = page_size * 2u;
+  assert(br_virtual_arena_init_growing(&arena, page_size * 2u) == BR_STATUS_OK);
+
+  first = br_virtual_arena_alloc(&arena, page_size / 2u, 32u);
+  assert(first.status == BR_STATUS_OK);
+  initial_reserved = arena.total_reserved;
+  initial_used = arena.total_used;
+
+  temp = br_virtual_arena_temp_begin(&arena);
+  assert(temp.status == BR_STATUS_OK);
+  assert(br_virtual_arena_check_temp(&arena) == BR_STATUS_INVALID_STATE);
+
+  second = br_virtual_arena_alloc(&arena, page_size * 2u, 64u);
+  assert(second.status == BR_STATUS_OK);
+  assert(arena.total_reserved > initial_reserved);
+
+  assert(br_virtual_arena_temp_end(temp.value) == BR_STATUS_OK);
+  assert(br_virtual_arena_check_temp(&arena) == BR_STATUS_OK);
+  assert(arena.total_reserved == initial_reserved);
+  assert(arena.total_used == initial_used);
+  assert(br_virtual_arena_temp_end(temp.value) == BR_STATUS_INVALID_STATE);
+
+  br_virtual_arena_destroy(&arena);
+}
+
+static void test_virtual_arena_temp_ignore(void) {
+  br_virtual_arena arena;
+  br_virtual_arena_temp_result temp;
+  br_alloc_result alloc;
+  usize page_size = br_vm_page_size();
+  usize used_after_alloc;
+
+  if (page_size == 0u) {
+    return;
+  }
+
+  br_virtual_arena_init(&arena);
+  arena.default_commit_size = page_size;
+  assert(br_virtual_arena_init_static(&arena, page_size * 4u, page_size) == BR_STATUS_OK);
+
+  temp = br_virtual_arena_temp_begin(&arena);
+  assert(temp.status == BR_STATUS_OK);
+
+  alloc = br_virtual_arena_alloc(&arena, page_size / 2u, 16u);
+  assert(alloc.status == BR_STATUS_OK);
+  used_after_alloc = arena.total_used;
+
+  assert(br_virtual_arena_temp_ignore(temp.value) == BR_STATUS_OK);
+  assert(arena.total_used == used_after_alloc);
+  assert(br_virtual_arena_check_temp(&arena) == BR_STATUS_OK);
+
+  br_virtual_arena_destroy(&arena);
+}
+
+static void test_virtual_arena_temp_invalid(void) {
+  br_virtual_arena arena;
+  br_virtual_arena_temp zero_temp;
+  br_virtual_arena_temp_result temp;
+  usize page_size = br_vm_page_size();
+
+  memset(&zero_temp, 0, sizeof(zero_temp));
+
+  assert(br_virtual_arena_temp_begin(NULL).status == BR_STATUS_INVALID_ARGUMENT);
+  assert(br_virtual_arena_check_temp(NULL) == BR_STATUS_INVALID_ARGUMENT);
+  assert(br_virtual_arena_temp_end(zero_temp) == BR_STATUS_INVALID_ARGUMENT);
+  assert(br_virtual_arena_temp_ignore(zero_temp) == BR_STATUS_INVALID_ARGUMENT);
+
+  if (page_size == 0u) {
+    return;
+  }
+
+  br_virtual_arena_init(&arena);
+  assert(br_virtual_arena_temp_begin(&arena).status == BR_STATUS_INVALID_STATE);
+
+  assert(br_virtual_arena_init_static(&arena, page_size * 2u, page_size) == BR_STATUS_OK);
+  temp = br_virtual_arena_temp_begin(&arena);
+  assert(temp.status == BR_STATUS_OK);
+  br_virtual_arena_destroy(&arena);
+  assert(br_virtual_arena_temp_end(temp.value) == BR_STATUS_INVALID_STATE);
+}
+
 int main(void) {
   test_vm_reserve_commit_release();
   test_virtual_arena_static();
   test_virtual_arena_growing();
+  test_virtual_arena_temp_end();
+  test_virtual_arena_temp_ignore();
+  test_virtual_arena_temp_invalid();
   return 0;
 }

@@ -21,12 +21,24 @@ typedef struct br_virtual_arena {
   usize total_reserved;
   usize default_commit_size;
   usize minimum_block_size;
+  usize temp_count;
 } br_virtual_arena;
 
 typedef struct br_virtual_arena_mark {
   br_virtual_arena_block *block;
   usize used;
 } br_virtual_arena_mark;
+
+typedef struct br_virtual_arena_temp {
+  br_virtual_arena *arena;
+  br_virtual_arena_block *block;
+  usize used;
+} br_virtual_arena_temp;
+
+typedef struct br_virtual_arena_temp_result {
+  br_virtual_arena_temp value;
+  br_status status;
+} br_virtual_arena_temp_result;
 
 #define BR_VIRTUAL_ARENA_DEFAULT_STATIC_COMMIT_SIZE ((usize)1048576u)
 #define BR_VIRTUAL_ARENA_DEFAULT_GROWING_COMMIT_SIZE ((usize)8388608u)
@@ -60,6 +72,16 @@ void br_virtual_arena_destroy(br_virtual_arena *arena);
 
 br_virtual_arena_mark br_virtual_arena_mark_save(const br_virtual_arena *arena);
 br_status br_virtual_arena_rewind(br_virtual_arena *arena, br_virtual_arena_mark mark);
+
+/*
+These helpers mirror Odin's Arena_Temp workflow, but Bedrock reports misuse
+through statuses instead of asserting because the C API should not abort by
+default on ownership mistakes.
+*/
+br_virtual_arena_temp_result br_virtual_arena_temp_begin(br_virtual_arena *arena);
+br_status br_virtual_arena_temp_end(br_virtual_arena_temp temp);
+br_status br_virtual_arena_temp_ignore(br_virtual_arena_temp temp);
+br_status br_virtual_arena_check_temp(const br_virtual_arena *arena);
 
 br_alloc_result br_virtual_arena_alloc(br_virtual_arena *arena, usize size, usize alignment);
 br_alloc_result br_virtual_arena_alloc_uninit(br_virtual_arena *arena, usize size, usize alignment);

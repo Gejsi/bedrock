@@ -13,6 +13,7 @@ without hidden ambient context.
 - virtual static arenas
 - virtual growing arenas
 - arena savepoints / rewind markers
+- virtual arena temp/watermark helpers
 - null allocator
 - panic/fail-fast allocator
 - debug wrappers such as tracking or guard allocators

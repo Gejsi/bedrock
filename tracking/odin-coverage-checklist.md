@@ -52,7 +52,7 @@ Current Bedrock files:
 | rollback stack allocator | `planned` | none | Not started. |
 | raw memory helper layer | `planned` | none | Not started. |
 | TLSF allocator | `deferred` | none | Odin has `tlsf/*`; Bedrock does not. |
-| virtual temp / watermark helpers | `planned` | none | Bedrock currently exposes mark/rewind instead of Odin's temp helper API. |
+| virtual temp / watermark helpers | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Landed as explicit begin/end/ignore/check helpers that return statuses instead of Odin's assertion-based misuse handling. |
 | virtual buffer-backed arena variant | `adapted` | `arena.h`, `arena.c` | Bedrock keeps fixed-buffer arenas in `br_arena` instead of duplicating Odin's `.Buffer` variant here. |
 | file mapping / VM-backed file helpers | `deferred` | none | Not started. |
 
