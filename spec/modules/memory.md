@@ -15,6 +15,7 @@ without hidden ambient context.
 - arena savepoints / rewind markers
 - virtual arena temp/watermark helpers
 - trailing guard-page overflow protection for virtual arenas
+- file mapping / unmapping
 - null allocator
 - panic/fail-fast allocator
 - debug wrappers such as tracking or guard allocators
@@ -22,7 +23,6 @@ without hidden ambient context.
 ## Defer
 
 - TLSF and other specialized allocators
-- file mapping
 - platform-specific VM extras beyond the current trailing guard-page support
 
 Those features are valuable, but they belong after the core VM-backed arena

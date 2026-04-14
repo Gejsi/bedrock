@@ -7,7 +7,9 @@
 #include <windows.h>
 #else
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -17,6 +19,16 @@ static br_vm_region_result br__vm_region_result(u8 *data, usize size, br_status 
   result.value.data = data;
   result.value.size = size;
   result.status = status;
+  return result;
+}
+
+static br_vm_mapped_file_result
+br__vm_mapped_file_result(u8 *data, usize size, br_vm_map_file_error error) {
+  br_vm_mapped_file_result result;
+
+  result.value.data = data;
+  result.value.size = size;
+  result.error = error;
   return result;
 }
 
@@ -243,5 +255,139 @@ bool br_vm_protect(void *ptr, usize size, br_vm_protect_flags flags) {
   BR_UNUSED(size);
   BR_UNUSED(flags);
   return false;
+#endif
+}
+
+br_vm_mapped_file_result br_vm_map_file(const char *path, br_vm_map_file_flags flags) {
+  if (path == NULL || (flags & (BR_VM_MAP_FILE_READ | BR_VM_MAP_FILE_WRITE)) == 0u) {
+    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_INVALID_ARGUMENT);
+  }
+
+#if defined(_WIN32)
+  {
+    DWORD desired_access = 0u;
+    DWORD protect = PAGE_READONLY;
+    DWORD map_access = FILE_MAP_READ;
+    HANDLE file = INVALID_HANDLE_VALUE;
+    HANDLE mapping = NULL;
+    LARGE_INTEGER file_size;
+    void *view = NULL;
+
+    if ((flags & BR_VM_MAP_FILE_READ) != 0u) {
+      desired_access |= GENERIC_READ;
+    }
+    if ((flags & BR_VM_MAP_FILE_WRITE) != 0u) {
+      desired_access |= GENERIC_READ | GENERIC_WRITE;
+      protect = PAGE_READWRITE;
+      map_access = FILE_MAP_READ | FILE_MAP_WRITE;
+    }
+
+    file = CreateFileA(
+      path, desired_access, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file == INVALID_HANDLE_VALUE) {
+      return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_OPEN_FAILURE);
+    }
+
+    if (GetFileSizeEx(file, &file_size) == 0) {
+      CloseHandle(file);
+      return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_STAT_FAILURE);
+    }
+    if (file_size.QuadPart < 0) {
+      CloseHandle(file);
+      return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_NEGATIVE_SIZE);
+    }
+    if ((u64)file_size.QuadPart > (u64)SIZE_MAX) {
+      CloseHandle(file);
+      return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_TOO_LARGE_SIZE);
+    }
+    if (file_size.QuadPart == 0) {
+      CloseHandle(file);
+      return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_NONE);
+    }
+
+    mapping = CreateFileMappingA(file, NULL, protect, 0u, 0u, NULL);
+    if (mapping == NULL) {
+      CloseHandle(file);
+      return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
+    }
+
+    view = MapViewOfFile(mapping, map_access, 0u, 0u, 0u);
+    CloseHandle(mapping);
+    CloseHandle(file);
+    if (view == NULL) {
+      return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
+    }
+
+    return br__vm_mapped_file_result(
+      (u8 *)view, (usize)file_size.QuadPart, BR_VM_MAP_FILE_ERROR_NONE);
+  }
+#elif defined(MAP_SHARED)
+  {
+    int open_flags = O_RDONLY;
+    int prot = 0;
+    int fd;
+    struct stat st;
+    void *view;
+
+    if ((flags & BR_VM_MAP_FILE_WRITE) != 0u) {
+      open_flags = O_RDWR;
+      prot |= PROT_WRITE;
+    }
+    if ((flags & BR_VM_MAP_FILE_READ) != 0u || (flags & BR_VM_MAP_FILE_WRITE) == 0u) {
+      prot |= PROT_READ;
+    }
+
+    fd = open(path, open_flags);
+    if (fd < 0) {
+      return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_OPEN_FAILURE);
+    }
+
+    if (fstat(fd, &st) != 0) {
+      close(fd);
+      return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_STAT_FAILURE);
+    }
+    if (st.st_size < 0) {
+      close(fd);
+      return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_NEGATIVE_SIZE);
+    }
+    if ((u64)st.st_size > (u64)SIZE_MAX) {
+      close(fd);
+      return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_TOO_LARGE_SIZE);
+    }
+    if (st.st_size == 0) {
+      close(fd);
+      return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_NONE);
+    }
+
+    view = mmap(NULL, (usize)st.st_size, prot, MAP_SHARED, fd, 0);
+    close(fd);
+    if (view == MAP_FAILED || view == NULL) {
+      return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
+    }
+
+    return br__vm_mapped_file_result((u8 *)view, (usize)st.st_size, BR_VM_MAP_FILE_ERROR_NONE);
+  }
+#else
+  BR_UNUSED(path);
+  BR_UNUSED(flags);
+  return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
+#endif
+}
+
+void br_vm_unmap_file(br_vm_mapped_file mapping) {
+  if (mapping.data == NULL || mapping.size == 0u) {
+    return;
+  }
+
+#if defined(_WIN32)
+  (void)FlushViewOfFile(mapping.data, mapping.size);
+  (void)UnmapViewOfFile(mapping.data);
+#elif defined(MAP_SHARED)
+#if defined(MS_SYNC)
+  (void)msync(mapping.data, mapping.size, MS_SYNC);
+#endif
+  (void)munmap(mapping.data, mapping.size);
+#else
+  BR_UNUSED(mapping);
 #endif
 }

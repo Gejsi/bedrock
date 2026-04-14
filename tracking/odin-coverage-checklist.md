@@ -24,8 +24,7 @@ Why this label:
 - Bedrock now has the allocator contract, the first fixed arena, and the first
   cross-platform virtual-memory-backed arena implementation.
 - Odin `core/mem` is still much broader and includes specialized allocators,
-  synchronized wrappers, file mapping, and TLSF work that Bedrock has not
-  ported yet.
+  synchronized wrappers, and TLSF work that Bedrock has not ported yet.
 
 Current Bedrock files:
 - `include/bedrock/mem/alloc.h`
@@ -54,7 +53,7 @@ Current Bedrock files:
 | TLSF allocator | `deferred` | none | Odin has `tlsf/*`; Bedrock does not. |
 | virtual temp / watermark helpers | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Landed as explicit begin/end/ignore/check helpers that return statuses instead of Odin's assertion-based misuse handling. |
 | virtual buffer-backed arena variant | `adapted` | `arena.h`, `arena.c` | Bedrock keeps fixed-buffer arenas in `br_arena` instead of duplicating Odin's `.Buffer` variant here. |
-| file mapping / VM-backed file helpers | `deferred` | none | Not started. |
+| file mapping / VM-backed file helpers | `adapted` | `virtual.h`, `virtual.c` | Path-based map/unmap landed with Odin-style error categories; Bedrock v1 does not yet expose the file-handle entry point. |
 
 Summary:
 - `mem` now includes the VM milestone that started the project.

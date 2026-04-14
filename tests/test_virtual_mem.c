@@ -1,7 +1,54 @@
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <bedrock.h>
+
+#if !defined(_WIN32)
+#include <fcntl.h>
+#include <unistd.h>
+#endif
+
+static void br__write_text_file(const char *path, const char *text) {
+  FILE *file = fopen(path, "wb");
+
+  assert(file != NULL);
+  assert(fwrite(text, 1u, strlen(text), file) == strlen(text));
+  assert(fclose(file) == 0);
+}
+
+static void br__read_text_file(const char *path, char *buffer, usize cap) {
+  FILE *file = fopen(path, "rb");
+  usize read_len;
+
+  assert(file != NULL);
+  read_len = fread(buffer, 1u, cap - 1u, file);
+  buffer[read_len] = '\0';
+  assert(fclose(file) == 0);
+}
+
+static void br__make_temp_path(char *buffer, usize cap) {
+#if defined(_WIN32)
+  assert(tmpnam_s(buffer, cap) == 0);
+#else
+  int fd;
+  static unsigned counter = 0u;
+  int written;
+
+  for (;;) {
+    written = snprintf(buffer, cap, "/tmp/bedrock-vm-%ld-%u.tmp", (long)getpid(), counter);
+    assert(written > 0);
+    assert((usize)written < cap);
+    counter += 1u;
+
+    fd = open(buffer, O_CREAT | O_EXCL | O_RDWR, 0600);
+    if (fd >= 0) {
+      assert(close(fd) == 0);
+      return;
+    }
+  }
+#endif
+}
 
 static void test_vm_reserve_commit_release(void) {
   br_vm_region_result region;
@@ -28,6 +75,57 @@ static void test_vm_reserve_commit_release(void) {
   assert(region.value.data != NULL);
   memset(region.value.data, 0x11, page_size);
   br_vm_release(region.value.data, region.value.size);
+}
+
+static void test_vm_map_file_readonly(void) {
+  char path[64];
+  const char *text = "bedrock-map";
+  br_vm_mapped_file_result mapping;
+
+  br__make_temp_path(path, sizeof(path));
+  br__write_text_file(path, text);
+
+  mapping = br_vm_map_file(path, BR_VM_MAP_FILE_READ);
+  assert(mapping.error == BR_VM_MAP_FILE_ERROR_NONE);
+  assert(mapping.value.data != NULL);
+  assert(mapping.value.size == strlen(text));
+  assert(memcmp(mapping.value.data, text, mapping.value.size) == 0);
+
+  br_vm_unmap_file(mapping.value);
+  assert(remove(path) == 0);
+}
+
+static void test_vm_map_file_write(void) {
+  char path[64];
+  char file_text[64];
+  br_vm_mapped_file_result mapping;
+
+  br__make_temp_path(path, sizeof(path));
+  br__write_text_file(path, "abcde");
+
+  mapping = br_vm_map_file(path, BR_VM_MAP_FILE_READ | BR_VM_MAP_FILE_WRITE);
+  assert(mapping.error == BR_VM_MAP_FILE_ERROR_NONE);
+  assert(mapping.value.data != NULL);
+  assert(mapping.value.size == 5u);
+
+  memcpy(mapping.value.data, "ABCDE", mapping.value.size);
+  br_vm_unmap_file(mapping.value);
+
+  br__read_text_file(path, file_text, sizeof(file_text));
+  assert(strcmp(file_text, "ABCDE") == 0);
+  assert(remove(path) == 0);
+}
+
+static void test_vm_map_file_invalid(void) {
+  br_vm_mapped_file_result mapping;
+
+  mapping = br_vm_map_file(NULL, BR_VM_MAP_FILE_READ);
+  assert(mapping.error == BR_VM_MAP_FILE_ERROR_INVALID_ARGUMENT);
+
+  mapping = br_vm_map_file("this-file-should-not-exist-bedrock.tmp", BR_VM_MAP_FILE_READ);
+  assert(mapping.error == BR_VM_MAP_FILE_ERROR_OPEN_FAILURE);
+
+  br_vm_unmap_file(mapping.value);
 }
 
 static void test_virtual_arena_static(void) {
@@ -252,6 +350,9 @@ static void test_virtual_arena_overflow_protection(void) {
 
 int main(void) {
   test_vm_reserve_commit_release();
+  test_vm_map_file_readonly();
+  test_vm_map_file_write();
+  test_vm_map_file_invalid();
   test_virtual_arena_static();
   test_virtual_arena_growing();
   test_virtual_arena_temp_end();
