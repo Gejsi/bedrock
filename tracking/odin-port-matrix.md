@@ -12,7 +12,7 @@ Detailed status for the currently active module ports lives in
 | `core/bytes` | partial v1 | Slice/view model, buffer, reader, split, and replace/remove family landed, including Odin-style rune-aware empty-substring behavior; remaining gaps are mostly explicit rune helpers and some convenience APIs. |
 | `core/strings` | partial v1 | String view/owned string layer, builder, reader, split, and replace/remove helpers landed with UTF-8-aware rune search/count behavior; broader conversion, iterator, and Unicode-table work still remains. |
 | `core/io` | partial v1 | Odin-style single stream proc plus in-memory adapters landed, including generic byte/rune/copy helpers and `read_at`/`write_at`/`size` fallbacks; buffered utilities still remain. |
-| `core/bufio` | v1 | Good on top of `io`. |
+| `core/bufio` | partial v1 | Buffered reader, writer, and read-writer landed on top of `io`; scanner, lookahead, and some convenience helpers still remain. |
 | `core/encoding/base64` | v1 | Straightforward table-driven code. |
 | `core/encoding/hex` | v1 | Straightforward. |
 | `core/encoding/endian` | v1 | Straightforward. |

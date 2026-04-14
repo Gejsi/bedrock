@@ -191,10 +191,54 @@ Current Bedrock files:
 | generic `read_rune` / `write_rune` helpers | `adapted` | `io.h`, `io.c`, `tests/test_io.c` | Landed on top of UTF-8; malformed multi-byte stream reads report consumed bytes because generic streams cannot unread. |
 | generic `copy` / `copy_buffer` helpers | `adapted` | `io.h`, `io.c`, `tests/test_io.c` | Landed with explicit short-write detection. |
 | close / flush / destroy lifecycle operations | `adapted` | `io.h`, `io.c` | Present in the generic stream API; current in-memory streams mostly report unsupported. |
-| buffered IO / scanners / pipes | `planned` | none | Future `bufio` work, not part of the base IO traits. |
+| buffered IO / scanners / pipes | `adapted` | `bufio/*`, `tests/test_bufio.c` | Core buffered IO has moved into the new `bufio` module. |
 
 Summary:
 - `io` now exists as a real foundational module.
 - Bedrock now follows Odin's single-stream direction more closely than before.
 - The next growth area is `read_full` / `write_full` style helpers and then
-  `bufio`.
+  further `bufio` expansion.
+
+## `core/bufio`
+
+Current label: `partial v1`
+
+Why this label:
+- Bedrock now has the main buffered reader and writer types plus a combined
+  read-writer adapter.
+- The core buffered operations are present and tested.
+- Odin still has additional `bufio` surfaces like lookahead readers and
+  scanners that Bedrock has not started.
+
+Current Bedrock files:
+- `include/bedrock/bufio/common.h`
+- `include/bedrock/bufio/reader.h`
+- `include/bedrock/bufio/writer.h`
+- `include/bedrock/bufio/read_writer.h`
+- `src/bufio/reader.c`
+- `src/bufio/writer.c`
+- `src/bufio/read_writer.c`
+- `tests/test_bufio.c`
+
+| Odin area | Status | Bedrock coverage | Notes |
+| --- | --- | --- | --- |
+| `bufio.Reader` core init/reset/destroy | `adapted` | `bufio/reader.h`, `bufio/reader.c` | Heap-backed and caller-buffer-backed init landed with explicit allocators. |
+| `bufio.Reader` `peek` / `buffered` / `discard` | `done` | `bufio/reader.h`, `bufio/reader.c`, `test_bufio.c` | Landed with explicit `BR_STATUS_BUFFER_FULL` and `BR_STATUS_NO_PROGRESS`. |
+| `bufio.Reader` `read` / `read_byte` / `unread_byte` | `done` | `bufio/reader.h`, `bufio/reader.c`, `test_bufio.c` | Landed and follows Odin's buffered-reader model. |
+| `bufio.Reader` `read_rune` / `unread_rune` | `done` | `bufio/reader.h`, `bufio/reader.c`, `test_bufio.c` | Landed. |
+| `bufio.Reader` `read_slice` / `read_bytes` / `read_string` | `adapted` | `bufio/reader.h`, `bufio/reader.c`, `test_bufio.c` | Landed with explicit owned result types for bytes and strings. |
+| `bufio.Reader` stream adapter | `adapted` | `bufio/reader.h`, `bufio/reader.c` | Exposed as a generic read stream. |
+| `bufio.Reader` `write_to` | `planned` | none | Not landed. |
+| `bufio.Writer` core init/reset/destroy | `adapted` | `bufio/writer.h`, `bufio/writer.c` | Heap-backed and caller-buffer-backed init landed with explicit allocators. |
+| `bufio.Writer` `flush` / `available` / `buffered` | `done` | `bufio/writer.h`, `bufio/writer.c`, `test_bufio.c` | Landed. |
+| `bufio.Writer` `write` / `write_byte` / `write_rune` / `write_string` | `done` | `bufio/writer.h`, `bufio/writer.c`, `test_bufio.c` | Landed with explicit short-write detection. |
+| `bufio.Writer` stream adapter | `adapted` | `bufio/writer.h`, `bufio/writer.c` | Exposed as a generic write/flush stream. |
+| `bufio.Writer` `read_from` | `planned` | none | Not landed. |
+| `bufio.Read_Writer` | `adapted` | `bufio/read_writer.h`, `bufio/read_writer.c`, `test_bufio.c` | Landed as a tiny combined adapter. |
+| `lookahead_reader` | `planned` | none | Not started. |
+| `scanner` | `planned` | none | Not started. |
+
+Summary:
+- `bufio` is now a real partial module instead of a roadmap placeholder.
+- The safe next growth area is `writer.read_from`, `reader.write_to`, then the
+  higher-level scanner/lookahead utilities.

@@ -4,6 +4,7 @@
 #include <bedrock/base.h>
 #include <bedrock/types.h>
 #include <bedrock/io.h>
+#include <bedrock/bufio.h>
 #include <bedrock/alloc.h>
 #include <bedrock/arena.h>
 #include <bedrock/bytes.h>
