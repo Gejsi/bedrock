@@ -16,6 +16,7 @@ without hidden ambient context.
 - virtual arena temp/watermark helpers
 - trailing guard-page overflow protection for virtual arenas
 - file mapping / unmapping
+- rollback stack allocator
 - tracking allocator
 - null allocator
 - panic/fail-fast allocator
@@ -129,6 +130,21 @@ Important Bedrock-specific deviations from Odin for now:
 - no exposed generic allocation map; Bedrock keeps a private pointer index
 - no allocator feature queries, so `clear_on_reset` is an explicit policy flag
 - no source-location tracking yet
+
+## Rollback Stack Allocator
+
+Bedrock now also has a rollback stack allocator layer. The intended v1 shape is:
+
+- fixed head block plus optional dynamically chained blocks
+- out-of-order frees that collapse freed tails
+- in-place resize for the last allocation when possible
+- allocator adapter support for normal Bedrock allocation call sites
+
+Important Bedrock-specific deviations from Odin for now:
+
+- initialization is split into explicit buffered and dynamic entry points
+- invalid usage returns statuses instead of Odin's assertion-heavy diagnostics
+- fallback resize copies `min(old_size, new_size)` bytes explicitly
 
 ## Temporary Allocation
 

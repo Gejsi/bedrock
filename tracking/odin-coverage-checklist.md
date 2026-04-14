@@ -29,11 +29,13 @@ Why this label:
 Current Bedrock files:
 - `include/bedrock/mem/alloc.h`
 - `include/bedrock/mem/arena.h`
+- `include/bedrock/mem/rollback_stack.h`
 - `include/bedrock/mem/tracking_allocator.h`
 - `include/bedrock/mem/virtual.h`
 - `include/bedrock/mem/virtual_arena.h`
 - `src/mem/alloc.c`
 - `src/mem/arena.c`
+- `src/mem/rollback_stack.c`
 - `src/mem/tracking_allocator.c`
 - `src/mem/virtual.c`
 - `src/mem/virtual_arena.c`
@@ -50,7 +52,7 @@ Current Bedrock files:
 | virtual growing/static arena core | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Growing and static arenas landed with allocator support, reset/destroy, mark/rewind, and optional trailing guard-page overflow protection. |
 | tracking allocator | `adapted` | `tracking_allocator.h`, `tracking_allocator.c` | Landed with a dense live-entry list plus a private pointer index; it still omits Odin's mutex, feature-query, and source-location machinery. |
 | mutex / locked allocator | `planned` | none | Useful later for shared allocators. |
-| rollback stack allocator | `planned` | none | Not started. |
+| rollback stack allocator | `adapted` | `rollback_stack.h`, `rollback_stack.c` | Landed with Odin-style rollback/free collapse and singleton oversized blocks; Bedrock splits init into explicit buffered/dynamic entry points and reports invalid usage via statuses. |
 | raw memory helper layer | `planned` | none | Not started. |
 | TLSF allocator | `deferred` | none | Odin has `tlsf/*`; Bedrock does not. |
 | virtual temp / watermark helpers | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Landed as explicit begin/end/ignore/check helpers that return statuses instead of Odin's assertion-based misuse handling. |
