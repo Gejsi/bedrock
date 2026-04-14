@@ -61,14 +61,6 @@ static br_status br__align_up_size(usize value, usize alignment, usize *result) 
   return BR_STATUS_OK;
 }
 
-static usize br__max_size(usize a, usize b) {
-  return a > b ? a : b;
-}
-
-static usize br__min_size(usize a, usize b) {
-  return a < b ? a : b;
-}
-
 static br_status br__normalize_alignment(usize alignment, usize minimum, usize *result) {
   if (alignment == 0u) {
     alignment = BR_DEFAULT_ALIGNMENT;
@@ -146,7 +138,7 @@ static br_status br__virtual_block_create(usize committed,
   }
 
   overflow_protection = (flags & BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION) != 0u;
-  required_alignment = overflow_protection ? br__max_size(alignment, page_size) : alignment;
+  required_alignment = overflow_protection ? br_max_size(alignment, page_size) : alignment;
 
   status = br__align_up_size(sizeof(br__virtual_platform_block), required_alignment, &base_offset);
   if (status != BR_STATUS_OK) {
@@ -234,7 +226,7 @@ static br_status br__virtual_block_commit_if_needed(br_virtual_arena_block *bloc
   platform_block = br__virtual_platform_from_block(block);
   base_offset = (usize)(block->base - (u8 *)(void *)platform_block);
 
-  extra_size = br__max_size(size, block->committed >> 1u);
+  extra_size = br_max_size(size, block->committed >> 1u);
   if (!br__safe_add_size(base_offset, block->used, &total_commit) ||
       !br__safe_add_size(total_commit, extra_size, &total_commit)) {
     return BR_STATUS_OUT_OF_MEMORY;
@@ -251,11 +243,11 @@ static br_status br__virtual_block_commit_if_needed(br_virtual_arena_block *bloc
   the value is nominally expressed in payload bytes rather than header-inclusive
   bytes.
   */
-  total_commit = br__max_size(total_commit, default_commit_size);
+  total_commit = br_max_size(total_commit, default_commit_size);
   if (!br__safe_add_size(base_offset, block->reserved, &payload_limit)) {
     return BR_STATUS_OUT_OF_MEMORY;
   }
-  total_commit = br__min_size(total_commit, payload_limit);
+  total_commit = br_min_size(total_commit, payload_limit);
 
   if (total_commit <= platform_block->committed_total) {
     return BR_STATUS_OK;
@@ -391,7 +383,7 @@ static br_alloc_result br__virtual_arena_alloc_internal(br_virtual_arena *arena,
         default_commit_size = arena->default_commit_size;
         if (default_commit_size == 0u) {
           default_commit_size =
-            br__min_size(BR_VIRTUAL_ARENA_DEFAULT_GROWING_COMMIT_SIZE, minimum_block_size);
+            br_min_size(BR_VIRTUAL_ARENA_DEFAULT_GROWING_COMMIT_SIZE, minimum_block_size);
           status = br__align_to_pages(default_commit_size, &default_commit_size);
           if (status != BR_STATUS_OK) {
             return br__virtual_arena_result(NULL, 0u, status);
@@ -399,8 +391,8 @@ static br_alloc_result br__virtual_arena_alloc_internal(br_virtual_arena *arena,
           arena->default_commit_size = default_commit_size;
         }
 
-        default_commit_size = br__min_size(arena->default_commit_size, arena->minimum_block_size);
-        minimum_block_size = br__max_size(arena->default_commit_size, arena->minimum_block_size);
+        default_commit_size = br_min_size(arena->default_commit_size, arena->minimum_block_size);
+        minimum_block_size = br_max_size(arena->default_commit_size, arena->minimum_block_size);
         arena->default_commit_size = default_commit_size;
         arena->minimum_block_size = minimum_block_size;
 
@@ -413,8 +405,8 @@ static br_alloc_result br__virtual_arena_alloc_internal(br_virtual_arena *arena,
           return br__virtual_arena_result(NULL, 0u, status);
         }
 
-        needed = br__max_size(needed, default_commit_size);
-        block_size = br__max_size(needed, minimum_block_size);
+        needed = br_max_size(needed, default_commit_size);
+        block_size = br_max_size(needed, minimum_block_size);
 
         status = br__virtual_block_create(needed, block_size, alignment, arena->flags, &new_block);
         if (status != BR_STATUS_OK) {

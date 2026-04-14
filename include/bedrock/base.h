@@ -42,4 +42,8 @@ static inline usize br_min_size(usize a, usize b) {
   return a < b ? a : b;
 }
 
+static inline usize br_max_size(usize a, usize b) {
+  return a > b ? a : b;
+}
+
 #endif
