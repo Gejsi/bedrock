@@ -18,6 +18,7 @@
 #define BR_CONCAT(a, b) BR_CONCAT_INNER(a, b)
 #define BR_DEFAULT_ALIGNMENT ((usize) _Alignof(max_align_t))
 #define BR_STATIC_ASSERT(cond, msg) _Static_assert(cond, msg)
+#define BR_UNUSED(x) ((void)(x))
 
 typedef enum br_status {
   BR_STATUS_OK = 0,

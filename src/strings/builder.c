@@ -296,8 +296,8 @@ static br_i64_result br__string_builder_stream_proc(
   br_string_builder_io_result io_result;
   br_io_mode_set modes;
 
-  (void)offset;
-  (void)whence;
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
 
   builder = (br_string_builder *)context;
   switch (mode) {

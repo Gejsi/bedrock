@@ -511,8 +511,8 @@ static br_i64_result br__bufio_reader_stream_proc(
   br_io_mode_set modes;
   br_bufio_reader_io_result io_result;
 
-  (void)offset;
-  (void)whence;
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
 
   reader = (br_bufio_reader *)context;
   switch (mode) {

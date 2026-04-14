@@ -336,8 +336,8 @@ static br_i64_result br__byte_buffer_stream_proc(
   br_byte_buffer_io_result io_result;
   br_io_mode_set modes;
 
-  (void)offset;
-  (void)whence;
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
 
   buffer = (br_byte_buffer *)context;
   switch (mode) {

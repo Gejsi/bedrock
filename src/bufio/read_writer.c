@@ -19,8 +19,8 @@ static br_i64_result br__bufio_read_writer_stream_proc(
   br_bufio_writer_io_result write_result;
   br_status status;
 
-  (void)offset;
-  (void)whence;
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
 
   read_writer = (br_bufio_read_writer *)context;
   switch (mode) {

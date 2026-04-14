@@ -81,9 +81,9 @@ static br_i64_result test_short_writer_proc(
   test_short_writer *writer;
   usize count;
 
-  (void)data;
-  (void)offset;
-  (void)whence;
+  BR_UNUSED(data);
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
 
   writer = (test_short_writer *)context;
   switch (mode) {

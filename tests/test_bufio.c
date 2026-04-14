@@ -16,10 +16,10 @@ static br_i64_result test_bufio_no_progress_reader_proc(
   void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
   test_bufio_no_progress_reader *reader;
 
-  (void)data;
-  (void)data_len;
-  (void)offset;
-  (void)whence;
+  BR_UNUSED(data);
+  BR_UNUSED(data_len);
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
 
   reader = (test_bufio_no_progress_reader *)context;
   switch (mode) {
@@ -38,9 +38,9 @@ static br_i64_result test_bufio_short_sink_proc(
   test_bufio_short_sink *sink;
   usize count;
 
-  (void)data;
-  (void)offset;
-  (void)whence;
+  BR_UNUSED(data);
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
 
   sink = (test_bufio_short_sink *)context;
   switch (mode) {

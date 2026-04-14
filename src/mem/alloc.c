@@ -100,7 +100,7 @@ br__heap_resize(void *ptr, usize old_size, usize new_size, usize alignment, int 
 }
 
 static br_alloc_result br__heap_allocator_fn(void *ctx, const br_alloc_request *req) {
-  (void)ctx;
+  BR_UNUSED(ctx);
 
   if (req == NULL) {
     return br__alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
@@ -129,13 +129,13 @@ static br_alloc_result br__heap_allocator_fn(void *ctx, const br_alloc_request *
 }
 
 static br_alloc_result br__null_allocator_fn(void *ctx, const br_alloc_request *req) {
-  (void)ctx;
-  (void)req;
+  BR_UNUSED(ctx);
+  BR_UNUSED(req);
   return br__alloc_result(NULL, 0u, BR_STATUS_OK);
 }
 
 static br_alloc_result br__fail_allocator_fn(void *ctx, const br_alloc_request *req) {
-  (void)ctx;
+  BR_UNUSED(ctx);
 
   if (req == NULL) {
     return br__alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
