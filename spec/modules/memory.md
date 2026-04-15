@@ -11,6 +11,7 @@ without hidden ambient context.
 - fixed-buffer arena allocator
 - scratch allocator
 - stack allocator
+- small stack allocator
 - cross-platform virtual memory reserve/commit/decommit/release/protect
 - virtual static arenas
 - virtual growing arenas
@@ -133,6 +134,25 @@ Important Bedrock-specific deviations from Odin for now:
   the same last-allocation rule as free; this is documented because Odin's
   current resize code appears to compare against the header's previous offset
   instead
+
+## Small Stack Design
+
+Bedrock now also has a buffered small stack allocator close to Odin's current
+shape.
+
+- contiguous backing buffer supplied by the caller
+- tiny per-allocation headers that only store padding
+- out-of-order frees are allowed and rewind the running offset immediately
+- later allocations can overwrite memory from allocations that used to follow
+  the freed pointer
+
+Important Bedrock-specific deviations from Odin for now:
+
+- misuse returns statuses instead of Odin's panic-heavy diagnostics
+- the allocator adapter currently targets Bedrock's alloc/free/resize/reset ABI,
+  not Odin's richer query-features/query-info modes
+- alignment still has to satisfy Bedrock's power-of-two allocator contract
+  after the Odin-style clamp to the small-stack maximum
 
 ## Virtual Arena Design
 
