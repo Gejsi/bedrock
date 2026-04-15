@@ -3,9 +3,7 @@
 #if defined(BR__VM_TARGET_POSIX)
 
 #include <errno.h>
-#include <fcntl.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
 static br_status br__vm_status_from_posix_errno(int err) {
@@ -58,50 +56,24 @@ bool br__vm_platform_protect(void *ptr, usize size, br_vm_protect_flags flags) {
   return mprotect(ptr, size, protect) == 0;
 }
 
-br_vm_mapped_file_result br__vm_platform_map_file(const char *path, br_vm_map_file_flags flags) {
-  int open_flags = O_RDONLY;
+br_vm_mapped_file_result
+br__vm_platform_map_open_file(br__vm_native_file file, usize size, br_vm_map_file_flags flags) {
   int prot = 0;
-  int fd;
-  struct stat st;
   void *view;
 
   if ((flags & BR_VM_MAP_FILE_WRITE) != 0u) {
-    open_flags = O_RDWR;
     prot |= PROT_WRITE;
   }
   if ((flags & BR_VM_MAP_FILE_READ) != 0u || (flags & BR_VM_MAP_FILE_WRITE) == 0u) {
     prot |= PROT_READ;
   }
 
-  fd = open(path, open_flags);
-  if (fd < 0) {
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_OPEN_FAILURE);
-  }
-
-  if (fstat(fd, &st) != 0) {
-    close(fd);
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_STAT_FAILURE);
-  }
-  if (st.st_size < 0) {
-    close(fd);
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_NEGATIVE_SIZE);
-  }
-  if ((u64)st.st_size > (u64)SIZE_MAX) {
-    close(fd);
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_TOO_LARGE_SIZE);
-  }
-  if (st.st_size == 0) {
-    close(fd);
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_NONE);
-  }
-
-  view = mmap(NULL, (usize)st.st_size, prot, MAP_SHARED, fd, 0);
-  close(fd);
+  view = mmap(NULL, size, prot, MAP_SHARED, (int)file, 0);
   if (view == MAP_FAILED || view == NULL) {
     return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
   }
 
-  return br__vm_mapped_file_result((u8 *)view, (usize)st.st_size, BR_VM_MAP_FILE_ERROR_NONE);
+  return br__vm_mapped_file_result((u8 *)view, size, BR_VM_MAP_FILE_ERROR_NONE);
 }
 
 void br__vm_platform_unmap_file(br_vm_mapped_file mapping) {

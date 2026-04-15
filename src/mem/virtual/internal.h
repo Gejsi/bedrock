@@ -37,6 +37,8 @@ typedef struct br__vm_platform_memory_block {
   usize reserved_total;
 } br__vm_platform_memory_block;
 
+typedef iptr br__vm_native_file;
+
 br_vm_region_result br__vm_region_result(u8 *data, usize size, br_status status);
 br_vm_mapped_file_result
 br__vm_mapped_file_result(u8 *data, usize size, br_vm_map_file_error error);
@@ -50,7 +52,8 @@ void br__vm_platform_decommit(void *ptr, usize size);
 void br__vm_platform_release(void *ptr, usize size);
 bool br__vm_platform_protect(void *ptr, usize size, br_vm_protect_flags flags);
 
-br_vm_mapped_file_result br__vm_platform_map_file(const char *path, br_vm_map_file_flags flags);
+br_vm_mapped_file_result
+br__vm_platform_map_open_file(br__vm_native_file file, usize size, br_vm_map_file_flags flags);
 void br__vm_platform_unmap_file(br_vm_mapped_file mapping);
 
 br__vm_platform_memory_block *

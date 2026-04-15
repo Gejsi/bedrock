@@ -34,8 +34,10 @@ bool br__vm_platform_protect(void *ptr, usize size, br_vm_protect_flags flags) {
   return false;
 }
 
-br_vm_mapped_file_result br__vm_platform_map_file(const char *path, br_vm_map_file_flags flags) {
-  BR_UNUSED(path);
+br_vm_mapped_file_result
+br__vm_platform_map_open_file(br__vm_native_file file, usize size, br_vm_map_file_flags flags) {
+  BR_UNUSED(file);
+  BR_UNUSED(size);
   BR_UNUSED(flags);
   return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
 }

@@ -116,8 +116,11 @@ Important Bedrock-specific deviations from Odin for now:
   `virtual_platform`, `virtual_posix`, `virtual_windows`, `virtual_linux`,
   `virtual_darwin`, `virtual_freebsd`, `virtual_netbsd`, `virtual_openbsd`,
   and `virtual_other`
-- file mapping is still path-based only; the file-handle entry point remains a
-  later `os/file` integration task
+- file mapping is still path-based only at the public API boundary; internally
+  `virtual/file.c` now owns the high-level open/stat/map flow and the platform
+  backends only perform native-handle mapping
+- the public file-handle entry point remains a later `os/file` integration
+  task
 - `virtual/arena_util.odin` style typed convenience helpers are still absent;
   they should be added later as C-friendly inline or macro wrappers
 

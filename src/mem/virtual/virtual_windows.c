@@ -74,62 +74,30 @@ bool br__vm_platform_protect(void *ptr, usize size, br_vm_protect_flags flags) {
   return VirtualProtect(ptr, size, protect, &old_protect) != 0;
 }
 
-br_vm_mapped_file_result br__vm_platform_map_file(const char *path, br_vm_map_file_flags flags) {
-  DWORD desired_access = 0u;
+br_vm_mapped_file_result
+br__vm_platform_map_open_file(br__vm_native_file file, usize size, br_vm_map_file_flags flags) {
   DWORD protect = PAGE_READONLY;
   DWORD map_access = FILE_MAP_READ;
-  HANDLE file = INVALID_HANDLE_VALUE;
   HANDLE mapping = NULL;
-  LARGE_INTEGER file_size;
   void *view = NULL;
 
-  if ((flags & BR_VM_MAP_FILE_READ) != 0u) {
-    desired_access |= GENERIC_READ;
-  }
   if ((flags & BR_VM_MAP_FILE_WRITE) != 0u) {
-    desired_access |= GENERIC_READ | GENERIC_WRITE;
     protect = PAGE_READWRITE;
     map_access = FILE_MAP_READ | FILE_MAP_WRITE;
   }
 
-  file = CreateFileA(
-    path, desired_access, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-  if (file == INVALID_HANDLE_VALUE) {
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_OPEN_FAILURE);
-  }
-
-  if (GetFileSizeEx(file, &file_size) == 0) {
-    CloseHandle(file);
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_STAT_FAILURE);
-  }
-  if (file_size.QuadPart < 0) {
-    CloseHandle(file);
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_NEGATIVE_SIZE);
-  }
-  if ((u64)file_size.QuadPart > (u64)SIZE_MAX) {
-    CloseHandle(file);
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_TOO_LARGE_SIZE);
-  }
-  if (file_size.QuadPart == 0) {
-    CloseHandle(file);
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_NONE);
-  }
-
-  mapping = CreateFileMappingA(file, NULL, protect, 0u, 0u, NULL);
+  mapping = CreateFileMappingA((HANDLE)(iptr)file, NULL, protect, 0u, 0u, NULL);
   if (mapping == NULL) {
-    CloseHandle(file);
     return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
   }
 
-  view = MapViewOfFile(mapping, map_access, 0u, 0u, 0u);
+  view = MapViewOfFile(mapping, map_access, 0u, 0u, size);
   CloseHandle(mapping);
-  CloseHandle(file);
   if (view == NULL) {
     return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
   }
 
-  return br__vm_mapped_file_result(
-    (u8 *)view, (usize)file_size.QuadPart, BR_VM_MAP_FILE_ERROR_NONE);
+  return br__vm_mapped_file_result((u8 *)view, size, BR_VM_MAP_FILE_ERROR_NONE);
 }
 
 void br__vm_platform_unmap_file(br_vm_mapped_file mapping) {

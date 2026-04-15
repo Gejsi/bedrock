@@ -68,7 +68,7 @@ Current Bedrock files:
 | TLSF allocator | `deferred` | none | Odin has `tlsf/*`; Bedrock does not. |
 | virtual temp / watermark helpers | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Landed as explicit begin/end/ignore/check helpers that return statuses instead of Odin's assertion-based misuse handling. |
 | virtual buffer-backed arena variant | `adapted` | `arena.h`, `arena.c` | Bedrock keeps fixed-buffer arenas in `br_arena` instead of duplicating Odin's `.Buffer` variant here. |
-| file mapping / VM-backed file helpers | `adapted` | `virtual.h`, `src/mem/virtual/file.c` | Path-based map/unmap landed with Odin-style error categories; Bedrock v1 does not yet expose the file-handle entry point. |
+| file mapping / VM-backed file helpers | `adapted` | `virtual.h`, `src/mem/virtual/file.c` | Path-based map/unmap landed with Odin-style error categories; `virtual/file.c` now owns the high-level open/stat/map flow while per-platform files only map native handles. Bedrock v1 still does not expose the file-handle entry point publicly. |
 | `virtual/arena_util.odin` helpers | `planned` | none | The generic typed arena convenience layer is still absent; in Bedrock it should likely become inline or macro-based typed helpers rather than a literal syntax port. |
 
 Summary:
