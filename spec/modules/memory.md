@@ -146,6 +146,17 @@ Important Bedrock-specific deviations from Odin for now:
 - invalid usage returns statuses instead of Odin's assertion-heavy diagnostics
 - fallback resize copies `min(old_size, new_size)` bytes explicitly
 
+## Low-Level Helper Scope
+
+Bedrock should be selective about Odin's low-level `mem` helper surface.
+
+- portable `mem.odin` helpers like byte set/zero/copy/compare/check-zero are
+  reasonable targets
+- `raw.odin` is mostly Odin-runtime-specific layout exposure and should not be
+  treated as a direct Bedrock port target
+- if Bedrock adds low-level helpers here later, they should stay focused on the
+  portable subset rather than recreating Odin's `any`/slice/map runtime layouts
+
 ## Temporary Allocation
 
 Odin gets excellent mileage from temporary allocators because the language helps

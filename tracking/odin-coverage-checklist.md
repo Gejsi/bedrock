@@ -53,7 +53,7 @@ Current Bedrock files:
 | tracking allocator | `adapted` | `tracking_allocator.h`, `tracking_allocator.c` | Landed with a dense live-entry list plus a private pointer index; it still omits Odin's mutex, feature-query, and source-location machinery. |
 | mutex / locked allocator | `planned` | none | Useful later for shared allocators. |
 | rollback stack allocator | `adapted` | `rollback_stack.h`, `rollback_stack.c` | Landed with Odin-style rollback/free collapse and singleton oversized blocks; Bedrock splits init into explicit buffered/dynamic entry points and reports invalid usage via statuses. |
-| raw memory helper layer | `planned` | none | Not started. |
+| selected low-level `mem.odin` helpers | `planned` | none | Future work should target portable helpers like `set`, `zero`, `copy`, `compare_ptrs`, and `check_zero_ptr`, not a broad port of `raw.odin`'s Odin-runtime layout surface. |
 | TLSF allocator | `deferred` | none | Odin has `tlsf/*`; Bedrock does not. |
 | virtual temp / watermark helpers | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Landed as explicit begin/end/ignore/check helpers that return statuses instead of Odin's assertion-based misuse handling. |
 | virtual buffer-backed arena variant | `adapted` | `arena.h`, `arena.c` | Bedrock keeps fixed-buffer arenas in `br_arena` instead of duplicating Odin's `.Buffer` variant here. |
