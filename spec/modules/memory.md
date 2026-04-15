@@ -9,6 +9,7 @@ without hidden ambient context.
 
 - allocator abstraction
 - fixed-buffer arena allocator
+- scratch allocator
 - cross-platform virtual memory reserve/commit/decommit/release/protect
 - virtual static arenas
 - virtual growing arenas
@@ -96,6 +97,22 @@ Important semantics:
 - individual frees are unsupported
 - rewind is only valid to a previously returned mark
 - allocators are not thread-safe unless wrapped explicitly
+
+## Scratch Design
+
+Bedrock now also has a scratch allocator close to Odin's current shape.
+
+- contiguous backing buffer allocated from a backup allocator
+- last-allocation free/resize support
+- oversized or non-fitting allocations spill to the backup allocator
+- leaked backup allocations are tracked and cleaned up on reset/destroy
+
+Important Bedrock-specific deviations from Odin for now:
+
+- no ambient context allocator/logger; explicit `backup_allocator` defaults to
+  `br_allocator_heap()` when unset
+- no warning logger callback when scratch spills into the backup allocator
+- misuse returns statuses instead of Odin's assertion/panic-heavy diagnostics
 
 ## Virtual Arena Design
 

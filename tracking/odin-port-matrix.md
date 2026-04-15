@@ -13,7 +13,7 @@ Detailed status for the currently active module ports lives in
 | `core/strings` | partial v1 | String view/owned string layer, builder, reader, split, and replace/remove helpers landed with UTF-8-aware rune search/count behavior; broader conversion, iterator, and Unicode-table work still remains. |
 | `core/io` | partial v1 | Odin-style single stream proc plus in-memory adapters landed, including generic byte/rune/exact-read-write/copy helpers and `read_at`/`write_at`/`size` fallbacks; buffered utilities still remain above it. |
 | `core/bufio` | partial v1 | Buffered reader, writer, read-writer, transfer helpers, and lookahead reader landed on top of `io`; scanner and some convenience helpers still remain. |
-| `core/mem` | partial v1 | Allocators, fixed arenas, rollback stack allocator, tracking allocator, and an Odin-shaped `virtual/*` split for cross-platform virtual memory, virtual growing/static arenas, temp helpers, trailing guard-page overflow protection, and path-based file mapping landed; specialized allocators still remain. |
+| `core/mem` | partial v1 | Allocators, fixed arenas, scratch allocator, rollback stack allocator, tracking allocator, and an Odin-shaped `virtual/*` split for cross-platform virtual memory, virtual growing/static arenas, temp helpers, trailing guard-page overflow protection, and path-based file mapping landed; specialized allocators still remain. |
 | `core/encoding/base64` | v1 | Straightforward table-driven code. |
 | `core/encoding/hex` | v1 | Straightforward. |
 | `core/encoding/endian` | v1 | Straightforward. |
