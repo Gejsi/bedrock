@@ -21,8 +21,9 @@ The comparison target is the Odin checkout currently pinned in
 Current label: `partial v1`
 
 Why this label:
-- Bedrock now has the allocator contract, the first fixed and scratch arenas,
-  and the first cross-platform virtual-memory-backed arena implementation.
+- Bedrock now has the allocator contract, the first fixed, scratch, and stack
+  arenas/allocators, and the first cross-platform virtual-memory-backed arena
+  implementation.
 - Odin `core/mem` is still much broader and includes specialized allocators,
   synchronized wrappers, and TLSF work that Bedrock has not ported yet.
 
@@ -31,6 +32,7 @@ Current Bedrock files:
 - `include/bedrock/mem/arena.h`
 - `include/bedrock/mem/rollback_stack.h`
 - `include/bedrock/mem/scratch.h`
+- `include/bedrock/mem/stack.h`
 - `include/bedrock/mem/tracking_allocator.h`
 - `include/bedrock/mem/virtual.h`
 - `include/bedrock/mem/virtual_arena.h`
@@ -38,6 +40,7 @@ Current Bedrock files:
 - `src/mem/arena.c`
 - `src/mem/rollback_stack.c`
 - `src/mem/scratch.c`
+- `src/mem/stack.c`
 - `src/mem/tracking_allocator.c`
 - `src/mem/virtual/common.c`
 - `src/mem/virtual/virtual.c`
@@ -62,6 +65,7 @@ Current Bedrock files:
 | fixed-buffer arena | `adapted` | `arena.h`, `arena.c` | Implemented as the first arena shape. |
 | arena mark / rewind | `done` | `arena.h`, `arena.c` | Implemented. |
 | scratch allocator | `adapted` | `scratch.h`, `scratch.c` | Landed with lazy default initialization, backup allocations, and last-allocation free/resize behavior close to Odin; Bedrock omits Odin's context logger warning path and uses explicit status returns. |
+| stack allocator | `adapted` | `stack.h`, `stack.c` | Landed with Odin-style buffered stack allocation, last-allocation free/resize, and double-free tolerance; Bedrock returns statuses instead of panics and documents the in-place resize check that differs from Odin's current source. |
 | virtual memory API | `adapted` | `virtual.h`, `src/mem/virtual/*` | Reserve/commit/decommit/release/protect landed with an Odin-style `virtual/*` split: shared `virtual_platform`, shared BSD/macOS `virtual_posix`, per-OS Linux/Darwin/FreeBSD/NetBSD/OpenBSD files, Windows, and `other`. |
 | virtual growing/static arena core | `adapted` | `virtual_arena.h`, `src/mem/virtual/arena.c` | Growing and static arenas landed with allocator support, reset/destroy, mark/rewind, and optional trailing guard-page overflow protection. |
 | tracking allocator | `adapted` | `tracking_allocator.h`, `tracking_allocator.c` | Landed with a dense live-entry list plus a private pointer index; it still omits Odin's mutex, feature-query, and source-location machinery. |

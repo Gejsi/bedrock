@@ -10,6 +10,7 @@ without hidden ambient context.
 - allocator abstraction
 - fixed-buffer arena allocator
 - scratch allocator
+- stack allocator
 - cross-platform virtual memory reserve/commit/decommit/release/protect
 - virtual static arenas
 - virtual growing arenas
@@ -113,6 +114,25 @@ Important Bedrock-specific deviations from Odin for now:
   `br_allocator_heap()` when unset
 - no warning logger callback when scratch spills into the backup allocator
 - misuse returns statuses instead of Odin's assertion/panic-heavy diagnostics
+
+## Stack Design
+
+Bedrock now also has a buffered stack allocator close to Odin's current shape.
+
+- contiguous backing buffer supplied by the caller
+- per-allocation headers stored immediately before user memory
+- strict last-allocation free/resize semantics
+- allocator adapter support for normal Bedrock allocation call sites
+
+Important Bedrock-specific deviations from Odin for now:
+
+- misuse returns statuses instead of Odin's panic-heavy diagnostics
+- the allocator adapter currently targets Bedrock's alloc/free/resize/reset ABI,
+  not Odin's richer query-features/query-info modes
+- the resize path checks the current `prev_offset` so in-place resize follows
+  the same last-allocation rule as free; this is documented because Odin's
+  current resize code appears to compare against the header's previous offset
+  instead
 
 ## Virtual Arena Design
 

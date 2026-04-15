@@ -8,6 +8,7 @@
 #include <bedrock/alloc.h>
 #include <bedrock/arena.h>
 #include <bedrock/scratch.h>
+#include <bedrock/stack.h>
 #include <bedrock/rollback_stack.h>
 #include <bedrock/tracking_allocator.h>
 #include <bedrock/virtual.h>
