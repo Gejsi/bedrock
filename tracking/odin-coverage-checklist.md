@@ -37,8 +37,14 @@ Current Bedrock files:
 - `src/mem/arena.c`
 - `src/mem/rollback_stack.c`
 - `src/mem/tracking_allocator.c`
-- `src/mem/virtual.c`
-- `src/mem/virtual_arena.c`
+- `src/mem/virtual/common.c`
+- `src/mem/virtual/virtual.c`
+- `src/mem/virtual/platform.c`
+- `src/mem/virtual/platform_posix.c`
+- `src/mem/virtual/platform_windows.c`
+- `src/mem/virtual/platform_other.c`
+- `src/mem/virtual/file.c`
+- `src/mem/virtual/arena.c`
 
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
@@ -48,8 +54,8 @@ Current Bedrock files:
 | fail allocator | `done` | `alloc.c` | Implemented. |
 | fixed-buffer arena | `adapted` | `arena.h`, `arena.c` | Implemented as the first arena shape. |
 | arena mark / rewind | `done` | `arena.h`, `arena.c` | Implemented. |
-| virtual memory API | `adapted` | `virtual.h`, `virtual.c` | Reserve/commit/decommit/release/protect landed with Windows and POSIX backends. |
-| virtual growing/static arena core | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Growing and static arenas landed with allocator support, reset/destroy, mark/rewind, and optional trailing guard-page overflow protection. |
+| virtual memory API | `adapted` | `virtual.h`, `src/mem/virtual/*` | Reserve/commit/decommit/release/protect landed with a split shared/platform/file layout closer to Odin's `virtual/*`; Bedrock still compresses Odin's finer Linux/BSD/Darwin split into a Windows/POSIX family split. |
+| virtual growing/static arena core | `adapted` | `virtual_arena.h`, `src/mem/virtual/arena.c` | Growing and static arenas landed with allocator support, reset/destroy, mark/rewind, and optional trailing guard-page overflow protection. |
 | tracking allocator | `adapted` | `tracking_allocator.h`, `tracking_allocator.c` | Landed with a dense live-entry list plus a private pointer index; it still omits Odin's mutex, feature-query, and source-location machinery. |
 | mutex / locked allocator | `planned` | none | Useful later for shared allocators. |
 | rollback stack allocator | `adapted` | `rollback_stack.h`, `rollback_stack.c` | Landed with Odin-style rollback/free collapse and singleton oversized blocks; Bedrock splits init into explicit buffered/dynamic entry points and reports invalid usage via statuses. |
@@ -57,10 +63,12 @@ Current Bedrock files:
 | TLSF allocator | `deferred` | none | Odin has `tlsf/*`; Bedrock does not. |
 | virtual temp / watermark helpers | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Landed as explicit begin/end/ignore/check helpers that return statuses instead of Odin's assertion-based misuse handling. |
 | virtual buffer-backed arena variant | `adapted` | `arena.h`, `arena.c` | Bedrock keeps fixed-buffer arenas in `br_arena` instead of duplicating Odin's `.Buffer` variant here. |
-| file mapping / VM-backed file helpers | `adapted` | `virtual.h`, `virtual.c` | Path-based map/unmap landed with Odin-style error categories; Bedrock v1 does not yet expose the file-handle entry point. |
+| file mapping / VM-backed file helpers | `adapted` | `virtual.h`, `src/mem/virtual/file.c` | Path-based map/unmap landed with Odin-style error categories; Bedrock v1 does not yet expose the file-handle entry point. |
+| `virtual/arena_util.odin` helpers | `planned` | none | The generic typed arena convenience layer is still absent and may need selective C adaptation rather than a direct port. |
 
 Summary:
 - `mem` now includes the VM milestone that started the project.
+- The VM implementation is now structurally closer to Odin's `virtual/*` split.
 - It is still not a broad Odin port yet.
 
 ## `core/bytes`

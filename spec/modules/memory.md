@@ -112,6 +112,11 @@ Important Bedrock-specific deviations from Odin for now:
 - no built-in mutex; the arena is intentionally single-threaded for now
 - overflow protection is currently exposed as an arena-level trailing guard page
   flag, not Odin's broader per-memory-block flag surface
+- the VM backend is now split into shared/platform/file/arena sources, but it
+  still groups POSIX platforms together instead of matching Odin's finer
+  Linux/BSD/Darwin file split
+- file mapping is still path-based only; the file-handle entry point remains a
+  later `os/file` integration task
 
 ## Tracking Allocator
 

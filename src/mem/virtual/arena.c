@@ -1,18 +1,4 @@
-#include <bedrock/mem/virtual_arena.h>
-
-struct br_virtual_arena_block {
-  struct br_virtual_arena_block *prev;
-  u8 *base;
-  usize used;
-  usize committed;
-  usize reserved;
-};
-
-typedef struct br__virtual_platform_block {
-  br_virtual_arena_block block;
-  usize committed_total;
-  usize reserved_total;
-} br__virtual_platform_block;
+#include "internal.h"
 
 static br_virtual_arena_temp_result br__virtual_arena_temp_result(br_virtual_arena *arena,
                                                                   br_virtual_arena_block *block,
@@ -86,8 +72,9 @@ static br_status br__align_to_pages(usize value, usize *result) {
   return br__align_up_size(value, page_size, result);
 }
 
-static br__virtual_platform_block *br__virtual_platform_from_block(br_virtual_arena_block *block) {
-  return (br__virtual_platform_block *)(void *)block;
+static br__vm_platform_memory_block *
+br__virtual_platform_from_block(br_virtual_arena_block *block) {
+  return (br__vm_platform_memory_block *)(void *)block;
 }
 
 static br_status br__virtual_block_create(usize committed,
@@ -95,8 +82,7 @@ static br_status br__virtual_block_create(usize committed,
                                           usize alignment,
                                           br_virtual_arena_flags flags,
                                           br_virtual_arena_block **out_block) {
-  br_vm_region_result region;
-  br__virtual_platform_block *platform_block;
+  br__vm_platform_memory_block *platform_block;
   br_status status;
   usize base_offset;
   usize page_size;
@@ -115,7 +101,7 @@ static br_status br__virtual_block_create(usize committed,
   }
 
   status =
-    br__normalize_alignment(alignment, (usize) _Alignof(br__virtual_platform_block), &alignment);
+    br__normalize_alignment(alignment, (usize) _Alignof(br__vm_platform_memory_block), &alignment);
   if (status != BR_STATUS_OK) {
     return status;
   }
@@ -140,7 +126,8 @@ static br_status br__virtual_block_create(usize committed,
   overflow_protection = (flags & BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION) != 0u;
   required_alignment = overflow_protection ? br_max_size(alignment, page_size) : alignment;
 
-  status = br__align_up_size(sizeof(br__virtual_platform_block), required_alignment, &base_offset);
+  status =
+    br__align_up_size(sizeof(br__vm_platform_memory_block), required_alignment, &base_offset);
   if (status != BR_STATUS_OK) {
     return status;
   }
@@ -154,29 +141,20 @@ static br_status br__virtual_block_create(usize committed,
     return BR_STATUS_OUT_OF_MEMORY;
   }
 
-  region = br_vm_reserve(total_size);
-  if (region.status != BR_STATUS_OK) {
-    return region.status;
-  }
-
-  status = br_vm_commit(region.value.data, total_commit);
-  if (status != BR_STATUS_OK) {
-    br_vm_release(region.value.data, region.value.size);
+  platform_block = br__vm_platform_memory_alloc(total_commit, total_size, &status);
+  if (platform_block == NULL) {
     return status;
   }
 
-  platform_block = (br__virtual_platform_block *)(void *)region.value.data;
-  memset(platform_block, 0, sizeof(*platform_block));
-  platform_block->committed_total = total_commit;
-  platform_block->reserved_total = region.value.size;
-  platform_block->block.base = region.value.data + base_offset;
+  platform_block->block.base = (u8 *)(void *)platform_block + base_offset;
   platform_block->block.committed = committed;
   platform_block->block.reserved = reserved;
 
   if (overflow_protection) {
     if (!br__safe_add_size(base_offset, reserved, &payload_limit) ||
-        !br__safe_add_size(payload_limit, page_size, &guard_end) || guard_end > region.value.size) {
-      br_vm_release(region.value.data, region.value.size);
+        !br__safe_add_size(payload_limit, page_size, &guard_end) ||
+        guard_end > platform_block->reserved_total) {
+      br__vm_platform_memory_free(platform_block);
       return BR_STATUS_INVALID_STATE;
     }
 
@@ -185,8 +163,9 @@ static br_status br__virtual_block_create(usize committed,
     payload. This stays close to Odin's intent while avoiding exposing the guard
     page itself as part of `block.reserved`.
     */
-    if (!br_vm_protect(region.value.data + payload_limit, page_size, BR_VM_PROTECT_NONE)) {
-      br_vm_release(region.value.data, region.value.size);
+    if (!br_vm_protect(
+          (u8 *)(void *)platform_block + payload_limit, page_size, BR_VM_PROTECT_NONE)) {
+      br__vm_platform_memory_free(platform_block);
       return BR_STATUS_NOT_SUPPORTED;
     }
   }
@@ -196,20 +175,17 @@ static br_status br__virtual_block_create(usize committed,
 }
 
 static void br__virtual_block_destroy(br_virtual_arena_block *block) {
-  br__virtual_platform_block *platform_block;
-
   if (block == NULL) {
     return;
   }
 
-  platform_block = br__virtual_platform_from_block(block);
-  br_vm_release(platform_block, platform_block->reserved_total);
+  br__vm_platform_memory_free(br__virtual_platform_from_block(block));
 }
 
 static br_status br__virtual_block_commit_if_needed(br_virtual_arena_block *block,
                                                     usize size,
                                                     usize default_commit_size) {
-  br__virtual_platform_block *platform_block;
+  br__vm_platform_memory_block *platform_block;
   br_status status;
   usize base_offset;
   usize extra_size;
@@ -253,12 +229,11 @@ static br_status br__virtual_block_commit_if_needed(br_virtual_arena_block *bloc
     return BR_STATUS_OK;
   }
 
-  status = br_vm_commit(platform_block, total_commit);
+  status = br__vm_platform_memory_commit(platform_block, total_commit);
   if (status != BR_STATUS_OK) {
     return status;
   }
 
-  platform_block->committed_total = total_commit;
   block->committed = total_commit - base_offset;
   return BR_STATUS_OK;
 }
