@@ -1,6 +1,6 @@
 #include "internal.h"
 
-#if defined(BR__VM_BACKEND_POSIX)
+#if defined(BR__VM_TARGET_LINUX)
 
 #include <errno.h>
 #include <fcntl.h>
@@ -8,7 +8,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-static br_status br__vm_status_from_errno(int err) {
+static br_status br__vm_status_from_linux_errno(int err) {
   switch (err) {
     case EINVAL:
       return BR_STATUS_INVALID_ARGUMENT;
@@ -20,13 +20,7 @@ static br_status br__vm_status_from_errno(int err) {
 }
 
 usize br__vm_platform_page_size_query(void) {
-#if defined(_SC_PAGESIZE)
-  long page_size = sysconf(_SC_PAGESIZE);
-
-  return page_size > 0 ? (usize)page_size : 4096u;
-#else
   return 4096u;
-#endif
 }
 
 br_vm_region_result br__vm_platform_reserve(usize size) {
@@ -38,7 +32,7 @@ br_vm_region_result br__vm_platform_reserve(usize size) {
 
   ptr = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (ptr == MAP_FAILED) {
-    return br__vm_region_result(NULL, 0u, br__vm_status_from_errno(errno));
+    return br__vm_region_result(NULL, 0u, br__vm_status_from_linux_errno(errno));
   }
 
   return br__vm_region_result((u8 *)ptr, size, BR_STATUS_OK);
@@ -46,16 +40,18 @@ br_vm_region_result br__vm_platform_reserve(usize size) {
 
 br_status br__vm_platform_commit(void *ptr, usize size) {
   return mprotect(ptr, size, PROT_READ | PROT_WRITE) == 0 ? BR_STATUS_OK
-                                                          : br__vm_status_from_errno(errno);
+                                                          : br__vm_status_from_linux_errno(errno);
 }
 
 void br__vm_platform_decommit(void *ptr, usize size) {
   (void)mprotect(ptr, size, PROT_NONE);
 #if defined(MADV_FREE)
   (void)madvise(ptr, size, MADV_FREE);
-#elif defined(POSIX_MADV_DONTNEED)
-  (void)posix_madvise(ptr, size, POSIX_MADV_DONTNEED);
 #elif defined(MADV_DONTNEED)
+  /*
+  Odin uses MADV_FREE on Linux. Bedrock falls back to DONTNEED when the libc
+  headers do not expose MADV_FREE so the Linux backend still builds cleanly.
+  */
   (void)madvise(ptr, size, MADV_DONTNEED);
 #endif
 }

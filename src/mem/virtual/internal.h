@@ -4,12 +4,23 @@
 #include <bedrock/mem/virtual_arena.h>
 
 #if defined(_WIN32)
-#define BR__VM_BACKEND_WINDOWS 1
-#elif defined(__APPLE__) || defined(__linux__) || defined(__FreeBSD__) || defined(__NetBSD__) ||   \
-  defined(__OpenBSD__) || defined(__unix__)
-#define BR__VM_BACKEND_POSIX 1
+#define BR__VM_TARGET_WINDOWS 1
+#elif defined(__linux__)
+#define BR__VM_TARGET_LINUX 1
+#elif defined(__APPLE__)
+#define BR__VM_TARGET_DARWIN 1
+#define BR__VM_TARGET_POSIX 1
+#elif defined(__FreeBSD__)
+#define BR__VM_TARGET_FREEBSD 1
+#define BR__VM_TARGET_POSIX 1
+#elif defined(__NetBSD__)
+#define BR__VM_TARGET_NETBSD 1
+#define BR__VM_TARGET_POSIX 1
+#elif defined(__OpenBSD__)
+#define BR__VM_TARGET_OPENBSD 1
+#define BR__VM_TARGET_POSIX 1
 #else
-#define BR__VM_BACKEND_OTHER 1
+#define BR__VM_TARGET_OTHER 1
 #endif
 
 struct br_virtual_arena_block {

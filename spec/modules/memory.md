@@ -112,11 +112,14 @@ Important Bedrock-specific deviations from Odin for now:
 - no built-in mutex; the arena is intentionally single-threaded for now
 - overflow protection is currently exposed as an arena-level trailing guard page
   flag, not Odin's broader per-memory-block flag surface
-- the VM backend is now split into shared/platform/file/arena sources, but it
-  still groups POSIX platforms together instead of matching Odin's finer
-  Linux/BSD/Darwin file split
+- the VM backend now follows Odin's shared/per-OS split much more closely:
+  `virtual_platform`, `virtual_posix`, `virtual_windows`, `virtual_linux`,
+  `virtual_darwin`, `virtual_freebsd`, `virtual_netbsd`, `virtual_openbsd`,
+  and `virtual_other`
 - file mapping is still path-based only; the file-handle entry point remains a
   later `os/file` integration task
+- `virtual/arena_util.odin` style typed convenience helpers are still absent;
+  they should be added later as C-friendly inline or macro wrappers
 
 ## Tracking Allocator
 

@@ -1,6 +1,6 @@
 #include "internal.h"
 
-#if defined(BR__VM_BACKEND_OTHER)
+#if defined(BR__VM_TARGET_OTHER)
 
 usize br__vm_platform_page_size_query(void) {
   return 0u;
