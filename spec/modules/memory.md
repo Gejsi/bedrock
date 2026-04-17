@@ -14,6 +14,7 @@ without hidden ambient context.
 - small stack allocator
 - dynamic arena allocator
 - buddy allocator
+- compat allocator
 - cross-platform virtual memory reserve/commit/decommit/release/protect
 - virtual static arenas
 - virtual growing arenas
@@ -196,6 +197,24 @@ Important Bedrock-specific deviations from Odin for now:
   ABI, not Odin's richer query-features/query-info modes
 - the generic allocator adapter ignores per-request alignment and always uses
   the allocator's fixed initialization alignment
+
+## Compat Allocator Design
+
+Bedrock now also has a compat allocator close to Odin's current shape.
+
+- wraps a parent allocator and prefixes each allocation with a tiny header
+- stores the user-facing size and alignment in that header
+- forwards free/resize using the original wrapped allocation size
+- useful when the parent allocator depends on the old allocation size
+
+Important Bedrock-specific deviations from Odin for now:
+
+- explicit `parent` allocator defaults to heap when unset, instead of using
+  Odin's ambient context allocator
+- the wrapper currently targets Bedrock's alloc/free/resize/reset ABI, so there
+  is no public generic query-features/query-info surface yet
+- Bedrock explicitly shifts the user payload forward if the wrapped header
+  prefix grows and the parent resize keeps the same base pointer in place
 
 ## Virtual Arena Design
 
