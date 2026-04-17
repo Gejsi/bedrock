@@ -13,6 +13,7 @@ without hidden ambient context.
 - stack allocator
 - small stack allocator
 - dynamic arena allocator
+- buddy allocator
 - cross-platform virtual memory reserve/commit/decommit/release/protect
 - virtual static arenas
 - virtual growing arenas
@@ -177,6 +178,24 @@ Important Bedrock-specific deviations from Odin for now:
   ABI, so `FREE` is not supported and `RESET` maps to `free_all`
 - block cycling preserves the current block if acquiring the next block fails,
   instead of mutating state before the failing allocation completes
+
+## Buddy Allocator Design
+
+Bedrock now also has a buddy allocator close to Odin's current shape.
+
+- fixed power-of-two backing buffer supplied by the caller
+- buddy block headers stored directly in the backing buffer
+- fixed-alignment allocations chosen at initialization time
+- free-time coalescing plus search-time coalescing to reduce fragmentation
+
+Important Bedrock-specific deviations from Odin for now:
+
+- explicit `buffer` + `capacity` instead of Odin's `[]byte` backing slice
+- initialization reports statuses instead of Odin's assertion-heavy diagnostics
+- the generic allocator adapter currently targets Bedrock's alloc/free/resize/reset
+  ABI, not Odin's richer query-features/query-info modes
+- the generic allocator adapter ignores per-request alignment and always uses
+  the allocator's fixed initialization alignment
 
 ## Virtual Arena Design
 
