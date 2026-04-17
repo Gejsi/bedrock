@@ -12,6 +12,7 @@ without hidden ambient context.
 - scratch allocator
 - stack allocator
 - small stack allocator
+- dynamic arena allocator
 - cross-platform virtual memory reserve/commit/decommit/release/protect
 - virtual static arenas
 - virtual growing arenas
@@ -153,6 +154,29 @@ Important Bedrock-specific deviations from Odin for now:
   not Odin's richer query-features/query-info modes
 - alignment still has to satisfy Bedrock's power-of-two allocator contract
   after the Odin-style clamp to the small-stack maximum
+
+## Dynamic Arena Design
+
+Bedrock now also has a dynamic arena close to Odin's current shape.
+
+- fixed-size blocks allocated on demand from a block allocator
+- pointer arrays for used, unused, and out-band allocations stored via a
+  separate array allocator
+- oversized allocations spill into out-band allocations instead of normal
+  arena blocks
+- direct resize is reallocate-and-copy because the arena keeps no per-allocation
+  metadata
+
+Important Bedrock-specific deviations from Odin for now:
+
+- explicit `block_allocator` and `array_allocator` default to heap allocators
+  when unset, instead of using Odin's ambient context allocator
+- direct allocation calls use the arena's configured alignment rather than a
+  per-request alignment parameter
+- the generic allocator adapter currently targets Bedrock's alloc/free/resize/reset
+  ABI, so `FREE` is not supported and `RESET` maps to `free_all`
+- block cycling preserves the current block if acquiring the next block fails,
+  instead of mutating state before the failing allocation completes
 
 ## Virtual Arena Design
 

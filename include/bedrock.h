@@ -7,6 +7,7 @@
 #include <bedrock/bufio.h>
 #include <bedrock/alloc.h>
 #include <bedrock/arena.h>
+#include <bedrock/dynamic_arena.h>
 #include <bedrock/scratch.h>
 #include <bedrock/stack.h>
 #include <bedrock/small_stack.h>

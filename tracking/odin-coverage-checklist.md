@@ -21,8 +21,8 @@ The comparison target is the Odin checkout currently pinned in
 Current label: `partial v1`
 
 Why this label:
-- Bedrock now has the allocator contract, the first fixed, scratch, stack, and
-  small-stack arenas/allocators, and the first cross-platform
+- Bedrock now has the allocator contract, the first fixed, scratch, stack,
+  small-stack, and dynamic arenas/allocators, and the first cross-platform
   virtual-memory-backed arena implementation.
 - Odin `core/mem` is still much broader and includes specialized allocators,
   synchronized wrappers, and TLSF work that Bedrock has not ported yet.
@@ -30,6 +30,7 @@ Why this label:
 Current Bedrock files:
 - `include/bedrock/mem/alloc.h`
 - `include/bedrock/mem/arena.h`
+- `include/bedrock/mem/dynamic_arena.h`
 - `include/bedrock/mem/rollback_stack.h`
 - `include/bedrock/mem/scratch.h`
 - `include/bedrock/mem/small_stack.h`
@@ -39,6 +40,7 @@ Current Bedrock files:
 - `include/bedrock/mem/virtual_arena.h`
 - `src/mem/alloc.c`
 - `src/mem/arena.c`
+- `src/mem/dynamic_arena.c`
 - `src/mem/rollback_stack.c`
 - `src/mem/scratch.c`
 - `src/mem/small_stack.c`
@@ -69,6 +71,7 @@ Current Bedrock files:
 | scratch allocator | `adapted` | `scratch.h`, `scratch.c` | Landed with lazy default initialization, backup allocations, and last-allocation free/resize behavior close to Odin; Bedrock omits Odin's context logger warning path and uses explicit status returns. |
 | stack allocator | `adapted` | `stack.h`, `stack.c` | Landed with Odin-style buffered stack allocation, last-allocation free/resize, and double-free tolerance; Bedrock returns statuses instead of panics and documents the in-place resize check that differs from Odin's current source. |
 | small stack allocator | `adapted` | `small_stack.h`, `small_stack.c` | Landed with Odin-style tiny headers, out-of-order free semantics, and overwrite-on-reuse behavior; Bedrock returns statuses instead of panics and still enforces Bedrock's power-of-two alignment contract after Odin-style clamping. |
+| dynamic arena allocator | `adapted` | `dynamic_arena.h`, `dynamic_arena.c` | Landed with Odin-style block cycling, separate block/array allocators, out-band allocations, reset/free-all split, and reallocate-on-resize behavior; Bedrock keeps the generic allocator adapter on alloc/free/resize/reset only, so there are no query-feature/query-info modes yet. |
 | virtual memory API | `adapted` | `virtual.h`, `src/mem/virtual/*` | Reserve/commit/decommit/release/protect landed with an Odin-style `virtual/*` split: shared `virtual_platform`, shared BSD/macOS `virtual_posix`, per-OS Linux/Darwin/FreeBSD/NetBSD/OpenBSD files, Windows, and `other`. |
 | virtual growing/static arena core | `adapted` | `virtual_arena.h`, `src/mem/virtual/arena.c` | Growing and static arenas landed with allocator support, reset/destroy, mark/rewind, and optional trailing guard-page overflow protection. |
 | tracking allocator | `adapted` | `tracking_allocator.h`, `tracking_allocator.c` | Landed with a dense live-entry list plus a private pointer index; it still omits Odin's mutex, feature-query, and source-location machinery. |
