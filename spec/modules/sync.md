@@ -1,17 +1,14 @@
 # Sync Module Notes
 
-This module exists to bring Bedrock close to Odin's `core/sync` while still
-using the strengths of a C implementation.
+This module exists to bring Bedrock close to Odin's `core/sync`.
 
-## Current Direction
+The current Bedrock implementation is a useful first slice, but it is not yet a
+close implementation-level port. The public surface is reasonably close; the
+backend structure is still materially different.
 
-The first slice targets:
+## Current Bedrock State
 
-- `primitives.odin`
-- `sync_util.odin`
-- the useful blocking subset of `extended.odin`
-
-Specifically:
+What is already landed:
 
 - `Mutex`
 - `RW_Mutex`
@@ -23,64 +20,165 @@ Specifically:
 - `Once`
 - `Ticket_Mutex`
 
-## Intentional Bedrock Adaptations
+Current implementation shape:
 
-These are deliberate, not accidental:
+- [include/bedrock/sync/primitives.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/primitives.h:1)
+- [include/bedrock/sync/extended.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/extended.h:1)
+- [include/bedrock/sync/sync_util.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/sync_util.h:1)
+- [src/sync/primitives_posix.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_posix.c:1)
+- [src/sync/primitives_windows.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_windows.c:1)
+- [src/sync/primitives_other.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_other.c:1)
+- [src/sync/extended.c](/home/gejsi/Desktop/bedrock/src/sync/extended.c:1)
 
-1. Native OS backends instead of Odin's atomic/futex internals
+Important current divergences from Odin:
 
-Bedrock currently implements the public sync surface directly on top of:
+1. Native OS wrappers instead of Odin's atomic/futex internals
+
+Bedrock currently implements the public primitives directly on top of:
 
 - POSIX `pthread_*`
 - Windows `SRWLOCK`, `CONDITION_VARIABLE`, and `CRITICAL_SECTION`
 
-This keeps the behavior close while avoiding a premature port of Odin's deeper
-atomic/futex stack.
+Odin does not do this on non-Windows. Its non-Windows primitives are built out
+of atomics plus futex-style wait/wake helpers.
 
-2. Explicit init/destroy for OS-backed primitives
+2. Explicit `init`/`destroy`
 
-Odin's sync primitives are designed around a zero-value-ready model.
-Bedrock currently uses:
+Odin's sync primitives are designed around a zero-value-ready model. Bedrock
+currently uses explicit initialization and destruction, plus static-init macros
+where the platform supports them.
 
-- explicit `*_init`
-- explicit `*_destroy`
-- static-init macros where the platform supports them
+3. Extra fallback backend
 
-This is the main C-facing divergence. It keeps construction/destruction honest
-for native OS primitives instead of hiding lazy initialization behind lock
-calls.
+Bedrock currently has [src/sync/primitives_other.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_other.c:1)
+as a generic unsupported-platform stub. Odin does not have a corresponding
+`primitives_other.odin`; it enumerates supported backends explicitly.
 
-3. Scoped guard macros instead of function-style guards
+4. Missing lower layers
 
-Odin's `guard` helpers rely on `defer`.
-Bedrock keeps the same intent, but exposes block macros because C has no direct
-equivalent:
+Bedrock currently has no equivalents of:
 
-```c
-br_guard(&mutex) {
-  /* critical section */
-}
+- `atomic.odin`
+- `primitives_internal.odin`
+- `primitives_atomic.odin`
+- `futex_*`
+
+That is the main reason the current sync module should be treated as an interim
+implementation, not as a parity-complete port.
+
+## Odin File Map
+
+The real comparison target is Odin's actual file tree:
+
+- public surface:
+  - `primitives.odin`
+  - `sync_util.odin`
+  - `extended.odin`
+- lower layers:
+  - `atomic.odin`
+  - `primitives_internal.odin`
+  - `primitives_atomic.odin`
+- per-OS primitives:
+  - `primitives_windows.odin`
+  - `primitives_linux.odin`
+  - `primitives_darwin.odin`
+  - `primitives_freebsd.odin`
+  - `primitives_netbsd.odin`
+  - `primitives_openbsd.odin`
+  - `primitives_haiku.odin`
+  - `primitives_wasm.odin`
+- futex backends:
+  - `futex_windows.odin`
+  - `futex_linux.odin`
+  - `futex_darwin.odin`
+  - `futex_freebsd.odin`
+  - `futex_netbsd.odin`
+  - `futex_openbsd.odin`
+  - `futex_haiku.odin`
+  - `futex_wasm.odin`
+- later surface:
+  - `chan/chan.odin`
+
+Bedrock should eventually look closer to this shape:
+
+```text
+include/bedrock/sync/
+  atomic.h
+  primitives.h
+  extended.h
+  sync_util.h
+
+src/sync/
+  atomic.c
+  primitives.c
+  primitives_internal.c
+  primitives_atomic.c
+  primitives_windows.c
+  primitives_linux.c
+  primitives_darwin.c
+  primitives_freebsd.c
+  primitives_netbsd.c
+  primitives_openbsd.c
+  primitives_haiku.c
+  primitives_wasm.c
+  futex_windows.c
+  futex_linux.c
+  futex_darwin.c
+  futex_freebsd.c
+  futex_netbsd.c
+  futex_openbsd.c
+  futex_haiku.c
+  futex_wasm.c
+  extended.c
 ```
 
-## Deferred Sync Work
+That does not mean every file must be a literal transliteration, but the
+responsibility split should be close.
 
-These are still expected later, but not part of the first sync milestone:
+## Recommended Rewrite Order
 
-- timeout-based wait APIs
+1. Remove the illusion that the current backend is Odin-like
+
+- treat the current pthread/Windows implementation as an interim compatibility
+  slice
+- stop describing it as if the lower sync stack were already ported
+
+2. Add the missing lower sync layers
+
+- `atomic`
+- futex wrappers
+- `primitives_internal`
+- `primitives_atomic`
+
+3. Split non-Windows primitives by Odin's OS tree
+
+- Linux
+- Darwin
+- FreeBSD
+- NetBSD
+- OpenBSD
+- later Haiku / WASM if Bedrock wants those targets
+
+4. Revisit zero-value-ready primitives
+
+Once Bedrock stops wrapping pthread objects directly, Odin's zero-value model
+becomes much more achievable.
+
+5. Add the next missing public pieces
+
+- timeout waits once `time` exists
 - semaphores
 - auto-reset events
-- benaphores
-- Odin's atomic mutex / cond / sema layer
-- futex-backed internals
-- channels
+- benaphores / recursive benaphores
+- later `chan`
 
 ## Why Sync Before Returning To Mem
 
-The first sync slice directly unlocks the missing `mem` parity work:
+The sync rewrite is not a detour. It is the prerequisite for the missing
+thread-safe half of `mem`:
 
 - `mutex_allocator`
-- mutex in tracking allocator
+- mutex in `tracking_allocator`
 - mutex in virtual arena
 
-So `sync` is not a detour. It is the clean prerequisite for finishing the
-thread-safe half of `mem`.
+If Bedrock wants `mem` parity, `sync` has to stop being just a wrapper layer.
