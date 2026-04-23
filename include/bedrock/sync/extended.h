@@ -1,8 +1,7 @@
 #ifndef BEDROCK_SYNC_EXTENDED_H
 #define BEDROCK_SYNC_EXTENDED_H
 
-#include <stdatomic.h>
-
+#include <bedrock/sync/atomic.h>
 #include <bedrock/sync/primitives.h>
 
 BR_EXTERN_C_BEGIN
@@ -26,19 +25,19 @@ typedef void (*br_once_fn0)(void);
 
 typedef struct br_once {
   br_mutex mutex;
-  atomic_bool done;
+  br_atomic_bool done;
 } br_once;
 
 typedef struct br_ticket_mutex {
-  _Atomic(u32) ticket;
-  _Atomic(u32) serving;
+  br_atomic_u32 ticket;
+  br_atomic_u32 serving;
 } br_ticket_mutex;
 
 #define BR_WAIT_GROUP_INIT {.counter = 0, .mutex = BR_MUTEX_INIT, .cond = BR_COND_INIT}
 
-#define BR_ONCE_INIT {.mutex = BR_MUTEX_INIT, .done = ATOMIC_VAR_INIT(false)}
+#define BR_ONCE_INIT {.mutex = BR_MUTEX_INIT, .done = BR_ATOMIC_INIT(false)}
 
-#define BR_TICKET_MUTEX_INIT {.ticket = ATOMIC_VAR_INIT((u32)0), .serving = ATOMIC_VAR_INIT((u32)0)}
+#define BR_TICKET_MUTEX_INIT {.ticket = BR_ATOMIC_INIT((u32)0), .serving = BR_ATOMIC_INIT((u32)0)}
 
 br_status br_wait_group_init(br_wait_group *wg);
 void br_wait_group_destroy(br_wait_group *wg);

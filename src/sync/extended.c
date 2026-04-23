@@ -1,17 +1,5 @@
 #include <bedrock/sync/extended.h>
 
-#if !defined(_WIN32)
-#include <sched.h>
-#endif
-
-static void br__sync_yield(void) {
-#if defined(_WIN32)
-  SwitchToThread();
-#else
-  sched_yield();
-#endif
-}
-
 br_status br_wait_group_init(br_wait_group *wg) {
   br_status status;
 
@@ -133,7 +121,7 @@ br_status br_once_init(br_once *once) {
     return BR_STATUS_INVALID_ARGUMENT;
   }
 
-  atomic_store_explicit(&once->done, false, memory_order_relaxed);
+  br_atomic_store_explicit(&once->done, false, BR_ATOMIC_RELAXED);
   return br_mutex_init(&once->mutex);
 }
 
@@ -149,14 +137,14 @@ void br_once_do(br_once *once, br_once_fn fn, void *ctx) {
     return;
   }
 
-  if (atomic_load_explicit(&once->done, memory_order_acquire)) {
+  if (br_atomic_load_explicit(&once->done, BR_ATOMIC_ACQUIRE)) {
     return;
   }
 
   br_mutex_lock(&once->mutex);
-  if (!atomic_load_explicit(&once->done, memory_order_relaxed)) {
+  if (!br_atomic_load_explicit(&once->done, BR_ATOMIC_RELAXED)) {
     fn(ctx);
-    atomic_store_explicit(&once->done, true, memory_order_release);
+    br_atomic_store_explicit(&once->done, true, BR_ATOMIC_RELEASE);
   }
   br_mutex_unlock(&once->mutex);
 }
@@ -187,8 +175,8 @@ void br_ticket_mutex_init(br_ticket_mutex *mutex) {
     return;
   }
 
-  atomic_store_explicit(&mutex->ticket, 0u, memory_order_relaxed);
-  atomic_store_explicit(&mutex->serving, 0u, memory_order_relaxed);
+  br_atomic_store_explicit(&mutex->ticket, 0u, BR_ATOMIC_RELAXED);
+  br_atomic_store_explicit(&mutex->serving, 0u, BR_ATOMIC_RELAXED);
 }
 
 void br_ticket_mutex_lock(br_ticket_mutex *mutex) {
@@ -198,9 +186,9 @@ void br_ticket_mutex_lock(br_ticket_mutex *mutex) {
     return;
   }
 
-  ticket = atomic_fetch_add_explicit(&mutex->ticket, 1u, memory_order_relaxed);
-  while (ticket != atomic_load_explicit(&mutex->serving, memory_order_acquire)) {
-    br__sync_yield();
+  ticket = br_atomic_add_explicit(&mutex->ticket, 1u, BR_ATOMIC_RELAXED);
+  while (ticket != br_atomic_load_explicit(&mutex->serving, BR_ATOMIC_ACQUIRE)) {
+    br_cpu_relax();
   }
 }
 
@@ -209,5 +197,5 @@ void br_ticket_mutex_unlock(br_ticket_mutex *mutex) {
     return;
   }
 
-  atomic_fetch_add_explicit(&mutex->serving, 1u, memory_order_release);
+  br_atomic_add_explicit(&mutex->serving, 1u, BR_ATOMIC_RELEASE);
 }

@@ -10,6 +10,7 @@ backend structure is still materially different.
 
 What is already landed:
 
+- `atomic`
 - `Mutex`
 - `RW_Mutex`
 - `Recursive_Mutex`
@@ -22,9 +23,12 @@ What is already landed:
 
 Current implementation shape:
 
+- [include/bedrock/sync/atomic.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/atomic.h:1)
 - [include/bedrock/sync/primitives.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/primitives.h:1)
 - [include/bedrock/sync/extended.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/extended.h:1)
 - [include/bedrock/sync/sync_util.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/sync_util.h:1)
+- [src/sync/atomic.c](/home/gejsi/Desktop/bedrock/src/sync/atomic.c:1)
+- [src/sync/primitives.c](/home/gejsi/Desktop/bedrock/src/sync/primitives.c:1)
 - [src/sync/primitives_posix.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_posix.c:1)
 - [src/sync/primitives_windows.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_windows.c:1)
 - [src/sync/primitives_other.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_other.c:1)
@@ -54,14 +58,17 @@ Bedrock currently has [src/sync/primitives_other.c](/home/gejsi/Desktop/bedrock/
 as a generic unsupported-platform stub. Odin does not have a corresponding
 `primitives_other.odin`; it enumerates supported backends explicitly.
 
-4. Missing lower layers
+4. Lower layers still missing after `atomic`
 
-Bedrock currently has no equivalents of:
+Bedrock now has an initial `atomic` layer, but it still has no equivalents of:
 
-- `atomic.odin`
 - `primitives_internal.odin`
 - `primitives_atomic.odin`
 - `futex_*`
+
+The current Bedrock atomic layer is intentionally C-shaped. It is implemented
+over C11 atomics and keeps C's compare-exchange `expected` pointer contract
+instead of trying to fake Odin's result-tuple shape at the ABI level.
 
 That is the main reason the current sync module should be treated as an interim
 implementation, not as a parity-complete port.
@@ -145,7 +152,7 @@ responsibility split should be close.
 
 2. Add the missing lower sync layers
 
-- `atomic`
+- keep the landed `atomic` layer and grow around it
 - futex wrappers
 - `primitives_internal`
 - `primitives_atomic`

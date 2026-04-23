@@ -26,7 +26,7 @@ Detailed status for the currently active module ports lives in
 | `core/container/*` | redesign | Keep the ideas; implement as generated typed containers. |
 | `core/sort` | redesign | Use erased generic algorithms plus optional typed sugar. |
 | `core/thread` | defer | Later module; no direct v1 port. |
-| `core/sync` | partial v1 | Core blocking primitives and a useful first extended slice landed, but the backend is still an interim native-wrapper implementation; Odin's atomic/futex internals and real per-OS sync tree are still missing. |
+| `core/sync` | partial v1 | Core blocking primitives, a useful first extended slice, and the first `sync/atomic` layer landed, but the backend is still an interim native-wrapper implementation; `primitives_internal`, `primitives_atomic`, futex backends, and Odin's real per-OS sync tree are still missing. |
 | `core/fmt` | exclude v1 | Too tied to `any`, RTTI, and formatter dispatch. |
 | `core/encoding/json` | exclude v1 | Too RTTI-heavy for a clean first pass. |
 | `core/encoding/xml` | exclude v1 | Large parser surface; not first-wave material. |

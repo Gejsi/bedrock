@@ -297,17 +297,19 @@ Current label: `partial v1`
 
 Why this label:
 - Bedrock now has the core blocking synchronization primitives and a useful
-  first extended slice.
+  first extended slice, plus the first lower layer in `sync/atomic`.
 - The public shape is close enough to start integrating with other modules.
 - The backend structure is still far from Odin's actual `core/sync` tree:
-  there is no `atomic.odin`, `primitives_internal.odin`,
-  `primitives_atomic.odin`, or `futex_*` equivalent yet.
+  `primitives_internal.odin`, `primitives_atomic.odin`, and `futex_*` still
+  have no Bedrock equivalents.
 
 Current Bedrock files:
 - `include/bedrock/sync.h`
+- `include/bedrock/sync/atomic.h`
 - `include/bedrock/sync/primitives.h`
 - `include/bedrock/sync/extended.h`
 - `include/bedrock/sync/sync_util.h`
+- `src/sync/atomic.c`
 - `src/sync/primitives.c`
 - `src/sync/primitives_posix.c`
 - `src/sync/primitives_windows.c`
@@ -326,7 +328,7 @@ Current Bedrock files:
 | `Barrier` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Core init/wait landed. |
 | `Once` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Landed with a generic `void *` callback plus a no-data helper instead of Odin's overloaded proc family. |
 | `Ticket_Mutex` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Lock/unlock landed with C atomics. |
-| `atomic.odin` surface | `planned` | none | Bedrock currently uses C atomics directly where needed but does not yet have an Odin-shaped `sync/atomic` layer. |
+| `atomic.odin` surface | `adapted` | `sync/atomic.h`, `src/sync/atomic.c`, `tests/test_sync_atomic.c` | Landed as a C11-atomic-backed layer with Bedrock names and memory-order aliases. Bedrock intentionally keeps C's compare-exchange `expected` pointer contract instead of emulating Odin's tuple-return API. |
 | `primitives_internal.odin` | `planned` | none | Missing. |
 | `primitives_atomic.odin` | `planned` | none | Missing. |
 | per-OS primitive split (`linux`, `darwin`, `freebsd`, `netbsd`, `openbsd`, `haiku`, `wasm`) | `planned` | none | Bedrock currently has `primitives_posix.c`, `primitives_windows.c`, and a Bedrock-only `primitives_other.c` fallback rather than Odin's actual file split. |
