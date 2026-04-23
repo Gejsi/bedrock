@@ -78,7 +78,7 @@ usize br_utf8_rune_count(br_bytes_view s);
 Return the number of bytes required to encode `value`, or `-1` if `value` is
 not a valid Unicode scalar value.
 */
-int br_utf8_rune_size(br_rune value);
+i32 br_utf8_rune_size(br_rune value);
 
 /*
 Report whether `s` begins with a complete UTF-8 encoding.

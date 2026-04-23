@@ -34,7 +34,7 @@ static uptr br__align_up_uintptr(uptr value, usize alignment) {
   return (value + (uptr)(alignment - 1u)) & ~((uptr)(alignment - 1u));
 }
 
-static br_alloc_result br__heap_alloc(usize size, usize alignment, int zeroed) {
+static br_alloc_result br__heap_alloc(usize size, usize alignment, bool zeroed) {
   br__heap_header *header;
   uptr aligned_addr;
   u8 *base;
@@ -70,7 +70,7 @@ static br_alloc_result br__heap_alloc(usize size, usize alignment, int zeroed) {
 }
 
 static br_alloc_result
-br__heap_resize(void *ptr, usize old_size, usize new_size, usize alignment, int zeroed) {
+br__heap_resize(void *ptr, usize old_size, usize new_size, usize alignment, bool zeroed) {
   br__heap_header *header;
   br_alloc_result result;
 

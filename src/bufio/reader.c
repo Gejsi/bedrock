@@ -93,7 +93,7 @@ static br_bytes br__bufio_take_byte_buffer(br_byte_buffer *buffer) {
   buffer->cap = 0u;
   buffer->off = 0u;
   buffer->allocator = br_allocator_null();
-  buffer->can_unread_byte = 0;
+  buffer->can_unread_byte = false;
   return bytes;
 }
 

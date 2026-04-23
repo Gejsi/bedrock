@@ -33,7 +33,7 @@ typedef struct br_bytes_view_list_result {
 typedef struct br_bytes_rewrite_result {
   br_bytes_view value;
   br_bytes owned;
-  int allocated;
+  bool allocated;
   br_status status;
 } br_bytes_rewrite_result;
 
@@ -68,7 +68,7 @@ br_status br_bytes_view_list_free(br_bytes_view_list list, br_allocator allocato
 br_status br_bytes_rewrite_free(br_bytes_rewrite_result result, br_allocator allocator);
 br_bytes_result br_bytes_clone(br_bytes_view src, br_allocator allocator);
 
-int br_bytes_compare(br_bytes_view lhs, br_bytes_view rhs);
+i32 br_bytes_compare(br_bytes_view lhs, br_bytes_view rhs);
 bool br_bytes_equal(br_bytes_view lhs, br_bytes_view rhs);
 bool br_bytes_has_prefix(br_bytes_view s, br_bytes_view prefix);
 bool br_bytes_has_suffix(br_bytes_view s, br_bytes_view suffix);

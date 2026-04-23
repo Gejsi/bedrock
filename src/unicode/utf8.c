@@ -13,8 +13,8 @@ typedef struct br__utf8_lead_info {
   usize width;
   u8 lo;
   u8 hi;
-  int ascii;
-  int invalid;
+  bool ascii;
+  bool invalid;
 } br__utf8_lead_info;
 
 static br_utf8_decode_result br__utf8_decode_result(br_rune value, usize width) {
@@ -42,15 +42,15 @@ static br__utf8_lead_info br__utf8_classify_lead(u8 lead) {
   info.width = 1u;
   info.lo = BR__UTF8_LOCB;
   info.hi = BR__UTF8_HICB;
-  info.ascii = 0;
-  info.invalid = 0;
+  info.ascii = false;
+  info.invalid = false;
 
   if (lead <= 0x7fu) {
-    info.ascii = 1;
+    info.ascii = true;
     return info;
   }
   if (lead < 0xc2u) {
-    info.invalid = 1;
+    info.invalid = true;
     return info;
   }
   if (lead <= 0xdfu) {
@@ -90,7 +90,7 @@ static br__utf8_lead_info br__utf8_classify_lead(u8 lead) {
     return info;
   }
 
-  info.invalid = 1;
+  info.invalid = true;
   return info;
 }
 
@@ -301,7 +301,7 @@ usize br_utf8_rune_count(br_bytes_view s) {
   return count;
 }
 
-int br_utf8_rune_size(br_rune value) {
+i32 br_utf8_rune_size(br_rune value) {
   if (value < 0) {
     return -1;
   }

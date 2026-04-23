@@ -18,7 +18,7 @@ typedef struct br_string_builder {
   usize len;
   usize cap;
   br_allocator allocator;
-  int owns_storage;
+  bool owns_storage;
 } br_string_builder;
 
 typedef br_io_result br_string_builder_io_result;

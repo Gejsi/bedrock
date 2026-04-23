@@ -24,7 +24,7 @@ static br_bytes_rewrite_result br__bytes_rewrite_alias_result(br_bytes_view valu
 
   result.value = value;
   result.owned = br_bytes_make(NULL, 0u);
-  result.allocated = 0;
+  result.allocated = false;
   result.status = BR_STATUS_OK;
   return result;
 }
@@ -90,9 +90,9 @@ br_bytes_result br_bytes_clone(br_bytes_view src, br_allocator allocator) {
   return br__bytes_result(alloc.ptr, src.len, BR_STATUS_OK);
 }
 
-int br_bytes_compare(br_bytes_view lhs, br_bytes_view rhs) {
+i32 br_bytes_compare(br_bytes_view lhs, br_bytes_view rhs) {
   usize common_len = br_min_size(lhs.len, rhs.len);
-  int cmp;
+  i32 cmp;
 
   if (common_len == 0u) {
     if (lhs.len == rhs.len) {

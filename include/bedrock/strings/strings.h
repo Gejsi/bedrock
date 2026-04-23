@@ -85,7 +85,7 @@ br_string_result br_string_clone(br_string_view s, br_allocator allocator);
 /*
 Compare two strings lexicographically.
 */
-int br_string_compare(br_string_view lhs, br_string_view rhs);
+i32 br_string_compare(br_string_view lhs, br_string_view rhs);
 
 /*
 Return whether two strings have the same bytes.

@@ -42,7 +42,7 @@ void br_wait_group_destroy(br_wait_group *wg) {
   br_mutex_destroy(&wg->mutex);
 }
 
-void br_wait_group_add(br_wait_group *wg, int delta) {
+void br_wait_group_add(br_wait_group *wg, i32 delta) {
   if (wg == NULL || delta == 0) {
     return;
   }
@@ -71,7 +71,7 @@ void br_wait_group_wait(br_wait_group *wg) {
   br_mutex_unlock(&wg->mutex);
 }
 
-br_status br_barrier_init(br_barrier *barrier, int thread_count) {
+br_status br_barrier_init(br_barrier *barrier, i32 thread_count) {
   br_status status;
 
   if (barrier == NULL || thread_count <= 0) {
@@ -104,7 +104,7 @@ void br_barrier_destroy(br_barrier *barrier) {
 }
 
 bool br_barrier_wait(br_barrier *barrier) {
-  int generation;
+  i32 generation;
 
   if (barrier == NULL) {
     return false;
@@ -192,7 +192,7 @@ void br_ticket_mutex_init(br_ticket_mutex *mutex) {
 }
 
 void br_ticket_mutex_lock(br_ticket_mutex *mutex) {
-  unsigned int ticket;
+  u32 ticket;
 
   if (mutex == NULL) {
     return;

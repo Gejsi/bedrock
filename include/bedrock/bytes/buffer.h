@@ -12,7 +12,7 @@ typedef struct br_byte_buffer {
   usize cap;
   usize off;
   br_allocator allocator;
-  int can_unread_byte;
+  bool can_unread_byte;
 } br_byte_buffer;
 
 typedef br_io_result br_byte_buffer_io_result;

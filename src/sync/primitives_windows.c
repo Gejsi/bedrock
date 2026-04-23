@@ -161,5 +161,5 @@ void br_cond_broadcast(br_cond *cond) {
 }
 
 #else
-typedef int br__sync_windows_translation_unit;
+typedef char br__sync_windows_translation_unit;
 #endif

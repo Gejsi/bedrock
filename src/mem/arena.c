@@ -13,7 +13,7 @@ static uptr br__arena_align_up(uptr value, usize alignment) {
   return (value + (uptr)(alignment - 1u)) & ~((uptr)(alignment - 1u));
 }
 
-static br_alloc_result br__arena_alloc(br_arena *arena, usize size, usize alignment, int zeroed) {
+static br_alloc_result br__arena_alloc(br_arena *arena, usize size, usize alignment, bool zeroed) {
   uptr base_addr;
   uptr aligned_addr;
   usize new_offset;

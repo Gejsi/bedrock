@@ -21,7 +21,7 @@ static br_byte_buffer_byte_result br__byte_buffer_byte_result(u8 value, br_statu
 static void br__byte_buffer_clear_state(br_byte_buffer *buffer) {
   buffer->len = 0u;
   buffer->off = 0u;
-  buffer->can_unread_byte = 0;
+  buffer->can_unread_byte = false;
 }
 
 static usize br__byte_buffer_unread_len(const br_byte_buffer *buffer) {
@@ -204,7 +204,7 @@ br_status br_byte_buffer_truncate(br_byte_buffer *buffer, usize n) {
   }
 
   buffer->len = buffer->off + n;
-  buffer->can_unread_byte = 0;
+  buffer->can_unread_byte = false;
   if (n == 0u && buffer->off == buffer->len) {
     br__byte_buffer_clear_state(buffer);
   }
@@ -218,7 +218,7 @@ br_byte_buffer_io_result br_byte_buffer_write(br_byte_buffer *buffer, br_bytes_v
     return br__byte_buffer_io_result(0u, BR_STATUS_INVALID_ARGUMENT);
   }
   if (src.len == 0u) {
-    buffer->can_unread_byte = 0;
+    buffer->can_unread_byte = false;
     return br__byte_buffer_io_result(0u, BR_STATUS_OK);
   }
 
@@ -229,7 +229,7 @@ br_byte_buffer_io_result br_byte_buffer_write(br_byte_buffer *buffer, br_bytes_v
 
   memcpy(buffer->data + buffer->len, src.data, src.len);
   buffer->len += src.len;
-  buffer->can_unread_byte = 0;
+  buffer->can_unread_byte = false;
   return br__byte_buffer_io_result(src.len, BR_STATUS_OK);
 }
 
@@ -247,7 +247,7 @@ br_status br_byte_buffer_write_byte(br_byte_buffer *buffer, u8 byte_value) {
 
   buffer->data[buffer->len] = byte_value;
   buffer->len += 1u;
-  buffer->can_unread_byte = 0;
+  buffer->can_unread_byte = false;
   return BR_STATUS_OK;
 }
 
@@ -266,7 +266,7 @@ br_bytes_view br_byte_buffer_next(br_byte_buffer *buffer, usize n) {
 
   result = br_bytes_view_make(buffer->data + buffer->off, n);
   buffer->off += n;
-  buffer->can_unread_byte = 0;
+  buffer->can_unread_byte = false;
   if (buffer->off == buffer->len) {
     br__byte_buffer_clear_state(buffer);
   }
@@ -310,7 +310,7 @@ br_byte_buffer_byte_result br_byte_buffer_read_byte(br_byte_buffer *buffer) {
 
   byte_value = buffer->data[buffer->off];
   buffer->off += 1u;
-  buffer->can_unread_byte = 1;
+  buffer->can_unread_byte = true;
   if (buffer->off == buffer->len) {
     buffer->off = buffer->len;
   }
@@ -326,7 +326,7 @@ br_status br_byte_buffer_unread_byte(br_byte_buffer *buffer) {
   }
 
   buffer->off -= 1u;
-  buffer->can_unread_byte = 0;
+  buffer->can_unread_byte = false;
   return BR_STATUS_OK;
 }
 

@@ -96,7 +96,7 @@ void br_string_builder_init(br_string_builder *builder, br_allocator allocator) 
   builder->len = 0u;
   builder->cap = 0u;
   builder->allocator = allocator;
-  builder->owns_storage = 1;
+  builder->owns_storage = true;
 }
 
 br_status br_string_builder_init_with_capacity(br_string_builder *builder,
@@ -127,7 +127,7 @@ void br_string_builder_init_with_backing(br_string_builder *builder,
   builder->len = 0u;
   builder->cap = backing_len;
   builder->allocator = br_allocator_null();
-  builder->owns_storage = 0;
+  builder->owns_storage = false;
 }
 
 void br_string_builder_destroy(br_string_builder *builder) {
@@ -142,7 +142,7 @@ void br_string_builder_destroy(br_string_builder *builder) {
   builder->data = NULL;
   builder->len = 0u;
   builder->cap = 0u;
-  builder->owns_storage = 0;
+  builder->owns_storage = false;
 }
 
 void br_string_builder_reset(br_string_builder *builder) {

@@ -30,7 +30,7 @@ typedef struct br_mutex {
 #elif defined(__unix__) || defined(__APPLE__)
   pthread_mutex_t impl;
 #else
-  int impl;
+  i32 impl;
 #endif
 } br_mutex;
 
@@ -40,7 +40,7 @@ typedef struct br_rw_mutex {
 #elif defined(__unix__) || defined(__APPLE__)
   pthread_rwlock_t impl;
 #else
-  int impl;
+  i32 impl;
 #endif
 } br_rw_mutex;
 
@@ -50,7 +50,7 @@ typedef struct br_recursive_mutex {
 #elif defined(__unix__) || defined(__APPLE__)
   pthread_mutex_t impl;
 #else
-  int impl;
+  i32 impl;
 #endif
 } br_recursive_mutex;
 
@@ -60,7 +60,7 @@ typedef struct br_cond {
 #elif defined(__unix__) || defined(__APPLE__)
   pthread_cond_t impl;
 #else
-  int impl;
+  i32 impl;
 #endif
 } br_cond;
 
