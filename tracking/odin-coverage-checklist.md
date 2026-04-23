@@ -40,6 +40,7 @@ Current Bedrock files:
 - `include/bedrock/mem/tracking_allocator.h`
 - `include/bedrock/mem/virtual.h`
 - `include/bedrock/mem/virtual_arena.h`
+- `include/bedrock/mem/virtual_arena_util.h`
 - `src/mem/alloc.c`
 - `src/mem/arena.c`
 - `src/mem/buddy_allocator.c`
@@ -63,6 +64,7 @@ Current Bedrock files:
 - `src/mem/virtual/virtual_other.c`
 - `src/mem/virtual/file.c`
 - `src/mem/virtual/arena.c`
+- `src/mem/virtual/arena_util.c`
 
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
@@ -88,7 +90,7 @@ Current Bedrock files:
 | virtual temp / watermark helpers | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Landed as explicit begin/end/ignore/check helpers that return statuses instead of Odin's assertion-based misuse handling. |
 | virtual buffer-backed arena variant | `adapted` | `arena.h`, `arena.c` | Bedrock keeps fixed-buffer arenas in `br_arena` instead of duplicating Odin's `.Buffer` variant here. |
 | file mapping / VM-backed file helpers | `adapted` | `virtual.h`, `src/mem/virtual/file.c` | Path-based map/unmap landed with Odin-style error categories; `virtual/file.c` now owns the high-level open/stat/map flow while per-platform files only map native handles. Bedrock v1 still does not expose the file-handle entry point publicly. |
-| `virtual/arena_util.odin` helpers | `planned` | none | The generic typed arena convenience layer is still absent; in Bedrock it should likely become inline or macro-based typed helpers rather than a literal syntax port. |
+| `virtual/arena_util.odin` helpers | `adapted` | `virtual_arena_util.h`, `src/mem/virtual/arena_util.c` | Landed as raw helpers plus typed C macros for `new`, `new_aligned`, `new_clone`, `make_slice`, `make_aligned`, and `make_multi_pointer`; Bedrock mirrors Odin's convenience layer without pretending C has `typeid` overloads. |
 
 Summary:
 - `mem` now includes the VM milestone that started the project.

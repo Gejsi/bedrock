@@ -240,8 +240,9 @@ Important Bedrock-specific deviations from Odin for now:
   backends only perform native-handle mapping
 - the public file-handle entry point remains a later `os/file` integration
   task
-- `virtual/arena_util.odin` style typed convenience helpers are still absent;
-  they should be added later as C-friendly inline or macro wrappers
+- `virtual/arena_util.odin` style typed convenience helpers now exist as
+  C-friendly raw helpers plus typed assignment macros instead of a literal
+  syntax port
 
 ## Tracking Allocator
 
