@@ -25,6 +25,18 @@ BASE_CFLAGS ?= -std=c11
 WARN_CFLAGS ?= -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wstrict-prototypes
 COMMON_CFLAGS := $(BASE_CFLAGS) $(WARN_CFLAGS)
 
+ifeq ($(OS),Windows_NT)
+THREAD_CFLAGS :=
+THREAD_LDFLAGS :=
+THREAD_CPPFLAGS :=
+else
+THREAD_CFLAGS := -pthread
+THREAD_LDFLAGS := -pthread
+THREAD_CPPFLAGS := -D_XOPEN_SOURCE=700
+endif
+
+CPPFLAGS += $(THREAD_CPPFLAGS)
+
 CC_VERSION := $(shell $(CC) --version 2>/dev/null | head -n 1)
 ifneq ($(findstring clang,$(CC_VERSION)),)
 COMPILER_FAMILY := clang
@@ -64,9 +76,9 @@ $(error Unsupported MODE '$(MODE)'; use debug, release, or sanitize)
 endif
 
 CFLAGS ?=
-CFLAGS += $(COMMON_CFLAGS) $(CLANG_ONLY_CFLAGS) $(MODE_CFLAGS)
+CFLAGS += $(COMMON_CFLAGS) $(CLANG_ONLY_CFLAGS) $(MODE_CFLAGS) $(THREAD_CFLAGS)
 LDFLAGS ?=
-LDFLAGS += $(MODE_LDFLAGS)
+LDFLAGS += $(MODE_LDFLAGS) $(THREAD_LDFLAGS)
 
 TEST_CFLAGS := $(filter-out -DNDEBUG,$(CFLAGS))
 TEST_ENV :=
