@@ -1,18 +1,43 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <bedrock/sync/primitives.h>
 
-#include <string.h>
+#if defined(__linux__)
+#include <sys/syscall.h>
+#include <unistd.h>
+#elif defined(__FreeBSD__)
+#include <pthread_np.h>
+#elif defined(__NetBSD__)
+#include <lwp.h>
+#elif defined(__OpenBSD__)
+#include <unistd.h>
+#elif defined(__HAIKU__)
+#include <OS.h>
+#endif
 
-uptr br_current_thread_id(void) {
+br_thread_id br_current_thread_id(void) {
 #if defined(_WIN32)
-  return (uptr)GetCurrentThreadId();
-#elif defined(__unix__) || defined(__APPLE__)
-  pthread_t self;
-  uptr id = 0;
-
-  self = pthread_self();
-  memcpy(&id, &self, br_min_size(sizeof(id), sizeof(self)));
-  return id;
+  return (br_thread_id)GetCurrentThreadId();
+#elif defined(__linux__)
+  long tid = syscall(SYS_gettid);
+  return tid > 0 ? (br_thread_id)tid : BR_THREAD_ID_INVALID;
+#elif defined(__APPLE__) && defined(__MACH__)
+  u64 tid = 0;
+  if (pthread_threadid_np(NULL, &tid) != 0) {
+    return BR_THREAD_ID_INVALID;
+  }
+  return (br_thread_id)tid;
+#elif defined(__FreeBSD__)
+  return (br_thread_id)pthread_getthreadid_np();
+#elif defined(__NetBSD__)
+  return (br_thread_id)_lwp_self();
+#elif defined(__OpenBSD__)
+  return (br_thread_id)getthrid();
+#elif defined(__HAIKU__)
+  return (br_thread_id)find_thread(NULL);
 #else
-  return 0u;
+  return BR_THREAD_ID_INVALID;
 #endif
 }

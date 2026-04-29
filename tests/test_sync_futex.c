@@ -50,6 +50,13 @@ typedef struct atomic_rw_writer_state {
   br_atomic_bool *locked;
 } atomic_rw_writer_state;
 
+typedef struct atomic_recursive_try_state {
+  br_atomic_recursive_mutex *mutex;
+  br_atomic_bool *start;
+  br_atomic_bool *done;
+  br_atomic_bool *result;
+} atomic_recursive_try_state;
+
 static void *futex_wait_worker(void *ctx) {
   futex_wait_state *state = (futex_wait_state *)ctx;
 
@@ -108,6 +115,42 @@ static void *atomic_rw_writer_worker(void *ctx) {
   spin_until_bool(state->release, true);
   br_atomic_rw_mutex_unlock(state->rw);
   return NULL;
+}
+
+static void *atomic_recursive_try_worker(void *ctx) {
+  atomic_recursive_try_state *state = (atomic_recursive_try_state *)ctx;
+  bool result;
+
+  spin_until_bool(state->start, true);
+  result = br_atomic_recursive_mutex_try_lock(state->mutex);
+  if (result) {
+    br_atomic_recursive_mutex_unlock(state->mutex);
+  }
+  br_atomic_store_explicit(state->result, result, BR_ATOMIC_RELEASE);
+  br_atomic_store_explicit(state->done, true, BR_ATOMIC_RELEASE);
+  return NULL;
+}
+
+static bool atomic_recursive_try_from_other_thread(br_atomic_recursive_mutex *mutex) {
+  br_atomic_bool start;
+  br_atomic_bool done;
+  br_atomic_bool result;
+  atomic_recursive_try_state state;
+  pthread_t thread;
+
+  br_atomic_init(&start, false);
+  br_atomic_init(&done, false);
+  br_atomic_init(&result, false);
+  state.mutex = mutex;
+  state.start = &start;
+  state.done = &done;
+  state.result = &result;
+
+  assert(pthread_create(&thread, NULL, atomic_recursive_try_worker, &state) == 0);
+  br_atomic_store_explicit(&start, true, BR_ATOMIC_RELEASE);
+  spin_until_bool(&done, true);
+  assert(pthread_join(thread, NULL) == 0);
+  return br_atomic_load_explicit(&result, BR_ATOMIC_ACQUIRE);
 }
 
 static void test_futex_wait_signal(void) {
@@ -307,6 +350,25 @@ static void test_atomic_rw_mutex_writer_waits_for_readers(void) {
   assert(br_atomic_rw_mutex_try_shared_lock(&rw));
   br_atomic_rw_mutex_shared_unlock(&rw);
 }
+
+static void test_atomic_recursive_mutex_reentrant(void) {
+  br_atomic_recursive_mutex mutex = BR_ATOMIC_RECURSIVE_MUTEX_INIT;
+
+  assert(br_current_thread_id() != BR_THREAD_ID_INVALID);
+
+  br_atomic_recursive_mutex_lock(&mutex);
+  br_atomic_recursive_mutex_lock(&mutex);
+  br_atomic_recursive_mutex_unlock(&mutex);
+  br_atomic_recursive_mutex_unlock(&mutex);
+
+  assert(br_atomic_recursive_mutex_try_lock(&mutex));
+  assert(br_atomic_recursive_mutex_try_lock(&mutex));
+  assert(!atomic_recursive_try_from_other_thread(&mutex));
+  br_atomic_recursive_mutex_unlock(&mutex);
+  assert(!atomic_recursive_try_from_other_thread(&mutex));
+  br_atomic_recursive_mutex_unlock(&mutex);
+  assert(atomic_recursive_try_from_other_thread(&mutex));
+}
 #endif
 
 int main(void) {
@@ -317,6 +379,7 @@ int main(void) {
   test_atomic_rw_mutex_try_lock();
   test_atomic_rw_mutex_readers_share();
   test_atomic_rw_mutex_writer_waits_for_readers();
+  test_atomic_recursive_mutex_reentrant();
   test_atomic_sema_wait_post_one();
   test_atomic_sema_post_many();
 #endif

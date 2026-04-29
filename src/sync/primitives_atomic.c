@@ -1,3 +1,5 @@
+#include <assert.h>
+
 #include <bedrock/sync/primitives_atomic.h>
 
 static void br__atomic_mutex_lock_slow(br_atomic_mutex *mutex, u32 state) {
@@ -200,6 +202,81 @@ bool br_atomic_rw_mutex_try_shared_lock(br_atomic_rw_mutex *rw) {
   }
 
   return false;
+}
+
+void br_atomic_recursive_mutex_init(br_atomic_recursive_mutex *mutex) {
+  if (mutex == NULL) {
+    return;
+  }
+
+  br_atomic_init(&mutex->owner, BR_THREAD_ID_INVALID);
+  mutex->recursion = 0;
+  br_atomic_mutex_init(&mutex->mutex);
+}
+
+void br_atomic_recursive_mutex_lock(br_atomic_recursive_mutex *mutex) {
+  br_thread_id tid;
+  br_thread_id owner;
+
+  if (mutex == NULL) {
+    return;
+  }
+
+  tid = br_current_thread_id();
+  owner = br_atomic_load_explicit(&mutex->owner, BR_ATOMIC_ACQUIRE);
+  if (tid != owner) {
+    br_atomic_mutex_lock(&mutex->mutex);
+    br_atomic_store_explicit(&mutex->owner, tid, BR_ATOMIC_RELEASE);
+  }
+
+  mutex->recursion += 1;
+}
+
+void br_atomic_recursive_mutex_unlock(br_atomic_recursive_mutex *mutex) {
+  br_thread_id tid;
+
+  if (mutex == NULL) {
+    return;
+  }
+
+  tid = br_current_thread_id();
+  if (tid != br_atomic_load_explicit(&mutex->owner, BR_ATOMIC_RELAXED)) {
+    assert(false);
+    return;
+  }
+
+  mutex->recursion -= 1;
+  if (mutex->recursion == 0) {
+    br_atomic_store_explicit(&mutex->owner, BR_THREAD_ID_INVALID, BR_ATOMIC_RELEASE);
+    br_atomic_mutex_unlock(&mutex->mutex);
+  }
+}
+
+bool br_atomic_recursive_mutex_try_lock(br_atomic_recursive_mutex *mutex) {
+  br_thread_id tid;
+
+  if (mutex == NULL) {
+    return false;
+  }
+
+  tid = br_current_thread_id();
+  if (tid == br_atomic_load_explicit(&mutex->owner, BR_ATOMIC_ACQUIRE)) {
+    /*
+    Odin's `Atomic_Recursive_Mutex` currently calls mutex_try_lock here, which
+    makes recursive try-lock fail against the already-held non-recursive mutex.
+    Bedrock follows the documented recursive mutex behavior instead.
+    */
+    mutex->recursion += 1;
+    return true;
+  }
+
+  if (!br_atomic_mutex_try_lock(&mutex->mutex)) {
+    return false;
+  }
+
+  br_atomic_store_explicit(&mutex->owner, tid, BR_ATOMIC_RELEASE);
+  mutex->recursion += 1;
+  return true;
 }
 
 void br_atomic_sema_init(br_atomic_sema *sema, u32 count) {

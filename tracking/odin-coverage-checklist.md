@@ -324,7 +324,7 @@ Current Bedrock files:
 
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
-| `current_thread_id` | `adapted` | `sync/primitives.h`, `src/sync/primitives.c` | Implemented as a portable thread identity helper; the exact numeric identity is OS-backed rather than Odin-runtime-backed. |
+| `current_thread_id` | `adapted` | `sync/primitives.h`, `src/sync/primitives.c` | Landed as `br_thread_id` with native numeric OS thread IDs, matching Odin's strategy more closely than the earlier `pthread_self` byte-copy fallback. |
 | `Mutex` | `adapted` | `sync/primitives.h`, `src/sync/primitives_*` | Landed with lock/unlock/try-lock on top of native OS primitives. This is behavior-close but not implementation-close to Odin's non-Windows atomic/futex path. Bedrock also uses explicit init/destroy plus static-init macros instead of Odin's zero-value-ready contract. |
 | `RW_Mutex` | `adapted` | `sync/primitives.h`, `src/sync/primitives_*` | Exclusive/shared lock surface landed; same explicit init/destroy and native-wrapper divergence as `Mutex`. |
 | `Recursive_Mutex` | `adapted` | `sync/primitives.h`, `src/sync/primitives_*` | Landed, but Bedrock currently uses native recursive OS primitives instead of Odin's lower-level ownership/recursion machinery. |
@@ -336,12 +336,12 @@ Current Bedrock files:
 | `Ticket_Mutex` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Lock/unlock landed with C atomics. |
 | `atomic.odin` surface | `adapted` | `sync/atomic.h`, `src/sync/atomic.c`, `tests/test_sync_atomic.c` | Landed as a C11-atomic-backed layer with Bedrock names and memory-order aliases. Bedrock intentionally keeps C's compare-exchange `expected` pointer contract instead of emulating Odin's tuple-return API, and currently requires compiler/target support for C11 atomics. |
 | `primitives_internal.odin` | `planned` | none | Missing. |
-| `primitives_atomic.odin` | `adapted` | `sync/primitives_atomic.h`, `src/sync/primitives_atomic.c`, `tests/test_sync_futex.c` | First slices landed with `Atomic_Mutex`, `Atomic_RW_Mutex`, and `Atomic_Sema` on top of Bedrock futex. Atomic recursive mutex and cond are still missing. |
+| `primitives_atomic.odin` | `adapted` | `sync/primitives_atomic.h`, `src/sync/primitives_atomic.c`, `tests/test_sync_futex.c` | First slices landed with `Atomic_Mutex`, `Atomic_RW_Mutex`, `Atomic_Recursive_Mutex`, and `Atomic_Sema` on top of Bedrock futex. `Atomic_Recursive_Mutex` keeps the lower atomic layer zero-value-ready by using `br_atomic_mutex` until public `br_mutex` moves off pthread, stores owner atomically to avoid C data races, and follows documented recursive try-lock behavior rather than Odin's current same-owner `mutex_try_lock` branch. Atomic cond is still missing. |
 | per-OS primitive split (`linux`, `darwin`, `freebsd`, `netbsd`, `openbsd`, `haiku`, `wasm`) | `planned` | none | Bedrock currently has `primitives_posix.c`, `primitives_windows.c`, and a Bedrock-only `primitives_other.c` fallback rather than Odin's actual file split. |
 | Futex public surface and backends | `adapted` | `sync/futex.h`, `src/sync/futex_linux.c`, `src/sync/futex_other.c`, `tests/test_sync_futex.c` | Futex wait/signal/broadcast landed with a Linux syscall backend. Non-Linux backends are compile-time stubs until their Odin-equivalent `futex_*` files are ported. Timeout wait is deferred until Bedrock has `time`. |
 | public `Sema` / auto-reset events | `planned` | none | Public semaphore and auto-reset event surface is not landed yet; only the lower `Atomic_Sema` exists. |
 | benaphores / recursive benaphores | `planned` | none | Not landed yet. |
-| atomic recursive mutex / atomic cond | `planned` | none | Still missing from `primitives_atomic.odin`. |
+| atomic cond | `planned` | none | Still missing from `primitives_atomic.odin`. |
 | timeout-based waits | `deferred` | none | Bedrock currently lacks a `time` module and duration type. |
 | `sync/chan` | `deferred` | none | Channels are a later step, not part of the initial blocking-primitives slice. |
 

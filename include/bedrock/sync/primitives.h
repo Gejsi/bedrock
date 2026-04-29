@@ -17,6 +17,10 @@
 
 BR_EXTERN_C_BEGIN
 
+typedef u64 br_thread_id;
+
+#define BR_THREAD_ID_INVALID ((br_thread_id)0)
+
 /*
 Bedrock keeps Odin's sync surface close, but the primitive locks use explicit
 init/destroy in C instead of Odin's "zero value is ready" contract. That is an
@@ -78,7 +82,7 @@ typedef struct br_cond {
 #define BR_COND_INIT {0}
 #endif
 
-uptr br_current_thread_id(void);
+br_thread_id br_current_thread_id(void);
 
 br_status br_mutex_init(br_mutex *mutex);
 void br_mutex_destroy(br_mutex *mutex);

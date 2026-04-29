@@ -14,6 +14,7 @@ What is already landed:
 - `Futex` with a Linux backend
 - `Atomic_Mutex`
 - `Atomic_RW_Mutex`
+- `Atomic_Recursive_Mutex`
 - `Atomic_Sema`
 - `Mutex`
 - `RW_Mutex`
@@ -69,12 +70,13 @@ as a generic unsupported-platform stub. Odin does not have a corresponding
 
 4. Lower layers still missing after `atomic` / Linux `futex`
 
-Bedrock now has an initial `atomic` layer, Linux futex wait/wake,
-`Atomic_Mutex`, `Atomic_RW_Mutex`, and `Atomic_Sema`, but it still has no
-equivalents of:
+Bedrock now has an initial `atomic` layer, native numeric thread IDs, Linux
+futex wait/wake, `Atomic_Mutex`, `Atomic_RW_Mutex`,
+`Atomic_Recursive_Mutex`, and `Atomic_Sema`, but it still has no equivalents
+of:
 
 - `primitives_internal.odin`
-- most of `primitives_atomic.odin` beyond the mutex/rw-mutex/semaphore slice
+- most of `primitives_atomic.odin` beyond the mutex/rw-mutex/recursive-mutex/semaphore slice
 - non-Linux `futex_*`
 
 The current Bedrock atomic layer is intentionally C-shaped. It is implemented
@@ -89,6 +91,14 @@ errors.
 The current futex layer is similarly partial: Linux is implemented with the
 kernel futex syscall, while other targets compile through an unsupported stub
 until their Odin-equivalent backends are ported.
+
+`Atomic_Recursive_Mutex` intentionally differs from Odin in two ways. It stores
+a `br_atomic_mutex` rather than the public `br_mutex` because Bedrock's public
+mutex still wraps pthread/Windows primitives and is not universally
+zero-value-ready. Its owner field is atomic to avoid a C data race when another
+thread checks ownership while the current owner unlocks. Bedrock also follows
+the documented recursive try-lock behavior for same-thread reentry; the current
+Odin source appears to call `mutex_try_lock` in that branch.
 
 That is the main reason the current sync module should be treated as an interim
 implementation, not as a parity-complete port.
