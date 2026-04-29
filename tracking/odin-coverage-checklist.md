@@ -297,20 +297,26 @@ Current label: `partial v1`
 
 Why this label:
 - Bedrock now has the core blocking synchronization primitives and a useful
-  first extended slice, plus the first lower layer in `sync/atomic`.
+  first extended slice, plus `sync/atomic`, Linux futex wait/wake, and the
+  first `primitives_atomic` slice.
 - The public shape is close enough to start integrating with other modules.
 - The backend structure is still far from Odin's actual `core/sync` tree:
-  `primitives_internal.odin`, `primitives_atomic.odin`, and `futex_*` still
-  have no Bedrock equivalents.
+  `primitives_internal.odin`, most of `primitives_atomic.odin`, and non-Linux
+  `futex_*` still have no Bedrock equivalents.
 
 Current Bedrock files:
 - `include/bedrock/sync.h`
 - `include/bedrock/sync/atomic.h`
+- `include/bedrock/sync/futex.h`
 - `include/bedrock/sync/primitives.h`
+- `include/bedrock/sync/primitives_atomic.h`
 - `include/bedrock/sync/extended.h`
 - `include/bedrock/sync/sync_util.h`
 - `src/sync/atomic.c`
+- `src/sync/futex_linux.c`
+- `src/sync/futex_other.c`
 - `src/sync/primitives.c`
+- `src/sync/primitives_atomic.c`
 - `src/sync/primitives_posix.c`
 - `src/sync/primitives_windows.c`
 - `src/sync/primitives_other.c`
@@ -330,12 +336,12 @@ Current Bedrock files:
 | `Ticket_Mutex` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Lock/unlock landed with C atomics. |
 | `atomic.odin` surface | `adapted` | `sync/atomic.h`, `src/sync/atomic.c`, `tests/test_sync_atomic.c` | Landed as a C11-atomic-backed layer with Bedrock names and memory-order aliases. Bedrock intentionally keeps C's compare-exchange `expected` pointer contract instead of emulating Odin's tuple-return API, and currently requires compiler/target support for C11 atomics. |
 | `primitives_internal.odin` | `planned` | none | Missing. |
-| `primitives_atomic.odin` | `planned` | none | Missing. |
+| `primitives_atomic.odin` | `adapted` | `sync/primitives_atomic.h`, `src/sync/primitives_atomic.c`, `tests/test_sync_futex.c` | First slice landed with `Atomic_Sema` on top of Bedrock futex. Atomic mutex, rw mutex, recursive mutex, and cond are still missing. |
 | per-OS primitive split (`linux`, `darwin`, `freebsd`, `netbsd`, `openbsd`, `haiku`, `wasm`) | `planned` | none | Bedrock currently has `primitives_posix.c`, `primitives_windows.c`, and a Bedrock-only `primitives_other.c` fallback rather than Odin's actual file split. |
-| futex backends | `planned` | none | Missing. Odin has `futex_*` files for every supported backend, including Windows. |
-| semaphores / auto-reset events | `planned` | none | Not landed yet. |
+| Futex public surface and backends | `adapted` | `sync/futex.h`, `src/sync/futex_linux.c`, `src/sync/futex_other.c`, `tests/test_sync_futex.c` | Futex wait/signal/broadcast landed with a Linux syscall backend. Non-Linux backends are compile-time stubs until their Odin-equivalent `futex_*` files are ported. Timeout wait is deferred until Bedrock has `time`. |
+| public `Sema` / auto-reset events | `planned` | none | Public semaphore and auto-reset event surface is not landed yet; only the lower `Atomic_Sema` exists. |
 | benaphores / recursive benaphores | `planned` | none | Not landed yet. |
-| atomic mutex / atomic rw mutex / atomic cond / atomic sema | `planned` | none | These are the real missing lower layers that separate Bedrock's current sync slice from Odin's implementation structure. |
+| atomic mutex / atomic rw mutex / atomic cond | `planned` | none | Still missing from `primitives_atomic.odin`. |
 | timeout-based waits | `deferred` | none | Bedrock currently lacks a `time` module and duration type. |
 | `sync/chan` | `deferred` | none | Channels are a later step, not part of the initial blocking-primitives slice. |
 
@@ -344,5 +350,5 @@ Summary:
 - The public API is close enough to integrate.
 - The implementation is still an interim native-wrapper layer, not a close port
   of Odin's actual sync internals.
-- The main missing work is Odin's lower atomic/futex stack plus the real OS
-  file split.
+- The main missing work is finishing Odin's lower atomic/futex stack plus the
+  real OS primitive split.

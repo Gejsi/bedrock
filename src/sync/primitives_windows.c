@@ -1,3 +1,5 @@
+#include <bedrock/types.h>
+
 #if defined(_WIN32)
 
 #include <bedrock/sync/primitives.h>
@@ -161,5 +163,5 @@ void br_cond_broadcast(br_cond *cond) {
 }
 
 #else
-typedef char br__sync_windows_translation_unit;
+typedef u8 br__sync_windows_translation_unit;
 #endif

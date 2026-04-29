@@ -11,6 +11,8 @@ backend structure is still materially different.
 What is already landed:
 
 - `atomic`
+- `Futex` with a Linux backend
+- `Atomic_Sema`
 - `Mutex`
 - `RW_Mutex`
 - `Recursive_Mutex`
@@ -24,11 +26,16 @@ What is already landed:
 Current implementation shape:
 
 - [include/bedrock/sync/atomic.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/atomic.h:1)
+- [include/bedrock/sync/futex.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/futex.h:1)
 - [include/bedrock/sync/primitives.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/primitives.h:1)
+- [include/bedrock/sync/primitives_atomic.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/primitives_atomic.h:1)
 - [include/bedrock/sync/extended.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/extended.h:1)
 - [include/bedrock/sync/sync_util.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/sync_util.h:1)
 - [src/sync/atomic.c](/home/gejsi/Desktop/bedrock/src/sync/atomic.c:1)
+- [src/sync/futex_linux.c](/home/gejsi/Desktop/bedrock/src/sync/futex_linux.c:1)
+- [src/sync/futex_other.c](/home/gejsi/Desktop/bedrock/src/sync/futex_other.c:1)
 - [src/sync/primitives.c](/home/gejsi/Desktop/bedrock/src/sync/primitives.c:1)
+- [src/sync/primitives_atomic.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_atomic.c:1)
 - [src/sync/primitives_posix.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_posix.c:1)
 - [src/sync/primitives_windows.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_windows.c:1)
 - [src/sync/primitives_other.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_other.c:1)
@@ -58,13 +65,14 @@ Bedrock currently has [src/sync/primitives_other.c](/home/gejsi/Desktop/bedrock/
 as a generic unsupported-platform stub. Odin does not have a corresponding
 `primitives_other.odin`; it enumerates supported backends explicitly.
 
-4. Lower layers still missing after `atomic`
+4. Lower layers still missing after `atomic` / Linux `futex`
 
-Bedrock now has an initial `atomic` layer, but it still has no equivalents of:
+Bedrock now has an initial `atomic` layer, Linux futex wait/wake, and
+`Atomic_Sema`, but it still has no equivalents of:
 
 - `primitives_internal.odin`
-- `primitives_atomic.odin`
-- `futex_*`
+- most of `primitives_atomic.odin`
+- non-Linux `futex_*`
 
 The current Bedrock atomic layer is intentionally C-shaped. It is implemented
 over C11 atomics and keeps C's compare-exchange `expected` pointer contract
@@ -74,6 +82,10 @@ This is only an abstraction boundary right now, not a universal portability
 layer. Targets that do not provide C11 atomics fail at `sync/atomic.h` with an
 explicit requirement instead of falling through to backend-specific compiler
 errors.
+
+The current futex layer is similarly partial: Linux is implemented with the
+kernel futex syscall, while other targets compile through an unsupported stub
+until their Odin-equivalent backends are ported.
 
 That is the main reason the current sync module should be treated as an interim
 implementation, not as a parity-complete port.
@@ -122,6 +134,8 @@ include/bedrock/sync/
 
 src/sync/
   atomic.c
+  futex_linux.c
+  futex_other.c
   primitives.c
   primitives_internal.c
   primitives_atomic.c
@@ -158,9 +172,9 @@ responsibility split should be close.
 2. Add the missing lower sync layers
 
 - keep the landed `atomic` layer and grow around it
-- futex wrappers
+- add the remaining futex wrappers
 - `primitives_internal`
-- `primitives_atomic`
+- finish `primitives_atomic`
 
 3. Split non-Windows primitives by Odin's OS tree
 
