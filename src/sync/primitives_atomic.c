@@ -79,6 +79,129 @@ bool br_atomic_mutex_try_lock(br_atomic_mutex *mutex) {
     &mutex->state, &expected, BR_ATOMIC_MUTEX_LOCKED, BR_ATOMIC_ACQUIRE, BR_ATOMIC_CONSUME);
 }
 
+void br_atomic_rw_mutex_init(br_atomic_rw_mutex *rw) {
+  if (rw == NULL) {
+    return;
+  }
+
+  br_atomic_init(&rw->state, 0);
+  br_atomic_mutex_init(&rw->mutex);
+  br_atomic_sema_init(&rw->sema, 0u);
+}
+
+void br_atomic_rw_mutex_lock(br_atomic_rw_mutex *rw) {
+  usize state;
+
+  if (rw == NULL) {
+    return;
+  }
+
+  br_atomic_mutex_lock(&rw->mutex);
+
+  state = br_atomic_or(&rw->state, BR_ATOMIC_RW_MUTEX_STATE_IS_WRITING);
+  if ((state & BR_ATOMIC_RW_MUTEX_STATE_READER_MASK) != 0u) {
+    /*
+    Mirrors Odin: the exclusive mutex prevents new readers while the writer
+    waits for the last active reader to post the semaphore.
+    */
+    br_atomic_sema_wait(&rw->sema);
+  }
+}
+
+void br_atomic_rw_mutex_unlock(br_atomic_rw_mutex *rw) {
+  if (rw == NULL) {
+    return;
+  }
+
+  (void)br_atomic_and(&rw->state, ~BR_ATOMIC_RW_MUTEX_STATE_IS_WRITING);
+  br_atomic_mutex_unlock(&rw->mutex);
+}
+
+bool br_atomic_rw_mutex_try_lock(br_atomic_rw_mutex *rw) {
+  usize state;
+
+  if (rw == NULL) {
+    return false;
+  }
+
+  if (br_atomic_mutex_try_lock(&rw->mutex)) {
+    state = br_atomic_load(&rw->state);
+    if ((state & BR_ATOMIC_RW_MUTEX_STATE_READER_MASK) == 0u) {
+      usize expected = state;
+      if (br_atomic_compare_exchange_strong(
+            &rw->state, &expected, state | BR_ATOMIC_RW_MUTEX_STATE_IS_WRITING)) {
+        return true;
+      }
+    }
+
+    br_atomic_mutex_unlock(&rw->mutex);
+  }
+
+  return false;
+}
+
+void br_atomic_rw_mutex_shared_lock(br_atomic_rw_mutex *rw) {
+  usize state;
+
+  if (rw == NULL) {
+    return;
+  }
+
+  state = br_atomic_load(&rw->state);
+  while ((state & BR_ATOMIC_RW_MUTEX_STATE_IS_WRITING) == 0u) {
+    usize expected = state;
+    if (br_atomic_compare_exchange_weak(
+          &rw->state, &expected, state + BR_ATOMIC_RW_MUTEX_STATE_READER)) {
+      return;
+    }
+    state = expected;
+  }
+
+  br_atomic_mutex_lock(&rw->mutex);
+  (void)br_atomic_add(&rw->state, BR_ATOMIC_RW_MUTEX_STATE_READER);
+  br_atomic_mutex_unlock(&rw->mutex);
+}
+
+void br_atomic_rw_mutex_shared_unlock(br_atomic_rw_mutex *rw) {
+  usize state;
+
+  if (rw == NULL) {
+    return;
+  }
+
+  state = br_atomic_sub(&rw->state, BR_ATOMIC_RW_MUTEX_STATE_READER);
+  if ((state & BR_ATOMIC_RW_MUTEX_STATE_READER_MASK) == BR_ATOMIC_RW_MUTEX_STATE_READER &&
+      (state & BR_ATOMIC_RW_MUTEX_STATE_IS_WRITING) != 0u) {
+    br_atomic_sema_post(&rw->sema, 1u);
+  }
+}
+
+bool br_atomic_rw_mutex_try_shared_lock(br_atomic_rw_mutex *rw) {
+  usize state;
+
+  if (rw == NULL) {
+    return false;
+  }
+
+  state = br_atomic_load(&rw->state);
+  while ((state & BR_ATOMIC_RW_MUTEX_STATE_IS_WRITING) == 0u) {
+    usize expected = state;
+    if (br_atomic_compare_exchange_weak(
+          &rw->state, &expected, state + BR_ATOMIC_RW_MUTEX_STATE_READER)) {
+      return true;
+    }
+    state = expected;
+  }
+
+  if (br_atomic_mutex_try_lock(&rw->mutex)) {
+    (void)br_atomic_add(&rw->state, BR_ATOMIC_RW_MUTEX_STATE_READER);
+    br_atomic_mutex_unlock(&rw->mutex);
+    return true;
+  }
+
+  return false;
+}
+
 void br_atomic_sema_init(br_atomic_sema *sema, u32 count) {
   if (sema == NULL) {
     return;

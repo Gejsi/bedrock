@@ -37,6 +37,19 @@ typedef struct atomic_mutex_state {
   i32 iterations;
 } atomic_mutex_state;
 
+typedef struct atomic_rw_reader_state {
+  br_atomic_rw_mutex *rw;
+  br_atomic_bool *release;
+  br_atomic_i32 *inside;
+  br_atomic_i32 *entered;
+} atomic_rw_reader_state;
+
+typedef struct atomic_rw_writer_state {
+  br_atomic_rw_mutex *rw;
+  br_atomic_bool *release;
+  br_atomic_bool *locked;
+} atomic_rw_writer_state;
+
 static void *futex_wait_worker(void *ctx) {
   futex_wait_state *state = (futex_wait_state *)ctx;
 
@@ -72,6 +85,28 @@ static void *atomic_mutex_worker(void *ctx) {
     assert(br_atomic_sub_explicit(state->inside, 1, BR_ATOMIC_ACQ_REL) == 1);
     br_atomic_mutex_unlock(state->mutex);
   }
+  return NULL;
+}
+
+static void *atomic_rw_reader_worker(void *ctx) {
+  atomic_rw_reader_state *state = (atomic_rw_reader_state *)ctx;
+
+  br_atomic_rw_mutex_shared_lock(state->rw);
+  br_atomic_add_explicit(state->inside, 1, BR_ATOMIC_ACQ_REL);
+  br_atomic_add_explicit(state->entered, 1, BR_ATOMIC_RELEASE);
+  spin_until_bool(state->release, true);
+  br_atomic_sub_explicit(state->inside, 1, BR_ATOMIC_ACQ_REL);
+  br_atomic_rw_mutex_shared_unlock(state->rw);
+  return NULL;
+}
+
+static void *atomic_rw_writer_worker(void *ctx) {
+  atomic_rw_writer_state *state = (atomic_rw_writer_state *)ctx;
+
+  br_atomic_rw_mutex_lock(state->rw);
+  br_atomic_store_explicit(state->locked, true, BR_ATOMIC_RELEASE);
+  spin_until_bool(state->release, true);
+  br_atomic_rw_mutex_unlock(state->rw);
   return NULL;
 }
 
@@ -189,6 +224,89 @@ static void test_atomic_mutex_contention(void) {
   assert(br_atomic_load_explicit(&inside, BR_ATOMIC_ACQUIRE) == 0);
   assert(br_atomic_load_explicit(&counter, BR_ATOMIC_ACQUIRE) == THREAD_COUNT * ITERATIONS);
 }
+
+static void test_atomic_rw_mutex_try_lock(void) {
+  br_atomic_rw_mutex rw = BR_ATOMIC_RW_MUTEX_INIT;
+
+  assert(br_atomic_rw_mutex_try_lock(&rw));
+  assert(!br_atomic_rw_mutex_try_lock(&rw));
+  assert(!br_atomic_rw_mutex_try_shared_lock(&rw));
+  br_atomic_rw_mutex_unlock(&rw);
+
+  assert(br_atomic_rw_mutex_try_shared_lock(&rw));
+  assert(br_atomic_rw_mutex_try_shared_lock(&rw));
+  assert(!br_atomic_rw_mutex_try_lock(&rw));
+  br_atomic_rw_mutex_shared_unlock(&rw);
+  br_atomic_rw_mutex_shared_unlock(&rw);
+
+  assert(br_atomic_rw_mutex_try_lock(&rw));
+  br_atomic_rw_mutex_unlock(&rw);
+}
+
+static void test_atomic_rw_mutex_readers_share(void) {
+  enum { THREAD_COUNT = 4 };
+  br_atomic_rw_mutex rw = BR_ATOMIC_RW_MUTEX_INIT;
+  br_atomic_bool release;
+  br_atomic_i32 inside;
+  br_atomic_i32 entered;
+  atomic_rw_reader_state state;
+  pthread_t threads[THREAD_COUNT];
+  i32 i;
+
+  br_atomic_init(&release, false);
+  br_atomic_init(&inside, 0);
+  br_atomic_init(&entered, 0);
+  state.rw = &rw;
+  state.release = &release;
+  state.inside = &inside;
+  state.entered = &entered;
+
+  for (i = 0; i < THREAD_COUNT; ++i) {
+    assert(pthread_create(&threads[(usize)i], NULL, atomic_rw_reader_worker, &state) == 0);
+  }
+
+  spin_until_i32(&entered, THREAD_COUNT);
+  assert(br_atomic_load_explicit(&inside, BR_ATOMIC_ACQUIRE) == THREAD_COUNT);
+  assert(!br_atomic_rw_mutex_try_lock(&rw));
+
+  br_atomic_store_explicit(&release, true, BR_ATOMIC_RELEASE);
+  for (i = 0; i < THREAD_COUNT; ++i) {
+    assert(pthread_join(threads[(usize)i], NULL) == 0);
+  }
+  assert(br_atomic_load_explicit(&inside, BR_ATOMIC_ACQUIRE) == 0);
+}
+
+static void test_atomic_rw_mutex_writer_waits_for_readers(void) {
+  br_atomic_rw_mutex rw = BR_ATOMIC_RW_MUTEX_INIT;
+  br_atomic_bool release;
+  br_atomic_bool locked;
+  atomic_rw_writer_state state;
+  pthread_t thread;
+
+  br_atomic_init(&release, false);
+  br_atomic_init(&locked, false);
+  state.rw = &rw;
+  state.release = &release;
+  state.locked = &locked;
+
+  br_atomic_rw_mutex_shared_lock(&rw);
+  assert(pthread_create(&thread, NULL, atomic_rw_writer_worker, &state) == 0);
+  while ((br_atomic_load_explicit(&rw.state, BR_ATOMIC_ACQUIRE) &
+          BR_ATOMIC_RW_MUTEX_STATE_IS_WRITING) == 0u) {
+    br_cpu_relax();
+  }
+  assert(!br_atomic_load_explicit(&locked, BR_ATOMIC_ACQUIRE));
+
+  br_atomic_rw_mutex_shared_unlock(&rw);
+  spin_until_bool(&locked, true);
+  assert(!br_atomic_rw_mutex_try_lock(&rw));
+  assert(!br_atomic_rw_mutex_try_shared_lock(&rw));
+
+  br_atomic_store_explicit(&release, true, BR_ATOMIC_RELEASE);
+  assert(pthread_join(thread, NULL) == 0);
+  assert(br_atomic_rw_mutex_try_shared_lock(&rw));
+  br_atomic_rw_mutex_shared_unlock(&rw);
+}
 #endif
 
 int main(void) {
@@ -196,6 +314,9 @@ int main(void) {
   test_futex_wait_signal();
   test_atomic_mutex_try_lock();
   test_atomic_mutex_contention();
+  test_atomic_rw_mutex_try_lock();
+  test_atomic_rw_mutex_readers_share();
+  test_atomic_rw_mutex_writer_waits_for_readers();
   test_atomic_sema_wait_post_one();
   test_atomic_sema_post_many();
 #endif
