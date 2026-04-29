@@ -12,6 +12,7 @@ What is already landed:
 
 - `atomic`
 - `Futex` with a Linux backend
+- `Atomic_Mutex`
 - `Atomic_Sema`
 - `Mutex`
 - `RW_Mutex`
@@ -67,11 +68,11 @@ as a generic unsupported-platform stub. Odin does not have a corresponding
 
 4. Lower layers still missing after `atomic` / Linux `futex`
 
-Bedrock now has an initial `atomic` layer, Linux futex wait/wake, and
-`Atomic_Sema`, but it still has no equivalents of:
+Bedrock now has an initial `atomic` layer, Linux futex wait/wake,
+`Atomic_Mutex`, and `Atomic_Sema`, but it still has no equivalents of:
 
 - `primitives_internal.odin`
-- most of `primitives_atomic.odin`
+- most of `primitives_atomic.odin` beyond the mutex/semaphore slice
 - non-Linux `futex_*`
 
 The current Bedrock atomic layer is intentionally C-shaped. It is implemented

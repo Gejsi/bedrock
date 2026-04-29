@@ -298,7 +298,7 @@ Current label: `partial v1`
 Why this label:
 - Bedrock now has the core blocking synchronization primitives and a useful
   first extended slice, plus `sync/atomic`, Linux futex wait/wake, and the
-  first `primitives_atomic` slice.
+  first `primitives_atomic` slices.
 - The public shape is close enough to start integrating with other modules.
 - The backend structure is still far from Odin's actual `core/sync` tree:
   `primitives_internal.odin`, most of `primitives_atomic.odin`, and non-Linux
@@ -336,12 +336,12 @@ Current Bedrock files:
 | `Ticket_Mutex` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Lock/unlock landed with C atomics. |
 | `atomic.odin` surface | `adapted` | `sync/atomic.h`, `src/sync/atomic.c`, `tests/test_sync_atomic.c` | Landed as a C11-atomic-backed layer with Bedrock names and memory-order aliases. Bedrock intentionally keeps C's compare-exchange `expected` pointer contract instead of emulating Odin's tuple-return API, and currently requires compiler/target support for C11 atomics. |
 | `primitives_internal.odin` | `planned` | none | Missing. |
-| `primitives_atomic.odin` | `adapted` | `sync/primitives_atomic.h`, `src/sync/primitives_atomic.c`, `tests/test_sync_futex.c` | First slice landed with `Atomic_Sema` on top of Bedrock futex. Atomic mutex, rw mutex, recursive mutex, and cond are still missing. |
+| `primitives_atomic.odin` | `adapted` | `sync/primitives_atomic.h`, `src/sync/primitives_atomic.c`, `tests/test_sync_futex.c` | First slices landed with `Atomic_Mutex` and `Atomic_Sema` on top of Bedrock futex. Atomic rw mutex, recursive mutex, and cond are still missing. |
 | per-OS primitive split (`linux`, `darwin`, `freebsd`, `netbsd`, `openbsd`, `haiku`, `wasm`) | `planned` | none | Bedrock currently has `primitives_posix.c`, `primitives_windows.c`, and a Bedrock-only `primitives_other.c` fallback rather than Odin's actual file split. |
 | Futex public surface and backends | `adapted` | `sync/futex.h`, `src/sync/futex_linux.c`, `src/sync/futex_other.c`, `tests/test_sync_futex.c` | Futex wait/signal/broadcast landed with a Linux syscall backend. Non-Linux backends are compile-time stubs until their Odin-equivalent `futex_*` files are ported. Timeout wait is deferred until Bedrock has `time`. |
 | public `Sema` / auto-reset events | `planned` | none | Public semaphore and auto-reset event surface is not landed yet; only the lower `Atomic_Sema` exists. |
 | benaphores / recursive benaphores | `planned` | none | Not landed yet. |
-| atomic mutex / atomic rw mutex / atomic cond | `planned` | none | Still missing from `primitives_atomic.odin`. |
+| atomic rw mutex / atomic recursive mutex / atomic cond | `planned` | none | Still missing from `primitives_atomic.odin`. |
 | timeout-based waits | `deferred` | none | Bedrock currently lacks a `time` module and duration type. |
 | `sync/chan` | `deferred` | none | Channels are a later step, not part of the initial blocking-primitives slice. |
 
