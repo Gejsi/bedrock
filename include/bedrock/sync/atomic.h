@@ -1,6 +1,14 @@
 #ifndef BEDROCK_SYNC_ATOMIC_H
 #define BEDROCK_SYNC_ATOMIC_H
 
+#if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 201112L)
+#error "Bedrock sync/atomic currently requires a C11-or-newer compiler."
+#endif
+
+#if defined(__STDC_NO_ATOMICS__)
+#error "Bedrock sync/atomic requires C11 atomics; __STDC_NO_ATOMICS__ is defined."
+#endif
+
 #include <stdatomic.h>
 
 #include <bedrock/base.h>
@@ -13,6 +21,9 @@ Bedrock maps Odin's `core/sync/atomic` surface onto C11 atomics.
 Most operations keep Odin's names and sequencing concepts, but compare-exchange
 follows C's expected-pointer contract instead of Odin's tuple return. That is
 the clean portable choice in C without introducing a large typed wrapper layer.
+
+This header is an abstraction boundary, not a portability guarantee: the
+current backend requires a compiler/target with usable C11 atomics.
 */
 
 typedef memory_order br_atomic_memory_order;

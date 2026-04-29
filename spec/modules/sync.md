@@ -70,6 +70,11 @@ The current Bedrock atomic layer is intentionally C-shaped. It is implemented
 over C11 atomics and keeps C's compare-exchange `expected` pointer contract
 instead of trying to fake Odin's result-tuple shape at the ABI level.
 
+This is only an abstraction boundary right now, not a universal portability
+layer. Targets that do not provide C11 atomics fail at `sync/atomic.h` with an
+explicit requirement instead of falling through to backend-specific compiler
+errors.
+
 That is the main reason the current sync module should be treated as an interim
 implementation, not as a parity-complete port.
 

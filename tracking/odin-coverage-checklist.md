@@ -328,7 +328,7 @@ Current Bedrock files:
 | `Barrier` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Core init/wait landed. |
 | `Once` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Landed with a generic `void *` callback plus a no-data helper instead of Odin's overloaded proc family. |
 | `Ticket_Mutex` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Lock/unlock landed with C atomics. |
-| `atomic.odin` surface | `adapted` | `sync/atomic.h`, `src/sync/atomic.c`, `tests/test_sync_atomic.c` | Landed as a C11-atomic-backed layer with Bedrock names and memory-order aliases. Bedrock intentionally keeps C's compare-exchange `expected` pointer contract instead of emulating Odin's tuple-return API. |
+| `atomic.odin` surface | `adapted` | `sync/atomic.h`, `src/sync/atomic.c`, `tests/test_sync_atomic.c` | Landed as a C11-atomic-backed layer with Bedrock names and memory-order aliases. Bedrock intentionally keeps C's compare-exchange `expected` pointer contract instead of emulating Odin's tuple-return API, and currently requires compiler/target support for C11 atomics. |
 | `primitives_internal.odin` | `planned` | none | Missing. |
 | `primitives_atomic.odin` | `planned` | none | Missing. |
 | per-OS primitive split (`linux`, `darwin`, `freebsd`, `netbsd`, `openbsd`, `haiku`, `wasm`) | `planned` | none | Bedrock currently has `primitives_posix.c`, `primitives_windows.c`, and a Bedrock-only `primitives_other.c` fallback rather than Odin's actual file split. |
