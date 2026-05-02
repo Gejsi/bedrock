@@ -26,7 +26,7 @@ Detailed status for the currently active module ports lives in
 | `core/container/*` | redesign | Keep the ideas; implement as generated typed containers. |
 | `core/sort` | redesign | Use erased generic algorithms plus optional typed sugar. |
 | `core/thread` | defer | Later module; no direct v1 port. |
-| `core/sync` | partial v1 | Core blocking primitives, a useful first extended slice, `sync/atomic`, native thread IDs, Linux futex wait/wake, `Atomic_Mutex`, `Atomic_RW_Mutex`, `Atomic_Recursive_Mutex`, `Atomic_Cond`, and `Atomic_Sema` landed. Linux public primitives now delegate to the atomic/futex layer and are zero-value-ready; `primitives_internal`, timeout waits, non-Linux futex backends, and Odin's real per-OS sync tree are still missing. |
+| `core/sync` | partial v1 | Core blocking primitives, public `Sema`, a useful first extended slice, `sync/atomic`, native thread IDs, Linux/Windows/Darwin/FreeBSD/NetBSD/OpenBSD basic futex wait/wake, `Atomic_Mutex`, `Atomic_RW_Mutex`, `Atomic_Recursive_Mutex`, `Atomic_Cond`, and `Atomic_Sema` landed. Public primitives now delegate to the atomic/futex layer and are zero-value-ready; timeout waits, Haiku/WASM futex backends, missing extended primitives, and Odin's real per-OS primitive tree still remain. |
 | `core/fmt` | exclude v1 | Too tied to `any`, RTTI, and formatter dispatch. |
 | `core/encoding/json` | exclude v1 | Too RTTI-heavy for a clean first pass. |
 | `core/encoding/xml` | exclude v1 | Large parser surface; not first-wave material. |

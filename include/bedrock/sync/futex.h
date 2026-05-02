@@ -5,7 +5,8 @@
 
 BR_EXTERN_C_BEGIN
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(_WIN32) || (defined(__APPLE__) && defined(__MACH__)) ||          \
+  defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
 #define BR_SYNC_HAS_FUTEX 1
 #else
 #define BR_SYNC_HAS_FUTEX 0

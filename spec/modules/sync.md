@@ -11,7 +11,7 @@ backend structure is still materially different.
 What is already landed:
 
 - `atomic`
-- `Futex` with a Linux backend
+- `Futex` with Linux, Windows, Darwin, FreeBSD, NetBSD, and OpenBSD basic backends
 - `Atomic_Mutex`
 - `Atomic_RW_Mutex`
 - `Atomic_Recursive_Mutex`
@@ -21,6 +21,7 @@ What is already landed:
 - `RW_Mutex`
 - `Recursive_Mutex`
 - `Cond`
+- `Sema`
 - guard/lock helper layer
 - `Wait_Group`
 - `Barrier`
@@ -38,54 +39,53 @@ Current implementation shape:
 - [include/bedrock/sync/sync_util.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/sync_util.h:1)
 - [src/sync/atomic.c](/home/gejsi/Desktop/bedrock/src/sync/atomic.c:1)
 - [src/sync/futex_linux.c](/home/gejsi/Desktop/bedrock/src/sync/futex_linux.c:1)
+- [src/sync/futex_windows.c](/home/gejsi/Desktop/bedrock/src/sync/futex_windows.c:1)
+- [src/sync/futex_darwin.c](/home/gejsi/Desktop/bedrock/src/sync/futex_darwin.c:1)
+- [src/sync/futex_freebsd.c](/home/gejsi/Desktop/bedrock/src/sync/futex_freebsd.c:1)
+- [src/sync/futex_netbsd.c](/home/gejsi/Desktop/bedrock/src/sync/futex_netbsd.c:1)
+- [src/sync/futex_openbsd.c](/home/gejsi/Desktop/bedrock/src/sync/futex_openbsd.c:1)
 - [src/sync/futex_other.c](/home/gejsi/Desktop/bedrock/src/sync/futex_other.c:1)
 - [src/sync/primitives.c](/home/gejsi/Desktop/bedrock/src/sync/primitives.c:1)
 - [src/sync/primitives_atomic.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_atomic.c:1)
-- [src/sync/primitives_posix.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_posix.c:1)
-- [src/sync/primitives_windows.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_windows.c:1)
-- [src/sync/primitives_other.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_other.c:1)
+- [src/sync/primitives_internal.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_internal.c:1)
 - [src/sync/extended.c](/home/gejsi/Desktop/bedrock/src/sync/extended.c:1)
 
 Important current divergences from Odin:
 
-1. Mixed public primitive backends
+1. C-shaped public wrappers
 
-Bedrock now routes the public Linux/futex-target primitives through Bedrock's
-atomic/futex layer, so `Mutex`, `RW_Mutex`, `Recursive_Mutex`, and `Cond` are
-zero-value-ready on that path.
+Bedrock's public `Mutex`, `RW_Mutex`, `Recursive_Mutex`, `Cond`, and `Sema`
+now store zero-value-ready atomic/futex-backed words instead of native
+`pthread`/Windows objects. This matches Odin's zero-value model much more
+closely.
 
-Other backends still implement the public primitives directly on top of:
+The wrapper API is still C-shaped: Bedrock keeps explicit `init`/`destroy`
+functions as reset/no-op compatibility helpers, while Odin exposes the
+zero-value contract directly through package procedures.
 
-- Windows `SRWLOCK`, `CONDITION_VARIABLE`, and `CRITICAL_SECTION`
-- non-Linux POSIX `pthread_*`
+2. Backend coverage is still not parity-complete
 
-Odin does not use pthread wrappers for its non-Windows primitives. Its
-non-Windows path is built out of atomics plus futex-style wait/wake helpers.
+The shared atomic/futex primitive layer is now the only public primitive
+backend. Basic wait/wake source ports exist for Linux, Windows, Darwin,
+FreeBSD, NetBSD, and OpenBSD. Only the Linux path has been exercised locally in
+this repository. Haiku and WASM futex backends are still missing.
 
-2. Explicit `init`/`destroy`
+3. Timeout pieces are still missing
 
-Odin's sync primitives are designed around a zero-value-ready model. Bedrock
-keeps explicit initialization and destruction for API compatibility, but the
-Linux/futex public primitive backend is now zero-value-ready. Non-Linux POSIX
-and the Windows recursive mutex still require their native initialization
-contracts.
+Bedrock has no `time` module or duration type yet, so the timeout variants of
+futex, atomic condition variables, semaphores, public condition variables,
+public semaphores, and wait groups are deferred.
 
-3. Extra fallback backend
+4. Lower layers still missing after `atomic` / futex
 
-Bedrock currently has [src/sync/primitives_other.c](/home/gejsi/Desktop/bedrock/src/sync/primitives_other.c:1)
-as a generic unsupported-platform stub. Odin does not have a corresponding
-`primitives_other.odin`; it enumerates supported backends explicitly.
+Bedrock now has an initial `atomic` layer, native numeric thread IDs,
+`Atomic_Mutex`, `Atomic_RW_Mutex`, `Atomic_Recursive_Mutex`, `Atomic_Cond`,
+`Atomic_Sema`, public primitive wrappers, and several futex backends, but it
+still has no equivalents of:
 
-4. Lower layers still missing after `atomic` / Linux `futex`
-
-Bedrock now has an initial `atomic` layer, native numeric thread IDs, Linux
-futex wait/wake, `Atomic_Mutex`, `Atomic_RW_Mutex`,
-`Atomic_Recursive_Mutex`, `Atomic_Cond`, `Atomic_Sema`, and a Linux public
-primitive bridge to that layer, but it still has no equivalents of:
-
-- `primitives_internal.odin`
 - timeout pieces of `primitives_atomic.odin`
-- non-Linux `futex_*`
+- Haiku / WASM `futex_*`
+- Odin's exact per-OS `primitives_*` split for thread ID functions
 
 The current Bedrock atomic layer is intentionally C-shaped. It is implemented
 over C11 atomics and keeps C's compare-exchange `expected` pointer contract
@@ -96,9 +96,8 @@ layer. Targets that do not provide C11 atomics fail at `sync/atomic.h` with an
 explicit requirement instead of falling through to backend-specific compiler
 errors.
 
-The current futex layer is similarly partial: Linux is implemented with the
-kernel futex syscall, while other targets compile through an unsupported stub
-until their Odin-equivalent backends are ported.
+The current futex layer is still partial: the non-Linux backends are source
+ports from Odin's strategy and need target-specific verification.
 
 `Atomic_Recursive_Mutex` intentionally differs from Odin in two ways. It stores
 a lower `br_atomic_mutex` directly so the atomic layer remains independent from
@@ -108,8 +107,8 @@ Bedrock also follows the documented recursive try-lock behavior for same-thread
 reentry; the current Odin source appears to call `mutex_try_lock` in that
 branch.
 
-That is the main reason the current sync module should be treated as an interim
-implementation, not as a parity-complete port.
+That is the main reason the current sync module should still be treated as a
+partial port, not as parity-complete.
 
 ## Odin File Map
 
@@ -156,18 +155,9 @@ include/bedrock/sync/
 src/sync/
   atomic.c
   futex_linux.c
-  futex_other.c
   primitives.c
   primitives_internal.c
   primitives_atomic.c
-  primitives_windows.c
-  primitives_linux.c
-  primitives_darwin.c
-  primitives_freebsd.c
-  primitives_netbsd.c
-  primitives_openbsd.c
-  primitives_haiku.c
-  primitives_wasm.c
   futex_windows.c
   futex_linux.c
   futex_darwin.c
@@ -176,6 +166,7 @@ src/sync/
   futex_openbsd.c
   futex_haiku.c
   futex_wasm.c
+  futex_other.c
   extended.c
 ```
 
@@ -184,20 +175,20 @@ responsibility split should be close.
 
 ## Recommended Rewrite Order
 
-1. Remove the illusion that the current backend is Odin-like
+1. Verify and finish the remaining backend layer
 
-- treat the current pthread/Windows implementation as an interim compatibility
-  slice
-- stop describing it as if the lower sync stack were already ported
+- target-test Windows, Darwin, FreeBSD, NetBSD, and OpenBSD futex backends
+- add Haiku / WASM only if Bedrock wants those targets
+- keep unsupported targets as compile-time failures instead of spinning on a
+  fake futex
 
-2. Add the missing lower sync layers
+2. Add timeout support once `time` exists
 
-- keep the landed `atomic` layer and grow around it
-- add the remaining futex wrappers
-- `primitives_internal`
-- finish `primitives_atomic`
+- futex timeout waits
+- `Atomic_Cond` / `Atomic_Sema` timeout waits
+- public `Cond`, `Sema`, and `Wait_Group` timeout waits
 
-3. Split non-Windows primitives by Odin's OS tree
+3. Split thread ID primitives by Odin's OS tree
 
 - Linux
 - Darwin
@@ -206,19 +197,11 @@ responsibility split should be close.
 - OpenBSD
 - later Haiku / WASM if Bedrock wants those targets
 
-4. Revisit zero-value-ready primitives on remaining backends
+4. Add the next missing public pieces
 
-Linux/futex public primitives now satisfy the zero-value model. The remaining
-work is moving the other Odin-supported non-Windows backends off pthread-shaped
-wrappers and deciding how much Windows parity is possible around recursive
-mutex initialization.
-
-5. Add the next missing public pieces
-
-- timeout waits once `time` exists
-- semaphores
 - auto-reset events
 - benaphores / recursive benaphores
+- parker / one-shot events
 - later `chan`
 
 ## Why Sync Before Returning To Mem

@@ -5,92 +5,39 @@
 #include <bedrock/sync/primitives_atomic.h>
 #include <bedrock/sync/thread.h>
 
-#if defined(_WIN32)
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#elif (defined(__unix__) || defined(__APPLE__)) && !BR_SYNC_HAS_FUTEX
-#ifndef _XOPEN_SOURCE
-#define _XOPEN_SOURCE 700
-#endif
-#include <pthread.h>
-#endif
-
 BR_EXTERN_C_BEGIN
 
 /*
-Bedrock keeps Odin's sync surface close. On futex-backed targets, the public
-primitives are zero-value-ready because they wrap Bedrock's atomic/futex layer.
-Other native OS backends still use explicit init/destroy until their Odin-style
-futex backends are ported.
+Bedrock keeps Odin's zero-value-ready sync model: the public primitives store
+small atomic/futex-backed words instead of native objects that require hidden
+construction. The init/destroy functions are compatibility reset/no-op helpers.
 */
 
 typedef struct br_mutex {
-#if defined(_WIN32)
-  SRWLOCK impl;
-#elif BR_SYNC_HAS_FUTEX
   br_atomic_mutex impl;
-#elif defined(__unix__) || defined(__APPLE__)
-  pthread_mutex_t impl;
-#else
-  i32 impl;
-#endif
 } br_mutex;
 
 typedef struct br_rw_mutex {
-#if defined(_WIN32)
-  SRWLOCK impl;
-#elif BR_SYNC_HAS_FUTEX
   br_atomic_rw_mutex impl;
-#elif defined(__unix__) || defined(__APPLE__)
-  pthread_rwlock_t impl;
-#else
-  i32 impl;
-#endif
 } br_rw_mutex;
 
 typedef struct br_recursive_mutex {
-#if defined(_WIN32)
-  CRITICAL_SECTION impl;
-#elif BR_SYNC_HAS_FUTEX
   br_atomic_recursive_mutex impl;
-#elif defined(__unix__) || defined(__APPLE__)
-  pthread_mutex_t impl;
-#else
-  i32 impl;
-#endif
 } br_recursive_mutex;
 
 typedef struct br_cond {
-#if defined(_WIN32)
-  CONDITION_VARIABLE impl;
-#elif BR_SYNC_HAS_FUTEX
   br_atomic_cond impl;
-#elif defined(__unix__) || defined(__APPLE__)
-  pthread_cond_t impl;
-#else
-  i32 impl;
-#endif
 } br_cond;
 
-#if defined(_WIN32)
-#define BR_MUTEX_INIT {SRWLOCK_INIT}
-#define BR_RW_MUTEX_INIT {SRWLOCK_INIT}
-#define BR_COND_INIT {CONDITION_VARIABLE_INIT}
-#elif BR_SYNC_HAS_FUTEX
-#define BR_MUTEX_INIT {BR_ATOMIC_MUTEX_INIT}
-#define BR_RW_MUTEX_INIT {BR_ATOMIC_RW_MUTEX_INIT}
-#define BR_COND_INIT {BR_ATOMIC_COND_INIT}
-#elif defined(__unix__) || defined(__APPLE__)
-#define BR_MUTEX_INIT {PTHREAD_MUTEX_INITIALIZER}
-#define BR_RW_MUTEX_INIT {PTHREAD_RWLOCK_INITIALIZER}
-#define BR_COND_INIT {PTHREAD_COND_INITIALIZER}
-#else
-#define BR_MUTEX_INIT {0}
-#define BR_RW_MUTEX_INIT {0}
-#define BR_COND_INIT {0}
-#endif
+typedef struct br_sema {
+  br_atomic_sema impl;
+} br_sema;
+
+#define BR_MUTEX_INIT {.impl = BR_ATOMIC_MUTEX_INIT}
+#define BR_RW_MUTEX_INIT {.impl = BR_ATOMIC_RW_MUTEX_INIT}
+#define BR_RECURSIVE_MUTEX_INIT {.impl = BR_ATOMIC_RECURSIVE_MUTEX_INIT}
+#define BR_COND_INIT {.impl = BR_ATOMIC_COND_INIT}
+#define BR_SEMA_INIT(initial_count) {.impl = BR_ATOMIC_SEMA_INIT(initial_count)}
 
 br_status br_mutex_init(br_mutex *mutex);
 void br_mutex_destroy(br_mutex *mutex);
@@ -118,6 +65,11 @@ void br_cond_destroy(br_cond *cond);
 void br_cond_wait(br_cond *cond, br_mutex *mutex);
 void br_cond_signal(br_cond *cond);
 void br_cond_broadcast(br_cond *cond);
+
+br_status br_sema_init(br_sema *sema, u32 count);
+void br_sema_destroy(br_sema *sema);
+void br_sema_post(br_sema *sema, u32 count);
+void br_sema_wait(br_sema *sema);
 
 BR_EXTERN_C_END
 

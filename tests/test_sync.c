@@ -29,6 +29,12 @@ typedef struct test_cond_state {
   br_atomic_i32 seen;
 } test_cond_state;
 
+typedef struct test_sema_state {
+  br_sema *sema;
+  br_atomic_i32 waiting;
+  br_atomic_i32 seen;
+} test_sema_state;
+
 typedef struct test_rw_reader_state {
   br_rw_mutex *mutex;
   br_atomic_i32 entered;
@@ -71,6 +77,15 @@ static void *test_cond_waiter(void *ctx) {
   }
   br_atomic_add_explicit(&state->seen, 1, BR_ATOMIC_RELAXED);
   br_mutex_unlock(&state->mutex);
+  return NULL;
+}
+
+static void *test_sema_waiter(void *ctx) {
+  test_sema_state *state = (test_sema_state *)ctx;
+
+  br_atomic_add_explicit(&state->waiting, 1, BR_ATOMIC_RELEASE);
+  br_sema_wait(state->sema);
+  br_atomic_add_explicit(&state->seen, 1, BR_ATOMIC_RELAXED);
   return NULL;
 }
 
@@ -169,7 +184,7 @@ static void test_sync_recursive_mutex(void) {
   br_recursive_mutex_destroy(&mutex);
 }
 
-#if BR_SYNC_HAS_FUTEX && !defined(_WIN32)
+#if !defined(_WIN32)
 static void test_sync_zero_value_public_primitives(void) {
   br_mutex mutex = {0};
   br_rw_mutex rw_mutex = {0};
@@ -195,6 +210,27 @@ static void test_sync_zero_value_public_primitives(void) {
   br_recursive_mutex_unlock(&recursive_mutex);
 }
 
+static void test_sync_zero_value_extended_primitives(void) {
+  br_wait_group wg = {0};
+  br_once once = {0};
+  br_ticket_mutex ticket = {0};
+  br_atomic_i32 count;
+
+  br_wait_group_add(&wg, 1);
+  br_wait_group_done(&wg);
+  br_wait_group_wait(&wg);
+  br_wait_group_destroy(&wg);
+
+  br_atomic_init(&count, 0);
+  br_once_do(&once, test_once_increment, &count);
+  br_once_do(&once, test_once_increment, &count);
+  assert(br_atomic_load_explicit(&count, BR_ATOMIC_RELAXED) == 1);
+  br_once_destroy(&once);
+
+  br_ticket_mutex_lock(&ticket);
+  br_ticket_mutex_unlock(&ticket);
+}
+
 static void test_sync_zero_value_cond_signal(void) {
   test_cond_state state = {0};
   pthread_t thread;
@@ -213,6 +249,34 @@ static void test_sync_zero_value_cond_signal(void) {
 
   assert(pthread_join(thread, NULL) == 0);
   assert(br_atomic_load_explicit(&state.seen, BR_ATOMIC_RELAXED) == 1);
+}
+
+static void test_sync_zero_value_sema(void) {
+  br_sema sema = {0};
+  test_sema_state state;
+  pthread_t thread;
+
+  state.sema = &sema;
+  br_atomic_init(&state.waiting, 0);
+  br_atomic_init(&state.seen, 0);
+
+  assert(pthread_create(&thread, NULL, test_sema_waiter, &state) == 0);
+  test_spin_until_i32_eq(&state.waiting, 1);
+  assert(br_atomic_load_explicit(&state.seen, BR_ATOMIC_RELAXED) == 0);
+
+  br_sema_post(&sema, 1u);
+
+  assert(pthread_join(thread, NULL) == 0);
+  assert(br_atomic_load_explicit(&state.seen, BR_ATOMIC_RELAXED) == 1);
+  br_sema_destroy(&sema);
+}
+
+static void test_sync_sema_init_with_count(void) {
+  br_sema sema;
+
+  assert(br_sema_init(&sema, 1u) == BR_STATUS_OK);
+  br_sema_wait(&sema);
+  br_sema_destroy(&sema);
 }
 #endif
 
@@ -450,9 +514,12 @@ static void test_sync_ticket_mutex(void) {
 int main(void) {
   test_sync_mutex_and_guard();
   test_sync_recursive_mutex();
-#if BR_SYNC_HAS_FUTEX && !defined(_WIN32)
+#if !defined(_WIN32)
   test_sync_zero_value_public_primitives();
+  test_sync_zero_value_extended_primitives();
   test_sync_zero_value_cond_signal();
+  test_sync_zero_value_sema();
+  test_sync_sema_init_with_count();
 #endif
   test_sync_once_basic();
 #if !defined(_WIN32)

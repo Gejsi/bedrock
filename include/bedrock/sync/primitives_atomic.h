@@ -25,8 +25,7 @@ The zero value for an Atomic_Mutex is an unlocked mutex.
 An Atomic_Mutex must not be copied after first use.
 
 Odin's lower atomic primitives are zero-value-ready. Bedrock keeps that property
-inside this layer and now uses it as the public primitive backend on futex
-targets.
+inside this layer and uses it as the storage for public primitives.
 */
 typedef struct br_atomic_mutex {
   br_futex state;

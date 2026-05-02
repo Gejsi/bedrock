@@ -121,7 +121,7 @@ br_status br_once_init(br_once *once) {
     return BR_STATUS_INVALID_ARGUMENT;
   }
 
-  br_atomic_store_explicit(&once->done, false, BR_ATOMIC_RELAXED);
+  br_atomic_init(&once->done, false);
   return br_mutex_init(&once->mutex);
 }
 
@@ -175,8 +175,8 @@ void br_ticket_mutex_init(br_ticket_mutex *mutex) {
     return;
   }
 
-  br_atomic_store_explicit(&mutex->ticket, 0u, BR_ATOMIC_RELAXED);
-  br_atomic_store_explicit(&mutex->serving, 0u, BR_ATOMIC_RELAXED);
+  br_atomic_init(&mutex->ticket, 0u);
+  br_atomic_init(&mutex->serving, 0u);
 }
 
 void br_ticket_mutex_lock(br_ticket_mutex *mutex) {

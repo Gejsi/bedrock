@@ -4,7 +4,12 @@
 
 #include <bedrock/sync/primitives.h>
 
-#if defined(__linux__)
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#elif defined(__linux__)
 #include <sys/syscall.h>
 #include <unistd.h>
 #elif defined(__FreeBSD__)
