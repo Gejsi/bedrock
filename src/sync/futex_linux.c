@@ -45,7 +45,7 @@ void br_futex_signal(br_futex *futex) {
     return;
   }
 
-  (void)br__futex_syscall(futex, FUTEX_WAKE_PRIVATE, 1u);
+  BR_UNUSED(br__futex_syscall(futex, FUTEX_WAKE_PRIVATE, 1u));
 }
 
 void br_futex_broadcast(br_futex *futex) {
@@ -53,7 +53,7 @@ void br_futex_broadcast(br_futex *futex) {
     return;
   }
 
-  (void)br__futex_syscall(futex, FUTEX_WAKE_PRIVATE, (u32)INT_MAX);
+  BR_UNUSED(br__futex_syscall(futex, FUTEX_WAKE_PRIVATE, (u32)INT_MAX));
 }
 
 #else

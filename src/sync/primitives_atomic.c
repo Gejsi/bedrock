@@ -31,7 +31,7 @@ static void br__atomic_mutex_lock_slow(br_atomic_mutex *mutex, u32 state) {
       return;
     }
 
-    (void)br_futex_wait(&mutex->state, new_state);
+    BR_UNUSED(br_futex_wait(&mutex->state, new_state));
     br_cpu_relax();
   }
 }
@@ -115,7 +115,7 @@ void br_atomic_rw_mutex_unlock(br_atomic_rw_mutex *rw) {
     return;
   }
 
-  (void)br_atomic_and(&rw->state, ~BR_ATOMIC_RW_MUTEX_STATE_IS_WRITING);
+  BR_UNUSED(br_atomic_and(&rw->state, ~BR_ATOMIC_RW_MUTEX_STATE_IS_WRITING));
   br_atomic_mutex_unlock(&rw->mutex);
 }
 
@@ -160,7 +160,7 @@ void br_atomic_rw_mutex_shared_lock(br_atomic_rw_mutex *rw) {
   }
 
   br_atomic_mutex_lock(&rw->mutex);
-  (void)br_atomic_add(&rw->state, BR_ATOMIC_RW_MUTEX_STATE_READER);
+  BR_UNUSED(br_atomic_add(&rw->state, BR_ATOMIC_RW_MUTEX_STATE_READER));
   br_atomic_mutex_unlock(&rw->mutex);
 }
 
@@ -196,7 +196,7 @@ bool br_atomic_rw_mutex_try_shared_lock(br_atomic_rw_mutex *rw) {
   }
 
   if (br_atomic_mutex_try_lock(&rw->mutex)) {
-    (void)br_atomic_add(&rw->state, BR_ATOMIC_RW_MUTEX_STATE_READER);
+    BR_UNUSED(br_atomic_add(&rw->state, BR_ATOMIC_RW_MUTEX_STATE_READER));
     br_atomic_mutex_unlock(&rw->mutex);
     return true;
   }
@@ -210,7 +210,7 @@ void br_atomic_recursive_mutex_init(br_atomic_recursive_mutex *mutex) {
   }
 
   br_atomic_init(&mutex->owner, BR_THREAD_ID_INVALID);
-  mutex->recursion = 0;
+  mutex->recursion = 0u;
   br_atomic_mutex_init(&mutex->mutex);
 }
 
@@ -229,7 +229,7 @@ void br_atomic_recursive_mutex_lock(br_atomic_recursive_mutex *mutex) {
     br_atomic_store_explicit(&mutex->owner, tid, BR_ATOMIC_RELEASE);
   }
 
-  mutex->recursion += 1;
+  mutex->recursion += 1u;
 }
 
 void br_atomic_recursive_mutex_unlock(br_atomic_recursive_mutex *mutex) {
@@ -245,8 +245,8 @@ void br_atomic_recursive_mutex_unlock(br_atomic_recursive_mutex *mutex) {
     return;
   }
 
-  mutex->recursion -= 1;
-  if (mutex->recursion == 0) {
+  mutex->recursion -= 1u;
+  if (mutex->recursion == 0u) {
     br_atomic_store_explicit(&mutex->owner, BR_THREAD_ID_INVALID, BR_ATOMIC_RELEASE);
     br_atomic_mutex_unlock(&mutex->mutex);
   }
@@ -266,7 +266,7 @@ bool br_atomic_recursive_mutex_try_lock(br_atomic_recursive_mutex *mutex) {
     makes recursive try-lock fail against the already-held non-recursive mutex.
     Bedrock follows the documented recursive mutex behavior instead.
     */
-    mutex->recursion += 1;
+    mutex->recursion += 1u;
     return true;
   }
 
@@ -275,7 +275,7 @@ bool br_atomic_recursive_mutex_try_lock(br_atomic_recursive_mutex *mutex) {
   }
 
   br_atomic_store_explicit(&mutex->owner, tid, BR_ATOMIC_RELEASE);
-  mutex->recursion += 1;
+  mutex->recursion += 1u;
   return true;
 }
 
@@ -307,7 +307,7 @@ void br_atomic_cond_signal(br_atomic_cond *cond) {
     return;
   }
 
-  (void)br_atomic_add_explicit(&cond->state, 1u, BR_ATOMIC_RELEASE);
+  BR_UNUSED(br_atomic_add_explicit(&cond->state, 1u, BR_ATOMIC_RELEASE));
   br_futex_signal(&cond->state);
 }
 
@@ -316,7 +316,7 @@ void br_atomic_cond_broadcast(br_atomic_cond *cond) {
     return;
   }
 
-  (void)br_atomic_add_explicit(&cond->state, 1u, BR_ATOMIC_RELEASE);
+  BR_UNUSED(br_atomic_add_explicit(&cond->state, 1u, BR_ATOMIC_RELEASE));
   br_futex_broadcast(&cond->state);
 }
 
@@ -351,7 +351,7 @@ void br_atomic_sema_wait(br_atomic_sema *sema) {
   for (;;) {
     original_count = br_atomic_load_explicit(&sema->count, BR_ATOMIC_RELAXED);
     while (original_count == 0u) {
-      (void)br_futex_wait(&sema->count, original_count);
+      BR_UNUSED(br_futex_wait(&sema->count, original_count));
       br_cpu_relax();
       original_count = br_atomic_load_explicit(&sema->count, BR_ATOMIC_RELAXED);
     }

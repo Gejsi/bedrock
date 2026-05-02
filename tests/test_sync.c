@@ -169,6 +169,53 @@ static void test_sync_recursive_mutex(void) {
   br_recursive_mutex_destroy(&mutex);
 }
 
+#if BR_SYNC_HAS_FUTEX && !defined(_WIN32)
+static void test_sync_zero_value_public_primitives(void) {
+  br_mutex mutex = {0};
+  br_rw_mutex rw_mutex = {0};
+  br_recursive_mutex recursive_mutex = {0};
+
+  br_mutex_lock(&mutex);
+  br_mutex_unlock(&mutex);
+  assert(br_mutex_try_lock(&mutex));
+  br_mutex_unlock(&mutex);
+
+  br_rw_mutex_shared_lock(&rw_mutex);
+  assert(br_rw_mutex_try_shared_lock(&rw_mutex));
+  br_rw_mutex_shared_unlock(&rw_mutex);
+  br_rw_mutex_shared_unlock(&rw_mutex);
+  assert(br_rw_mutex_try_lock(&rw_mutex));
+  br_rw_mutex_unlock(&rw_mutex);
+
+  br_recursive_mutex_lock(&recursive_mutex);
+  br_recursive_mutex_lock(&recursive_mutex);
+  assert(br_recursive_mutex_try_lock(&recursive_mutex));
+  br_recursive_mutex_unlock(&recursive_mutex);
+  br_recursive_mutex_unlock(&recursive_mutex);
+  br_recursive_mutex_unlock(&recursive_mutex);
+}
+
+static void test_sync_zero_value_cond_signal(void) {
+  test_cond_state state = {0};
+  pthread_t thread;
+
+  state.ready = false;
+  br_atomic_init(&state.waiting, 0);
+  br_atomic_init(&state.seen, 0);
+
+  assert(pthread_create(&thread, NULL, test_cond_waiter, &state) == 0);
+  test_spin_until_i32_eq(&state.waiting, 1);
+
+  br_mutex_lock(&state.mutex);
+  state.ready = true;
+  br_cond_signal(&state.cond);
+  br_mutex_unlock(&state.mutex);
+
+  assert(pthread_join(thread, NULL) == 0);
+  assert(br_atomic_load_explicit(&state.seen, BR_ATOMIC_RELAXED) == 1);
+}
+#endif
+
 static void test_sync_once_basic(void) {
   br_once once;
   br_atomic_i32 count;
@@ -403,6 +450,10 @@ static void test_sync_ticket_mutex(void) {
 int main(void) {
   test_sync_mutex_and_guard();
   test_sync_recursive_mutex();
+#if BR_SYNC_HAS_FUTEX && !defined(_WIN32)
+  test_sync_zero_value_public_primitives();
+  test_sync_zero_value_cond_signal();
+#endif
   test_sync_once_basic();
 #if !defined(_WIN32)
   test_sync_cond_signal();

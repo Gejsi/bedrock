@@ -33,6 +33,7 @@ Current implementation shape:
 - [include/bedrock/sync/futex.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/futex.h:1)
 - [include/bedrock/sync/primitives.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/primitives.h:1)
 - [include/bedrock/sync/primitives_atomic.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/primitives_atomic.h:1)
+- [include/bedrock/sync/thread.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/thread.h:1)
 - [include/bedrock/sync/extended.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/extended.h:1)
 - [include/bedrock/sync/sync_util.h](/home/gejsi/Desktop/bedrock/include/bedrock/sync/sync_util.h:1)
 - [src/sync/atomic.c](/home/gejsi/Desktop/bedrock/src/sync/atomic.c:1)
@@ -47,21 +48,27 @@ Current implementation shape:
 
 Important current divergences from Odin:
 
-1. Native OS wrappers instead of Odin's atomic/futex internals
+1. Mixed public primitive backends
 
-Bedrock currently implements the public primitives directly on top of:
+Bedrock now routes the public Linux/futex-target primitives through Bedrock's
+atomic/futex layer, so `Mutex`, `RW_Mutex`, `Recursive_Mutex`, and `Cond` are
+zero-value-ready on that path.
 
-- POSIX `pthread_*`
+Other backends still implement the public primitives directly on top of:
+
 - Windows `SRWLOCK`, `CONDITION_VARIABLE`, and `CRITICAL_SECTION`
+- non-Linux POSIX `pthread_*`
 
-Odin does not do this on non-Windows. Its non-Windows primitives are built out
-of atomics plus futex-style wait/wake helpers.
+Odin does not use pthread wrappers for its non-Windows primitives. Its
+non-Windows path is built out of atomics plus futex-style wait/wake helpers.
 
 2. Explicit `init`/`destroy`
 
 Odin's sync primitives are designed around a zero-value-ready model. Bedrock
-currently uses explicit initialization and destruction, plus static-init macros
-where the platform supports them.
+keeps explicit initialization and destruction for API compatibility, but the
+Linux/futex public primitive backend is now zero-value-ready. Non-Linux POSIX
+and the Windows recursive mutex still require their native initialization
+contracts.
 
 3. Extra fallback backend
 
@@ -73,8 +80,8 @@ as a generic unsupported-platform stub. Odin does not have a corresponding
 
 Bedrock now has an initial `atomic` layer, native numeric thread IDs, Linux
 futex wait/wake, `Atomic_Mutex`, `Atomic_RW_Mutex`,
-`Atomic_Recursive_Mutex`, `Atomic_Cond`, and `Atomic_Sema`, but it still has no
-equivalents of:
+`Atomic_Recursive_Mutex`, `Atomic_Cond`, `Atomic_Sema`, and a Linux public
+primitive bridge to that layer, but it still has no equivalents of:
 
 - `primitives_internal.odin`
 - timeout pieces of `primitives_atomic.odin`
@@ -94,12 +101,12 @@ kernel futex syscall, while other targets compile through an unsupported stub
 until their Odin-equivalent backends are ported.
 
 `Atomic_Recursive_Mutex` intentionally differs from Odin in two ways. It stores
-a `br_atomic_mutex` rather than the public `br_mutex` because Bedrock's public
-mutex still wraps pthread/Windows primitives and is not universally
-zero-value-ready. Its owner field is atomic to avoid a C data race when another
-thread checks ownership while the current owner unlocks. Bedrock also follows
-the documented recursive try-lock behavior for same-thread reentry; the current
-Odin source appears to call `mutex_try_lock` in that branch.
+a lower `br_atomic_mutex` directly so the atomic layer remains independent from
+the public primitive backend split. Its owner field is atomic to avoid a C data
+race when another thread checks ownership while the current owner unlocks.
+Bedrock also follows the documented recursive try-lock behavior for same-thread
+reentry; the current Odin source appears to call `mutex_try_lock` in that
+branch.
 
 That is the main reason the current sync module should be treated as an interim
 implementation, not as a parity-complete port.
@@ -199,10 +206,12 @@ responsibility split should be close.
 - OpenBSD
 - later Haiku / WASM if Bedrock wants those targets
 
-4. Revisit zero-value-ready primitives
+4. Revisit zero-value-ready primitives on remaining backends
 
-Once Bedrock stops wrapping pthread objects directly, Odin's zero-value model
-becomes much more achievable.
+Linux/futex public primitives now satisfy the zero-value model. The remaining
+work is moving the other Odin-supported non-Windows backends off pthread-shaped
+wrappers and deciding how much Windows parity is possible around recursive
+mutex initialization.
 
 5. Add the next missing public pieces
 

@@ -2,7 +2,7 @@
 #define BEDROCK_SYNC_PRIMITIVES_ATOMIC_H
 
 #include <bedrock/sync/futex.h>
-#include <bedrock/sync/primitives.h>
+#include <bedrock/sync/thread.h>
 
 BR_EXTERN_C_BEGIN
 
@@ -25,8 +25,8 @@ The zero value for an Atomic_Mutex is an unlocked mutex.
 An Atomic_Mutex must not be copied after first use.
 
 Odin's lower atomic primitives are zero-value-ready. Bedrock keeps that property
-inside this layer even though the current public `br_mutex` still uses explicit
-init/destroy while it wraps native OS primitives.
+inside this layer and now uses it as the public primitive backend on futex
+targets.
 */
 typedef struct br_atomic_mutex {
   br_futex state;
@@ -55,13 +55,13 @@ The zero value for an Atomic_Recursive_Mutex is an unlocked mutex.
 
 An Atomic_Recursive_Mutex must not be copied after first use.
 
-Odin stores a public Mutex here. Bedrock uses the lower br_atomic_mutex until
-the public br_mutex backend is moved from pthread wrappers to the atomic/futex
-path; this keeps the atomic layer zero-value-ready.
+Odin stores a public Mutex here. Bedrock keeps the lower br_atomic_mutex inside
+the atomic layer so this type remains independent from the public primitive
+backend split.
 */
 typedef struct br_atomic_recursive_mutex {
   br_atomic_u64 owner;
-  i32 recursion;
+  u32 recursion;
   br_atomic_mutex mutex;
 } br_atomic_recursive_mutex;
 
