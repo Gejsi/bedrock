@@ -279,6 +279,47 @@ bool br_atomic_recursive_mutex_try_lock(br_atomic_recursive_mutex *mutex) {
   return true;
 }
 
+void br_atomic_cond_init(br_atomic_cond *cond) {
+  if (cond == NULL) {
+    return;
+  }
+
+  br_atomic_init(&cond->state, 0u);
+}
+
+bool br_atomic_cond_wait(br_atomic_cond *cond, br_atomic_mutex *mutex) {
+  u32 state;
+  bool ok;
+
+  if (cond == NULL || mutex == NULL) {
+    return false;
+  }
+
+  state = br_atomic_load_explicit(&cond->state, BR_ATOMIC_RELAXED);
+  br_atomic_mutex_unlock(mutex);
+  ok = br_futex_wait(&cond->state, state);
+  br_atomic_mutex_lock(mutex);
+  return ok;
+}
+
+void br_atomic_cond_signal(br_atomic_cond *cond) {
+  if (cond == NULL) {
+    return;
+  }
+
+  (void)br_atomic_add_explicit(&cond->state, 1u, BR_ATOMIC_RELEASE);
+  br_futex_signal(&cond->state);
+}
+
+void br_atomic_cond_broadcast(br_atomic_cond *cond) {
+  if (cond == NULL) {
+    return;
+  }
+
+  (void)br_atomic_add_explicit(&cond->state, 1u, BR_ATOMIC_RELEASE);
+  br_futex_broadcast(&cond->state);
+}
+
 void br_atomic_sema_init(br_atomic_sema *sema, u32 count) {
   if (sema == NULL) {
     return;

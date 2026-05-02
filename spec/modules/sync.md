@@ -15,6 +15,7 @@ What is already landed:
 - `Atomic_Mutex`
 - `Atomic_RW_Mutex`
 - `Atomic_Recursive_Mutex`
+- `Atomic_Cond`
 - `Atomic_Sema`
 - `Mutex`
 - `RW_Mutex`
@@ -72,11 +73,11 @@ as a generic unsupported-platform stub. Odin does not have a corresponding
 
 Bedrock now has an initial `atomic` layer, native numeric thread IDs, Linux
 futex wait/wake, `Atomic_Mutex`, `Atomic_RW_Mutex`,
-`Atomic_Recursive_Mutex`, and `Atomic_Sema`, but it still has no equivalents
-of:
+`Atomic_Recursive_Mutex`, `Atomic_Cond`, and `Atomic_Sema`, but it still has no
+equivalents of:
 
 - `primitives_internal.odin`
-- most of `primitives_atomic.odin` beyond the mutex/rw-mutex/recursive-mutex/semaphore slice
+- timeout pieces of `primitives_atomic.odin`
 - non-Linux `futex_*`
 
 The current Bedrock atomic layer is intentionally C-shaped. It is implemented

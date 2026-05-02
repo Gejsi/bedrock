@@ -65,12 +65,23 @@ typedef struct br_atomic_recursive_mutex {
   br_atomic_mutex mutex;
 } br_atomic_recursive_mutex;
 
+/*
+Atomic_Cond implements a condition variable, a rendezvous point for threads
+waiting for signalling the occurrence of an event.
+
+An Atomic_Cond must not be copied after first use.
+*/
+typedef struct br_atomic_cond {
+  br_futex state;
+} br_atomic_cond;
+
 #define BR_ATOMIC_MUTEX_INIT {.state = BR_FUTEX_INIT(BR_ATOMIC_MUTEX_UNLOCKED)}
 #define BR_ATOMIC_SEMA_INIT(initial_count) {.count = BR_FUTEX_INIT(initial_count)}
 #define BR_ATOMIC_RW_MUTEX_INIT                                                                    \
   {.state = BR_ATOMIC_INIT(0), .mutex = BR_ATOMIC_MUTEX_INIT, .sema = BR_ATOMIC_SEMA_INIT(0u)}
 #define BR_ATOMIC_RECURSIVE_MUTEX_INIT                                                             \
   {.owner = BR_ATOMIC_INIT(BR_THREAD_ID_INVALID), .recursion = 0, .mutex = BR_ATOMIC_MUTEX_INIT}
+#define BR_ATOMIC_COND_INIT {.state = BR_FUTEX_INIT(0u)}
 
 void br_atomic_mutex_init(br_atomic_mutex *mutex);
 void br_atomic_mutex_lock(br_atomic_mutex *mutex);
@@ -89,6 +100,11 @@ void br_atomic_recursive_mutex_init(br_atomic_recursive_mutex *mutex);
 void br_atomic_recursive_mutex_lock(br_atomic_recursive_mutex *mutex);
 void br_atomic_recursive_mutex_unlock(br_atomic_recursive_mutex *mutex);
 bool br_atomic_recursive_mutex_try_lock(br_atomic_recursive_mutex *mutex);
+
+void br_atomic_cond_init(br_atomic_cond *cond);
+bool br_atomic_cond_wait(br_atomic_cond *cond, br_atomic_mutex *mutex);
+void br_atomic_cond_signal(br_atomic_cond *cond);
+void br_atomic_cond_broadcast(br_atomic_cond *cond);
 
 void br_atomic_sema_init(br_atomic_sema *sema, u32 count);
 void br_atomic_sema_post(br_atomic_sema *sema, u32 count);

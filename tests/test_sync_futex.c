@@ -29,6 +29,14 @@ typedef struct sema_wait_state {
   br_atomic_i32 *done_count;
 } sema_wait_state;
 
+typedef struct atomic_cond_wait_state {
+  br_atomic_cond *cond;
+  br_atomic_mutex *mutex;
+  bool *ready;
+  br_atomic_i32 *waiting_count;
+  br_atomic_i32 *done_count;
+} atomic_cond_wait_state;
+
 typedef struct atomic_mutex_state {
   br_atomic_mutex *mutex;
   br_atomic_bool *start;
@@ -74,6 +82,19 @@ static void *sema_wait_worker(void *ctx) {
   br_atomic_add_explicit(state->waiting_count, 1, BR_ATOMIC_RELEASE);
   br_atomic_sema_wait(state->sema);
   br_atomic_add_explicit(state->done_count, 1, BR_ATOMIC_RELEASE);
+  return NULL;
+}
+
+static void *atomic_cond_wait_worker(void *ctx) {
+  atomic_cond_wait_state *state = (atomic_cond_wait_state *)ctx;
+
+  br_atomic_mutex_lock(state->mutex);
+  br_atomic_add_explicit(state->waiting_count, 1, BR_ATOMIC_RELEASE);
+  while (!*state->ready) {
+    assert(br_atomic_cond_wait(state->cond, state->mutex));
+  }
+  br_atomic_add_explicit(state->done_count, 1, BR_ATOMIC_RELEASE);
+  br_atomic_mutex_unlock(state->mutex);
   return NULL;
 }
 
@@ -219,6 +240,72 @@ static void test_atomic_sema_post_many(void) {
   spin_until_i32(&waiting_count, THREAD_COUNT);
 
   br_atomic_sema_post(&sema, THREAD_COUNT);
+
+  for (i = 0; i < THREAD_COUNT; ++i) {
+    assert(pthread_join(threads[(usize)i], NULL) == 0);
+  }
+  assert(br_atomic_load_explicit(&done_count, BR_ATOMIC_ACQUIRE) == THREAD_COUNT);
+}
+
+static void test_atomic_cond_signal(void) {
+  br_atomic_cond cond = BR_ATOMIC_COND_INIT;
+  br_atomic_mutex mutex = BR_ATOMIC_MUTEX_INIT;
+  br_atomic_i32 waiting_count;
+  br_atomic_i32 done_count;
+  atomic_cond_wait_state state;
+  pthread_t thread;
+  bool ready = false;
+
+  br_atomic_init(&waiting_count, 0);
+  br_atomic_init(&done_count, 0);
+  state.cond = &cond;
+  state.mutex = &mutex;
+  state.ready = &ready;
+  state.waiting_count = &waiting_count;
+  state.done_count = &done_count;
+
+  assert(pthread_create(&thread, NULL, atomic_cond_wait_worker, &state) == 0);
+  spin_until_i32(&waiting_count, 1);
+  assert(br_atomic_load_explicit(&done_count, BR_ATOMIC_ACQUIRE) == 0);
+
+  br_atomic_mutex_lock(&mutex);
+  ready = true;
+  br_atomic_cond_signal(&cond);
+  br_atomic_mutex_unlock(&mutex);
+
+  assert(pthread_join(thread, NULL) == 0);
+  assert(br_atomic_load_explicit(&done_count, BR_ATOMIC_ACQUIRE) == 1);
+}
+
+static void test_atomic_cond_broadcast(void) {
+  enum { THREAD_COUNT = 4 };
+  br_atomic_cond cond = BR_ATOMIC_COND_INIT;
+  br_atomic_mutex mutex = BR_ATOMIC_MUTEX_INIT;
+  br_atomic_i32 waiting_count;
+  br_atomic_i32 done_count;
+  atomic_cond_wait_state state;
+  pthread_t threads[THREAD_COUNT];
+  bool ready = false;
+  i32 i;
+
+  br_atomic_init(&waiting_count, 0);
+  br_atomic_init(&done_count, 0);
+  state.cond = &cond;
+  state.mutex = &mutex;
+  state.ready = &ready;
+  state.waiting_count = &waiting_count;
+  state.done_count = &done_count;
+
+  for (i = 0; i < THREAD_COUNT; ++i) {
+    assert(pthread_create(&threads[(usize)i], NULL, atomic_cond_wait_worker, &state) == 0);
+  }
+  spin_until_i32(&waiting_count, THREAD_COUNT);
+  assert(br_atomic_load_explicit(&done_count, BR_ATOMIC_ACQUIRE) == 0);
+
+  br_atomic_mutex_lock(&mutex);
+  ready = true;
+  br_atomic_cond_broadcast(&cond);
+  br_atomic_mutex_unlock(&mutex);
 
   for (i = 0; i < THREAD_COUNT; ++i) {
     assert(pthread_join(threads[(usize)i], NULL) == 0);
@@ -380,6 +467,8 @@ int main(void) {
   test_atomic_rw_mutex_readers_share();
   test_atomic_rw_mutex_writer_waits_for_readers();
   test_atomic_recursive_mutex_reentrant();
+  test_atomic_cond_signal();
+  test_atomic_cond_broadcast();
   test_atomic_sema_wait_post_one();
   test_atomic_sema_post_many();
 #endif
