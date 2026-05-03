@@ -20,15 +20,16 @@ bool br_futex_wait(br_futex *futex, u32 expected) {
   }
 
   /*
-  Odin simulates an infinite wait with a long timeout loop. Bedrock uses the
-  kernel's no-timeout form for the no-timeout v1 surface.
+  Odin simulates an infinite wait with a 4-hour timeout loop. Bedrock uses
+  FreeBSD's native no-timeout form: the _umtx_op timeout arguments are optional,
+  and timeout behavior is only requested when uaddr/uaddr2 describe a timespec.
   */
   rc = _umtx_op(futex, UMTX_OP_WAIT_UINT, (unsigned long)expected, NULL, NULL);
   if (rc == 0) {
     return true;
   }
 
-  return errno == EINTR || errno == EAGAIN;
+  return errno == EINTR || errno == EAGAIN || errno == EBUSY;
 }
 
 void br_futex_signal(br_futex *futex) {

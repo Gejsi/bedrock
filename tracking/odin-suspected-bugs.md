@@ -19,3 +19,12 @@ Concise notes for issues found while porting Odin code to Bedrock.
 - Expected: if current thread already owns the recursive mutex, increment recursion and return `true`.
 - Effect: recursive `try_lock` can return `false` for the owning thread because the inner normal mutex is already locked.
 - Bedrock: increments recursion and returns `true`.
+
+## `core/sync` atomic recursive mutex owner race
+
+- File: `core/sync/primitives_atomic.odin`
+- Area: `Atomic_Recursive_Mutex.owner`
+- Issue: `owner` is a plain `int`, but `atomic_recursive_mutex_lock` reads it before acquiring the inner mutex while unlock writes it before releasing the inner mutex.
+- Expected: the pre-lock ownership check should use atomic load/store or another synchronization mechanism.
+- Effect: concurrent lock/unlock can race on `owner`; practical failures include stale same-owner reads causing a thread to skip the inner mutex and violate mutual exclusion.
+- Bedrock: stores `owner` as an atomic thread id.
