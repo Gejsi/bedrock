@@ -201,6 +201,61 @@ void br_once_do0(br_once *once, br_once_fn0 fn) {
   br_once_do(once, br__once_call0, &ctx);
 }
 
+br_status br_auto_reset_event_init(br_auto_reset_event *event) {
+  if (event == NULL) {
+    return BR_STATUS_INVALID_ARGUMENT;
+  }
+
+  br_atomic_init(&event->status, 0);
+  return br_sema_init(&event->sema, 0u);
+}
+
+void br_auto_reset_event_destroy(br_auto_reset_event *event) {
+  if (event == NULL) {
+    return;
+  }
+  br_sema_destroy(&event->sema);
+}
+
+void br_auto_reset_event_signal(br_auto_reset_event *event) {
+  i32 old_status;
+
+  if (event == NULL) {
+    return;
+  }
+
+  old_status = br_atomic_load_explicit(&event->status, BR_ATOMIC_RELAXED);
+  for (;;) {
+    i32 expected = old_status;
+    i32 new_status = old_status < 1 ? old_status + 1 : 1;
+
+    if (br_atomic_compare_exchange_weak_explicit(
+          &event->status, &expected, new_status, BR_ATOMIC_RELEASE, BR_ATOMIC_RELAXED)) {
+      break;
+    }
+
+    old_status = expected;
+    br_cpu_relax();
+  }
+
+  if (old_status < 0) {
+    br_sema_post(&event->sema, 1u);
+  }
+}
+
+void br_auto_reset_event_wait(br_auto_reset_event *event) {
+  i32 old_status;
+
+  if (event == NULL) {
+    return;
+  }
+
+  old_status = br_atomic_sub_explicit(&event->status, 1, BR_ATOMIC_ACQUIRE);
+  if (old_status < 1) {
+    br_sema_wait(&event->sema);
+  }
+}
+
 void br_ticket_mutex_init(br_ticket_mutex *mutex) {
   if (mutex == NULL) {
     return;

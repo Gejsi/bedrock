@@ -28,6 +28,20 @@ typedef struct br_once {
   br_atomic_bool done;
 } br_once;
 
+/*
+Represents a synchronization primitive that releases one waiting thread when
+signalled, then resets automatically.
+*/
+typedef struct br_auto_reset_event {
+  /*
+  status ==  0: Event is reset and no threads are waiting.
+  status ==  1: Event is signalled.
+  status == -N: Event is reset and N threads are waiting.
+  */
+  br_atomic_i32 status;
+  br_sema sema;
+} br_auto_reset_event;
+
 typedef struct br_ticket_mutex {
   br_atomic_u32 ticket;
   br_atomic_u32 serving;
@@ -36,6 +50,8 @@ typedef struct br_ticket_mutex {
 #define BR_WAIT_GROUP_INIT {.counter = 0, .mutex = BR_MUTEX_INIT, .cond = BR_COND_INIT}
 
 #define BR_ONCE_INIT {.mutex = BR_MUTEX_INIT, .done = BR_ATOMIC_INIT(false)}
+
+#define BR_AUTO_RESET_EVENT_INIT {.status = BR_ATOMIC_INIT(0), .sema = BR_SEMA_INIT(0u)}
 
 #define BR_TICKET_MUTEX_INIT {.ticket = BR_ATOMIC_INIT((u32)0), .serving = BR_ATOMIC_INIT((u32)0)}
 
@@ -54,6 +70,11 @@ br_status br_once_init(br_once *once);
 void br_once_destroy(br_once *once);
 void br_once_do(br_once *once, br_once_fn fn, void *ctx);
 void br_once_do0(br_once *once, br_once_fn0 fn);
+
+br_status br_auto_reset_event_init(br_auto_reset_event *event);
+void br_auto_reset_event_destroy(br_auto_reset_event *event);
+void br_auto_reset_event_signal(br_auto_reset_event *event);
+void br_auto_reset_event_wait(br_auto_reset_event *event);
 
 void br_ticket_mutex_init(br_ticket_mutex *mutex);
 void br_ticket_mutex_lock(br_ticket_mutex *mutex);

@@ -28,6 +28,7 @@ What is already landed:
 - `Wait_Group`
 - `Barrier`
 - `Once`
+- `Auto_Reset_Event`
 - `Ticket_Mutex`
 
 Current implementation shape:
@@ -188,13 +189,7 @@ responsibility split should be close.
 - keep unsupported targets as compile-time failures instead of spinning on a
   fake futex
 
-2. Add timeout support once `time` exists
-
-- futex timeout waits
-- `Atomic_Cond` / `Atomic_Sema` timeout waits
-- public `Cond`, `Sema`, and `Wait_Group` timeout waits
-
-3. Split thread ID primitives by Odin's OS tree
+2. Split thread ID primitives by Odin's OS tree
 
 - Linux
 - Darwin
@@ -203,9 +198,8 @@ responsibility split should be close.
 - OpenBSD
 - later Haiku / WASM if Bedrock wants those targets
 
-4. Add the next missing public pieces
+3. Add the next missing public pieces
 
-- auto-reset events
 - benaphores / recursive benaphores
 - parker / one-shot events
 - later `chan`

@@ -21,6 +21,12 @@ static void test_spin_until_i32_eq(const br_atomic_i32 *value, i32 expected) {
   }
 }
 
+static void test_spin_until_i32_at_least(const br_atomic_i32 *value, i32 expected) {
+  while (br_atomic_load_explicit(value, BR_ATOMIC_ACQUIRE) < expected) {
+    br_cpu_relax();
+  }
+}
+
 typedef struct test_cond_state {
   br_mutex mutex;
   br_cond cond;
@@ -58,6 +64,12 @@ typedef struct test_once_state {
   br_atomic_i32 *count;
   br_atomic_bool *start;
 } test_once_state;
+
+typedef struct test_auto_reset_event_state {
+  br_auto_reset_event *event;
+  br_atomic_i32 *waiting;
+  br_atomic_i32 *seen;
+} test_auto_reset_event_state;
 
 typedef struct test_ticket_state {
   br_ticket_mutex *mutex;
@@ -127,6 +139,15 @@ static void *test_once_worker(void *ctx) {
 
   test_spin_until_bool(state->start, true);
   br_once_do(state->once, test_once_increment, state->count);
+  return NULL;
+}
+
+static void *test_auto_reset_event_worker(void *ctx) {
+  test_auto_reset_event_state *state = (test_auto_reset_event_state *)ctx;
+
+  br_atomic_add_explicit(state->waiting, 1, BR_ATOMIC_RELEASE);
+  br_auto_reset_event_wait(state->event);
+  br_atomic_add_explicit(state->seen, 1, BR_ATOMIC_RELEASE);
   return NULL;
 }
 
@@ -508,6 +529,52 @@ static void test_sync_once_threads(void) {
   br_once_destroy(&once);
 }
 
+static void test_sync_auto_reset_event_pre_signal(void) {
+  br_auto_reset_event event = BR_AUTO_RESET_EVENT_INIT;
+
+  br_auto_reset_event_signal(&event);
+  br_auto_reset_event_wait(&event);
+  assert(br_atomic_load_explicit(&event.status, BR_ATOMIC_ACQUIRE) == 0);
+  br_auto_reset_event_destroy(&event);
+}
+
+static void test_sync_auto_reset_event_releases_one_waiter(void) {
+  enum { THREAD_COUNT = 2 };
+  br_auto_reset_event event;
+  br_atomic_i32 waiting;
+  br_atomic_i32 seen;
+  test_auto_reset_event_state state;
+  pthread_t threads[THREAD_COUNT];
+  i32 i;
+
+  assert(br_auto_reset_event_init(&event) == BR_STATUS_OK);
+  br_atomic_init(&waiting, 0);
+  br_atomic_init(&seen, 0);
+  state.event = &event;
+  state.waiting = &waiting;
+  state.seen = &seen;
+
+  for (i = 0; i < THREAD_COUNT; ++i) {
+    assert(pthread_create(&threads[(usize)i], NULL, test_auto_reset_event_worker, &state) == 0);
+  }
+
+  test_spin_until_i32_eq(&waiting, THREAD_COUNT);
+  assert(br_atomic_load_explicit(&seen, BR_ATOMIC_ACQUIRE) == 0);
+
+  br_auto_reset_event_signal(&event);
+  test_spin_until_i32_at_least(&seen, 1);
+  assert(br_atomic_load_explicit(&seen, BR_ATOMIC_ACQUIRE) == 1);
+
+  br_auto_reset_event_signal(&event);
+  test_spin_until_i32_at_least(&seen, THREAD_COUNT);
+  assert(br_atomic_load_explicit(&seen, BR_ATOMIC_ACQUIRE) == THREAD_COUNT);
+
+  for (i = 0; i < THREAD_COUNT; ++i) {
+    assert(pthread_join(threads[(usize)i], NULL) == 0);
+  }
+  br_auto_reset_event_destroy(&event);
+}
+
 static void test_sync_ticket_mutex(void) {
   enum { THREAD_COUNT = 4, ITERATIONS = 1000 };
   br_ticket_mutex mutex;
@@ -562,6 +629,8 @@ int main(void) {
   test_sync_sema_wait_with_timeout();
   test_sync_barrier();
   test_sync_once_threads();
+  test_sync_auto_reset_event_pre_signal();
+  test_sync_auto_reset_event_releases_one_waiter();
   test_sync_ticket_mutex();
 #endif
   return 0;
