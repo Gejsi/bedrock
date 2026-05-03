@@ -72,9 +72,10 @@ this repository. Haiku and WASM futex backends are still missing.
 
 3. Timeout pieces are still missing
 
-Bedrock has no `time` module or duration type yet, so the timeout variants of
-futex, atomic condition variables, semaphores, public condition variables,
-public semaphores, and wait groups are deferred.
+Bedrock now has a minimal `time` module and `br_duration` foundation, so the
+timeout variants of futex, atomic condition variables, semaphores, public
+condition variables, public semaphores, and wait groups are the next sync
+milestone.
 
 4. Lower layers still missing after `atomic` / futex
 

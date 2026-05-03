@@ -21,6 +21,7 @@ Detailed status for the currently active module ports lives in
 | `core/encoding/csv` | v1 | Reasonable parser target. |
 | `core/encoding/ini` | v1 | Reasonable parser target. |
 | `core/path/slashpath` | v1 | Good portable path layer. |
+| `core/time` | partial v1 | Minimal duration/time/tick/sleep foundation landed to unblock sync timeouts; datetime, timezone, formatting/parsing, stopwatch, and TSC/perf helpers remain. |
 | `core/time/rfc3339` | v1 | Useful focused formatter/parser. |
 | `core/math/bits` | v1 | Mostly portability shims and bit helpers. |
 | `core/container/*` | redesign | Keep the ideas; implement as generated typed containers. |

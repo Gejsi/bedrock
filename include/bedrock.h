@@ -3,6 +3,7 @@
 
 #include <bedrock/base.h>
 #include <bedrock/types.h>
+#include <bedrock/time.h>
 #include <bedrock/sync.h>
 #include <bedrock/io.h>
 #include <bedrock/bufio.h>

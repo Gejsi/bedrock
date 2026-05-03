@@ -344,10 +344,10 @@ Current Bedrock files:
 | `primitives_internal.odin` | `adapted` | `src/sync/primitives_internal.c` | Public primitive wrappers now live in an Odin-shaped internal bridge over the atomic/futex layer. Bedrock keeps C-style explicit `init`/`destroy` reset/no-op helpers. |
 | `primitives_atomic.odin` | `adapted` | `sync/primitives_atomic.h`, `src/sync/primitives_atomic.c`, `tests/test_sync_futex.c` | Non-timeout slice landed with `Atomic_Mutex`, `Atomic_RW_Mutex`, `Atomic_Recursive_Mutex`, `Atomic_Cond`, and `Atomic_Sema` on top of Bedrock futex. `Atomic_Recursive_Mutex` stores owner atomically to avoid C data races and follows documented recursive try-lock behavior rather than Odin's current same-owner `mutex_try_lock` branch. Timeout waits are still missing. |
 | per-OS primitive split (`linux`, `darwin`, `freebsd`, `netbsd`, `openbsd`, `haiku`, `wasm`) | `planned` | none | Current thread ID dispatch is still consolidated in `src/sync/primitives.c` rather than Odin's actual per-OS primitive files. |
-| Futex public surface and backends | `adapted` | `sync/futex.h`, `src/sync/futex_*.c`, `tests/test_sync_futex.c` | Futex wait/signal/broadcast landed for Linux, Windows, Darwin, FreeBSD, NetBSD, and OpenBSD; Linux is locally tested, other source ports still need target-specific verification. Windows runtime-resolves Odin's `RtlWaitOnAddress` path plus wake functions so users do not need extra sync import libraries, Darwin weak-imports newer `os_sync_*` APIs with `__ulock_*` fallback, and FreeBSD uses the native no-timeout `_umtx_op` form instead of Odin's 4-hour timeout loop. Timeout wait is deferred until Bedrock has `time`; Haiku and WASM are still missing. |
+| Futex public surface and backends | `adapted` | `sync/futex.h`, `src/sync/futex_*.c`, `tests/test_sync_futex.c` | Futex wait/signal/broadcast landed for Linux, Windows, Darwin, FreeBSD, NetBSD, and OpenBSD; Linux is locally tested, other source ports still need target-specific verification. Windows runtime-resolves Odin's `RtlWaitOnAddress` path plus wake functions so users do not need extra sync import libraries, Darwin weak-imports newer `os_sync_*` APIs with `__ulock_*` fallback, and FreeBSD uses the native no-timeout `_umtx_op` form instead of Odin's 4-hour timeout loop. Timeout wait wiring is the next sync step now that Bedrock has minimal `time`; Haiku and WASM are still missing. |
 | auto-reset events | `planned` | none | Not landed yet. |
 | benaphores / recursive benaphores | `planned` | none | Not landed yet. |
-| timeout-based waits | `deferred` | none | Bedrock currently lacks a `time` module and duration type. |
+| timeout-based waits | `deferred` | none | Bedrock now has the minimal `time`/`br_duration` foundation; sync timeout APIs still need to be wired onto futex timeout waits. |
 | `sync/chan` | `deferred` | none | Channels are a later step, not part of the initial blocking-primitives slice. |
 
 Summary:
@@ -358,3 +358,26 @@ Summary:
 - The main missing work is finishing timeout waits, target-verifying non-Linux
   futex backends, adding the missing extended primitives, and completing the
   real Odin-style OS primitive split.
+
+## `core/time`
+
+Current Bedrock files:
+
+- `include/bedrock/time.h`
+- `include/bedrock/time/time.h`
+- `src/time/time.c`
+- `src/time/time_linux.c`
+- `src/time/time_unix.c`
+- `src/time/time_windows.c`
+- `src/time/time_other.c`
+- `tests/test_time.c`
+
+| Odin feature/file | Status | Bedrock files | Notes |
+| --- | --- | --- | --- |
+| `Duration` and constants | `adapted` | `time/time.h` | Landed as `br_duration` with nanosecond precision and `BR_NANOSECOND` through `BR_HOUR`. |
+| `Time` / `now` / `sleep` | `adapted` | `time/time.h`, `src/time/time_*.c` | Landed as Unix nanoseconds plus platform sleep. Windows follows Odin's millisecond `Sleep` behavior for now. |
+| `Tick` / low-level perf helpers | `partial` | `time/time.h`, `src/time/time.c`, `src/time/time_*.c` | Monotonic tick, add/diff/since/lap landed. TSC/invariant-frequency helpers are deferred. |
+| duration conversion helpers | `adapted` | `src/time/time.c` | Nanoseconds plus floating micro/milli/second/minute/hour conversions landed. |
+| duration round/truncate helpers | `planned` | none | Small self-contained helpers, but not needed for sync timeout wiring. |
+| stopwatch helpers | `planned` | none | Not needed for sync timeouts. |
+| datetime/timezone/RFC3339/ISO8601 | `planned` | none | Larger independent slices; do not pull into timeout work. |
