@@ -28,3 +28,12 @@ Concise notes for issues found while porting Odin code to Bedrock.
 - Expected: the pre-lock ownership check should use atomic load/store or another synchronization mechanism.
 - Effect: concurrent lock/unlock can race on `owner`; practical failures include stale same-owner reads causing a thread to skip the inner mutex and violate mutual exclusion.
 - Bedrock: stores `owner` as an atomic thread id.
+
+## `core/sync` parker timeout state
+
+- File: `core/sync/extended.odin`
+- Area: `park_with_timeout`
+- Issue: timeout return can leave `Parker.state` as `PARKER_PARKED`.
+- Expected: timeout should restore `PARKER_EMPTY` unless an `unpark` raced and installed `PARKER_NOTIFIED`.
+- Effect: a later `park` before another `unpark` can underflow the futex state away from valid parker states.
+- Bedrock: timeout wait returns `bool` and cleans up the state transition.

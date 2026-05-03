@@ -29,6 +29,8 @@ What is already landed:
 - `Barrier`
 - `Once`
 - `Auto_Reset_Event`
+- `Parker`
+- `One_Shot_Event`
 - `Ticket_Mutex`
 
 Current implementation shape:
@@ -201,7 +203,6 @@ responsibility split should be close.
 3. Add the next missing public pieces
 
 - benaphores / recursive benaphores
-- parker / one-shot events
 - later `chan`
 
 ## Why Sync Before Returning To Mem

@@ -42,6 +42,21 @@ typedef struct br_auto_reset_event {
   br_sema sema;
 } br_auto_reset_event;
 
+/*
+A parker is a single-consumer token used to block a thread until another thread
+makes the token available.
+*/
+typedef struct br_parker {
+  br_futex state;
+} br_parker;
+
+/*
+A one-shot event stays signalled once made available and wakes every waiter.
+*/
+typedef struct br_one_shot_event {
+  br_futex state;
+} br_one_shot_event;
+
 typedef struct br_ticket_mutex {
   br_atomic_u32 ticket;
   br_atomic_u32 serving;
@@ -52,6 +67,10 @@ typedef struct br_ticket_mutex {
 #define BR_ONCE_INIT {.mutex = BR_MUTEX_INIT, .done = BR_ATOMIC_INIT(false)}
 
 #define BR_AUTO_RESET_EVENT_INIT {.status = BR_ATOMIC_INIT(0), .sema = BR_SEMA_INIT(0u)}
+
+#define BR_PARKER_INIT {.state = BR_FUTEX_INIT(0u)}
+
+#define BR_ONE_SHOT_EVENT_INIT {.state = BR_FUTEX_INIT(0u)}
 
 #define BR_TICKET_MUTEX_INIT {.ticket = BR_ATOMIC_INIT((u32)0), .serving = BR_ATOMIC_INIT((u32)0)}
 
@@ -75,6 +94,15 @@ br_status br_auto_reset_event_init(br_auto_reset_event *event);
 void br_auto_reset_event_destroy(br_auto_reset_event *event);
 void br_auto_reset_event_signal(br_auto_reset_event *event);
 void br_auto_reset_event_wait(br_auto_reset_event *event);
+
+void br_parker_init(br_parker *parker);
+void br_parker_park(br_parker *parker);
+bool br_parker_park_with_timeout(br_parker *parker, br_duration duration);
+void br_parker_unpark(br_parker *parker);
+
+void br_one_shot_event_init(br_one_shot_event *event);
+void br_one_shot_event_wait(br_one_shot_event *event);
+void br_one_shot_event_signal(br_one_shot_event *event);
 
 void br_ticket_mutex_init(br_ticket_mutex *mutex);
 void br_ticket_mutex_lock(br_ticket_mutex *mutex);

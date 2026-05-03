@@ -340,6 +340,8 @@ Current Bedrock files:
 | `Barrier` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Core init/wait landed. |
 | `Once` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Landed with a generic `void *` callback plus a no-data helper instead of Odin's overloaded proc family. |
 | `Auto_Reset_Event` | `adapted` | `sync/extended.h`, `src/sync/extended.c`, `tests/test_sync.c` | Landed with Odin's signed status counter plus `Sema` storage, using `br_atomic_i32` for C data-race safety. |
+| `Parker` | `adapted` | `sync/extended.h`, `src/sync/extended.c`, `tests/test_sync.c` | Landed with Odin's futex state machine. Bedrock's timeout variant returns `bool` and restores state on timeout so C callers can tell whether a token was consumed. |
+| `One_Shot_Event` | `adapted` | `sync/extended.h`, `src/sync/extended.c`, `tests/test_sync.c` | Landed as Odin's futex-backed one-way broadcast event. |
 | `Ticket_Mutex` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Lock/unlock landed with C atomics. |
 | `atomic.odin` surface | `adapted` | `sync/atomic.h`, `src/sync/atomic.c`, `tests/test_sync_atomic.c` | Landed as a C11-atomic-backed layer with Bedrock names and memory-order aliases. Bedrock intentionally keeps C's compare-exchange `expected` pointer contract instead of emulating Odin's tuple-return API, and currently requires compiler/target support for C11 atomics. |
 | `primitives_internal.odin` | `adapted` | `src/sync/primitives_internal.c` | Public primitive wrappers now live in an Odin-shaped internal bridge over the atomic/futex layer. Bedrock keeps C-style explicit `init`/`destroy` reset/no-op helpers. |

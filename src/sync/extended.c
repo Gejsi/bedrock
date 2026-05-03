@@ -256,6 +256,130 @@ void br_auto_reset_event_wait(br_auto_reset_event *event) {
   }
 }
 
+#define BR__PARKER_EMPTY ((u32)0)
+#define BR__PARKER_NOTIFIED ((u32)1)
+#define BR__PARKER_PARKED UINT32_MAX
+
+void br_parker_init(br_parker *parker) {
+  if (parker == NULL) {
+    return;
+  }
+
+  br_atomic_init(&parker->state, BR__PARKER_EMPTY);
+}
+
+void br_parker_park(br_parker *parker) {
+  if (parker == NULL) {
+    return;
+  }
+
+  if (br_atomic_sub_explicit(&parker->state, 1u, BR_ATOMIC_ACQUIRE) == BR__PARKER_NOTIFIED) {
+    return;
+  }
+
+  for (;;) {
+    u32 expected = BR__PARKER_NOTIFIED;
+
+    BR_UNUSED(br_futex_wait(&parker->state, BR__PARKER_PARKED));
+    if (br_atomic_compare_exchange_strong_explicit(
+          &parker->state, &expected, BR__PARKER_EMPTY, BR_ATOMIC_ACQUIRE, BR_ATOMIC_ACQUIRE)) {
+      return;
+    }
+  }
+}
+
+static bool br__parker_finish_timeout(br_parker *parker) {
+  u32 expected = BR__PARKER_PARKED;
+
+  if (br_atomic_compare_exchange_strong_explicit(
+        &parker->state, &expected, BR__PARKER_EMPTY, BR_ATOMIC_ACQUIRE, BR_ATOMIC_ACQUIRE)) {
+    return false;
+  }
+
+  expected = BR__PARKER_NOTIFIED;
+  if (br_atomic_compare_exchange_strong_explicit(
+        &parker->state, &expected, BR__PARKER_EMPTY, BR_ATOMIC_ACQUIRE, BR_ATOMIC_ACQUIRE)) {
+    return true;
+  }
+
+  return false;
+}
+
+bool br_parker_park_with_timeout(br_parker *parker, br_duration duration) {
+  br_tick start;
+  br_duration remaining;
+
+  if (parker == NULL) {
+    return false;
+  }
+
+  if (br_atomic_sub_explicit(&parker->state, 1u, BR_ATOMIC_ACQUIRE) == BR__PARKER_NOTIFIED) {
+    return true;
+  }
+  if (duration <= 0) {
+    return br__parker_finish_timeout(parker);
+  }
+
+  start = br_tick_now();
+  remaining = duration;
+  for (;;) {
+    u32 expected;
+
+    if (!br_futex_wait_with_timeout(&parker->state, BR__PARKER_PARKED, remaining)) {
+      return br__parker_finish_timeout(parker);
+    }
+
+    expected = BR__PARKER_NOTIFIED;
+    if (br_atomic_compare_exchange_strong_explicit(
+          &parker->state, &expected, BR__PARKER_EMPTY, BR_ATOMIC_ACQUIRE, BR_ATOMIC_ACQUIRE)) {
+      return true;
+    }
+
+    remaining = duration - br_tick_since(start);
+    if (remaining <= 0) {
+      return br__parker_finish_timeout(parker);
+    }
+  }
+}
+
+void br_parker_unpark(br_parker *parker) {
+  if (parker == NULL) {
+    return;
+  }
+
+  if (br_atomic_exchange_explicit(&parker->state, BR__PARKER_NOTIFIED, BR_ATOMIC_RELEASE) ==
+      BR__PARKER_PARKED) {
+    br_futex_signal(&parker->state);
+  }
+}
+
+void br_one_shot_event_init(br_one_shot_event *event) {
+  if (event == NULL) {
+    return;
+  }
+
+  br_atomic_init(&event->state, 0u);
+}
+
+void br_one_shot_event_wait(br_one_shot_event *event) {
+  if (event == NULL) {
+    return;
+  }
+
+  while (br_atomic_load_explicit(&event->state, BR_ATOMIC_ACQUIRE) == 0u) {
+    BR_UNUSED(br_futex_wait(&event->state, 0u));
+  }
+}
+
+void br_one_shot_event_signal(br_one_shot_event *event) {
+  if (event == NULL) {
+    return;
+  }
+
+  br_atomic_store_explicit(&event->state, 1u, BR_ATOMIC_RELEASE);
+  br_futex_broadcast(&event->state);
+}
+
 void br_ticket_mutex_init(br_ticket_mutex *mutex) {
   if (mutex == NULL) {
     return;
