@@ -351,6 +351,16 @@ static void test_sync_cond_broadcast(void) {
   br_mutex_destroy(&state.mutex);
 }
 
+static void test_sync_cond_wait_with_timeout(void) {
+  br_mutex mutex = BR_MUTEX_INIT;
+  br_cond cond = BR_COND_INIT;
+
+  br_mutex_lock(&mutex);
+  assert(!br_cond_wait_with_timeout(&cond, &mutex, 1 * BR_MILLISECOND));
+  assert(!br_mutex_try_lock(&mutex));
+  br_mutex_unlock(&mutex);
+}
+
 static void test_sync_rw_mutex(void) {
   enum { THREAD_COUNT = 2 };
   br_rw_mutex mutex;
@@ -404,6 +414,26 @@ static void test_sync_wait_group(void) {
 
   assert(br_atomic_load_explicit(&counter, BR_ATOMIC_RELAXED) == THREAD_COUNT);
   br_wait_group_destroy(&wg);
+}
+
+static void test_sync_wait_group_with_timeout(void) {
+  br_wait_group wg = BR_WAIT_GROUP_INIT;
+
+  br_wait_group_add(&wg, 1);
+  assert(!br_wait_group_wait_with_timeout(&wg, 1 * BR_MILLISECOND));
+  br_wait_group_done(&wg);
+  assert(br_wait_group_wait_with_timeout(&wg, 1 * BR_MILLISECOND));
+  br_wait_group_destroy(&wg);
+}
+
+static void test_sync_sema_wait_with_timeout(void) {
+  br_sema sema = BR_SEMA_INIT(0u);
+
+  assert(!br_sema_wait_with_timeout(&sema, 1 * BR_MILLISECOND));
+  br_sema_post(&sema, 1u);
+  assert(br_sema_wait_with_timeout(&sema, 1 * BR_MILLISECOND));
+  assert(!br_sema_wait_with_timeout(&sema, 1 * BR_MILLISECOND));
+  br_sema_destroy(&sema);
 }
 
 static void test_sync_barrier(void) {
@@ -525,8 +555,11 @@ int main(void) {
 #if !defined(_WIN32)
   test_sync_cond_signal();
   test_sync_cond_broadcast();
+  test_sync_cond_wait_with_timeout();
   test_sync_rw_mutex();
   test_sync_wait_group();
+  test_sync_wait_group_with_timeout();
+  test_sync_sema_wait_with_timeout();
   test_sync_barrier();
   test_sync_once_threads();
   test_sync_ticket_mutex();

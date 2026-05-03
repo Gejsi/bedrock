@@ -17,6 +17,8 @@ What is already landed:
 - `Atomic_Recursive_Mutex`
 - `Atomic_Cond`
 - `Atomic_Sema`
+- futex, atomic condition, atomic semaphore, public condition, public
+  semaphore, and wait-group timeout waits
 - `Mutex`
 - `RW_Mutex`
 - `Recursive_Mutex`
@@ -70,12 +72,16 @@ backend. Basic wait/wake source ports exist for Linux, Windows, Darwin,
 FreeBSD, NetBSD, and OpenBSD. Only the Linux path has been exercised locally in
 this repository. Haiku and WASM futex backends are still missing.
 
-3. Timeout pieces are still missing
+3. Timeout pieces are now wired through the main primitive stack
 
-Bedrock now has a minimal `time` module and `br_duration` foundation, so the
-timeout variants of futex, atomic condition variables, semaphores, public
-condition variables, public semaphores, and wait groups are the next sync
-milestone.
+Bedrock now has the minimal `time` module foundation and the Odin-shaped
+timeout variants for futex, atomic condition variables, atomic semaphores,
+public condition variables, public semaphores, and wait groups.
+
+Intentional deviation: Odin's current `wait_group_wait_with_timeout` passes the
+full duration into each condition-wait loop iteration. Bedrock tracks remaining
+duration so spurious wakeups do not restart the public wait-group timeout
+window.
 
 4. Lower layers still missing after `atomic` / futex
 
@@ -84,7 +90,6 @@ Bedrock now has an initial `atomic` layer, native numeric thread IDs,
 `Atomic_Sema`, public primitive wrappers, and several futex backends, but it
 still has no equivalents of:
 
-- timeout pieces of `primitives_atomic.odin`
 - Haiku / WASM `futex_*`
 - Odin's exact per-OS `primitives_*` split for thread ID functions
 

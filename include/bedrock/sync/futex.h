@@ -2,6 +2,7 @@
 #define BEDROCK_SYNC_FUTEX_H
 
 #include <bedrock/sync/atomic.h>
+#include <bedrock/time.h>
 
 BR_EXTERN_C_BEGIN
 
@@ -26,6 +27,7 @@ Odin asserts backend failures, while C callers need a way to notice unsupported
 or failed waits.
 */
 bool br_futex_wait(br_futex *futex, u32 expected);
+bool br_futex_wait_with_timeout(br_futex *futex, u32 expected, br_duration duration);
 void br_futex_signal(br_futex *futex);
 void br_futex_broadcast(br_futex *futex);
 

@@ -302,6 +302,23 @@ bool br_atomic_cond_wait(br_atomic_cond *cond, br_atomic_mutex *mutex) {
   return ok;
 }
 
+bool br_atomic_cond_wait_with_timeout(br_atomic_cond *cond,
+                                      br_atomic_mutex *mutex,
+                                      br_duration duration) {
+  u32 state;
+  bool ok;
+
+  if (cond == NULL || mutex == NULL) {
+    return false;
+  }
+
+  state = br_atomic_load_explicit(&cond->state, BR_ATOMIC_RELAXED);
+  br_atomic_mutex_unlock(mutex);
+  ok = br_futex_wait_with_timeout(&cond->state, state, duration);
+  br_atomic_mutex_lock(mutex);
+  return ok;
+}
+
 void br_atomic_cond_signal(br_atomic_cond *cond) {
   if (cond == NULL) {
     return;
@@ -362,6 +379,38 @@ void br_atomic_sema_wait(br_atomic_sema *sema) {
                                                    BR_ATOMIC_ACQUIRE,
                                                    BR_ATOMIC_ACQUIRE)) {
       return;
+    }
+  }
+}
+
+bool br_atomic_sema_wait_with_timeout(br_atomic_sema *sema, br_duration duration) {
+  u32 original_count;
+
+  if (sema == NULL || duration <= 0) {
+    return false;
+  }
+
+  for (;;) {
+    original_count = br_atomic_load_explicit(&sema->count, BR_ATOMIC_RELAXED);
+    for (br_tick start = br_tick_now(); original_count == 0u;) {
+      br_duration remaining = duration - br_tick_since(start);
+      if (remaining < 0) {
+        return false;
+      }
+
+      if (!br_futex_wait_with_timeout(&sema->count, original_count, remaining)) {
+        return false;
+      }
+      br_cpu_relax();
+      original_count = br_atomic_load_explicit(&sema->count, BR_ATOMIC_RELAXED);
+    }
+
+    if (br_atomic_compare_exchange_strong_explicit(&sema->count,
+                                                   &original_count,
+                                                   original_count - 1u,
+                                                   BR_ATOMIC_ACQUIRE,
+                                                   BR_ATOMIC_ACQUIRE)) {
+      return true;
     }
   }
 }

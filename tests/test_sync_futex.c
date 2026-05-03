@@ -194,6 +194,15 @@ static void test_futex_wait_signal(void) {
   assert(br_atomic_load_explicit(&state.done, BR_ATOMIC_ACQUIRE));
 }
 
+static void test_futex_wait_with_timeout(void) {
+  br_futex futex;
+
+  br_atomic_init(&futex, 0u);
+  assert(br_futex_wait_with_timeout(&futex, 1u, 0) == true);
+  assert(br_futex_wait_with_timeout(&futex, 0u, 0) == false);
+  assert(br_futex_wait_with_timeout(&futex, 0u, 1 * BR_MILLISECOND) == false);
+}
+
 static void test_atomic_sema_wait_post_one(void) {
   br_atomic_sema sema;
   br_atomic_i32 waiting_count;
@@ -216,6 +225,17 @@ static void test_atomic_sema_wait_post_one(void) {
 
   assert(pthread_join(thread, NULL) == 0);
   assert(br_atomic_load_explicit(&done_count, BR_ATOMIC_ACQUIRE) == 1);
+}
+
+static void test_atomic_sema_wait_with_timeout(void) {
+  br_atomic_sema sema;
+
+  br_atomic_sema_init(&sema, 0u);
+  assert(!br_atomic_sema_wait_with_timeout(&sema, 1 * BR_MILLISECOND));
+
+  br_atomic_sema_post(&sema, 1u);
+  assert(br_atomic_sema_wait_with_timeout(&sema, 1 * BR_MILLISECOND));
+  assert(!br_atomic_sema_wait_with_timeout(&sema, 1 * BR_MILLISECOND));
 }
 
 static void test_atomic_sema_post_many(void) {
@@ -311,6 +331,16 @@ static void test_atomic_cond_broadcast(void) {
     assert(pthread_join(threads[(usize)i], NULL) == 0);
   }
   assert(br_atomic_load_explicit(&done_count, BR_ATOMIC_ACQUIRE) == THREAD_COUNT);
+}
+
+static void test_atomic_cond_wait_with_timeout(void) {
+  br_atomic_cond cond = BR_ATOMIC_COND_INIT;
+  br_atomic_mutex mutex = BR_ATOMIC_MUTEX_INIT;
+
+  br_atomic_mutex_lock(&mutex);
+  assert(!br_atomic_cond_wait_with_timeout(&cond, &mutex, 1 * BR_MILLISECOND));
+  assert(!br_atomic_mutex_try_lock(&mutex));
+  br_atomic_mutex_unlock(&mutex);
 }
 
 static void test_atomic_mutex_try_lock(void) {
@@ -461,6 +491,7 @@ static void test_atomic_recursive_mutex_reentrant(void) {
 int main(void) {
 #if BR_SYNC_HAS_FUTEX && !defined(_WIN32)
   test_futex_wait_signal();
+  test_futex_wait_with_timeout();
   test_atomic_mutex_try_lock();
   test_atomic_mutex_contention();
   test_atomic_rw_mutex_try_lock();
@@ -469,7 +500,9 @@ int main(void) {
   test_atomic_recursive_mutex_reentrant();
   test_atomic_cond_signal();
   test_atomic_cond_broadcast();
+  test_atomic_cond_wait_with_timeout();
   test_atomic_sema_wait_post_one();
+  test_atomic_sema_wait_with_timeout();
   test_atomic_sema_post_many();
 #endif
   return 0;

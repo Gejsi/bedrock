@@ -59,6 +59,37 @@ void br_wait_group_wait(br_wait_group *wg) {
   br_mutex_unlock(&wg->mutex);
 }
 
+bool br_wait_group_wait_with_timeout(br_wait_group *wg, br_duration duration) {
+  br_tick start;
+  bool ok = true;
+
+  if (wg == NULL || duration <= 0) {
+    return false;
+  }
+
+  start = br_tick_now();
+  br_mutex_lock(&wg->mutex);
+  while (wg->counter != 0) {
+    br_duration remaining = duration - br_tick_since(start);
+    if (remaining < 0) {
+      ok = false;
+      break;
+    }
+
+    /*
+    Odin currently passes the full duration to every condition wait iteration.
+    Bedrock tracks the remaining duration so a spurious wakeup does not restart
+    the public wait-group timeout window.
+    */
+    if (!br_cond_wait_with_timeout(&wg->cond, &wg->mutex, remaining)) {
+      ok = false;
+      break;
+    }
+  }
+  br_mutex_unlock(&wg->mutex);
+  return ok;
+}
+
 br_status br_barrier_init(br_barrier *barrier, i32 thread_count) {
   br_status status;
 

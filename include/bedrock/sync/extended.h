@@ -44,6 +44,7 @@ void br_wait_group_destroy(br_wait_group *wg);
 void br_wait_group_add(br_wait_group *wg, i32 delta);
 void br_wait_group_done(br_wait_group *wg);
 void br_wait_group_wait(br_wait_group *wg);
+bool br_wait_group_wait_with_timeout(br_wait_group *wg, br_duration duration);
 
 br_status br_barrier_init(br_barrier *barrier, i32 thread_count);
 void br_barrier_destroy(br_barrier *barrier);

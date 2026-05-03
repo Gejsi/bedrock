@@ -4,6 +4,7 @@
 #include <bedrock/base.h>
 #include <bedrock/sync/primitives_atomic.h>
 #include <bedrock/sync/thread.h>
+#include <bedrock/time.h>
 
 BR_EXTERN_C_BEGIN
 
@@ -63,6 +64,7 @@ bool br_recursive_mutex_try_lock(br_recursive_mutex *mutex);
 br_status br_cond_init(br_cond *cond);
 void br_cond_destroy(br_cond *cond);
 void br_cond_wait(br_cond *cond, br_mutex *mutex);
+bool br_cond_wait_with_timeout(br_cond *cond, br_mutex *mutex, br_duration duration);
 void br_cond_signal(br_cond *cond);
 void br_cond_broadcast(br_cond *cond);
 
@@ -70,6 +72,7 @@ br_status br_sema_init(br_sema *sema, u32 count);
 void br_sema_destroy(br_sema *sema);
 void br_sema_post(br_sema *sema, u32 count);
 void br_sema_wait(br_sema *sema);
+bool br_sema_wait_with_timeout(br_sema *sema, br_duration duration);
 
 BR_EXTERN_C_END
 

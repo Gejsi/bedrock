@@ -50,7 +50,23 @@ static bool br__windows_sync_symbol(const char *name, FARPROC *out_symbol) {
   return br__windows_symbol("kernel32.dll", name, out_symbol);
 }
 
-static bool br__windows_rtl_wait_on_address(br_futex *futex, u32 *compare, SIZE_T address_size) {
+static bool br__windows_duration_to_timeout(br_duration duration, LARGE_INTEGER *timeout) {
+  if (duration <= 0 || timeout == NULL) {
+    return false;
+  }
+
+  /*
+  RtlWaitOnAddress expects relative timeouts as negative 100ns intervals, which
+  matches Odin's CustomWaitOnAddress path.
+  */
+  timeout->QuadPart = -(LONGLONG)(duration / 100);
+  return true;
+}
+
+static bool br__windows_rtl_wait_on_address(br_futex *futex,
+                                            u32 *compare,
+                                            SIZE_T address_size,
+                                            const LARGE_INTEGER *timeout) {
   FARPROC wait_symbol;
   FARPROC status_symbol;
   br__rtl_wait_on_address_fn wait_on_address = NULL;
@@ -70,7 +86,7 @@ static bool br__windows_rtl_wait_on_address(br_futex *futex, u32 *compare, SIZE_
   memcpy(&wait_on_address, &wait_symbol, sizeof(wait_on_address));
   memcpy(&nt_status_to_dos_error, &status_symbol, sizeof(nt_status_to_dos_error));
 
-  status = wait_on_address((volatile void *)futex, compare, address_size, NULL);
+  status = wait_on_address((volatile void *)futex, compare, address_size, timeout);
   if (status != 0) {
     SetLastError(nt_status_to_dos_error(status));
   }
@@ -109,7 +125,25 @@ bool br_futex_wait(br_futex *futex, u32 expected) {
   all wait/wake symbols at runtime so users do not need Windows sync import
   libraries when linking a static Bedrock build.
   */
-  return br__windows_rtl_wait_on_address(futex, &compare, sizeof(compare));
+  return br__windows_rtl_wait_on_address(futex, &compare, sizeof(compare), NULL);
+}
+
+bool br_futex_wait_with_timeout(br_futex *futex, u32 expected, br_duration duration) {
+  LARGE_INTEGER timeout;
+  u32 compare;
+
+  if (futex == NULL) {
+    return false;
+  }
+  if (br_atomic_load_explicit(futex, BR_ATOMIC_ACQUIRE) != expected) {
+    return true;
+  }
+  if (!br__windows_duration_to_timeout(duration, &timeout)) {
+    return false;
+  }
+
+  compare = expected;
+  return br__windows_rtl_wait_on_address(futex, &compare, sizeof(compare), &timeout);
 }
 
 void br_futex_signal(br_futex *futex) {

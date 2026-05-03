@@ -102,12 +102,16 @@ bool br_atomic_recursive_mutex_try_lock(br_atomic_recursive_mutex *mutex);
 
 void br_atomic_cond_init(br_atomic_cond *cond);
 bool br_atomic_cond_wait(br_atomic_cond *cond, br_atomic_mutex *mutex);
+bool br_atomic_cond_wait_with_timeout(br_atomic_cond *cond,
+                                      br_atomic_mutex *mutex,
+                                      br_duration duration);
 void br_atomic_cond_signal(br_atomic_cond *cond);
 void br_atomic_cond_broadcast(br_atomic_cond *cond);
 
 void br_atomic_sema_init(br_atomic_sema *sema, u32 count);
 void br_atomic_sema_post(br_atomic_sema *sema, u32 count);
 void br_atomic_sema_wait(br_atomic_sema *sema);
+bool br_atomic_sema_wait_with_timeout(br_atomic_sema *sema, br_duration duration);
 
 BR_EXTERN_C_END
 

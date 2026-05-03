@@ -139,6 +139,13 @@ void br_cond_wait(br_cond *cond, br_mutex *mutex) {
   BR_UNUSED(br_atomic_cond_wait(&cond->impl, &mutex->impl));
 }
 
+bool br_cond_wait_with_timeout(br_cond *cond, br_mutex *mutex, br_duration duration) {
+  if (cond == NULL || mutex == NULL || duration <= 0) {
+    return false;
+  }
+  return br_atomic_cond_wait_with_timeout(&cond->impl, &mutex->impl, duration);
+}
+
 void br_cond_signal(br_cond *cond) {
   if (cond == NULL) {
     return;
@@ -177,4 +184,11 @@ void br_sema_wait(br_sema *sema) {
     return;
   }
   br_atomic_sema_wait(&sema->impl);
+}
+
+bool br_sema_wait_with_timeout(br_sema *sema, br_duration duration) {
+  if (sema == NULL) {
+    return false;
+  }
+  return br_atomic_sema_wait_with_timeout(&sema->impl, duration);
 }
