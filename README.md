@@ -30,6 +30,7 @@ Current implemented bootstrap:
 - central short-type aliases in `include/bedrock/types.h`
 - allocator ABI in `include/bedrock/mem/alloc.h` and `src/mem/alloc.c`
 - fixed-buffer arena in `include/bedrock/mem/arena.h` and `src/mem/arena.c`
+- mutex allocator wrapper in `include/bedrock/mem/mutex_allocator.h` and `src/mem/mutex_allocator.c`
 - UTF-8 foundation in `include/bedrock/unicode/utf8.h` and `src/unicode/utf8.c`
 - `bytes` slice/view helpers in `include/bedrock/bytes/bytes.h` and `src/bytes/bytes.c`
 - `bytes.Buffer`-style mutable storage in `include/bedrock/bytes/buffer.h` and `src/bytes/buffer.c`

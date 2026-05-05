@@ -10,6 +10,7 @@
 #include <bedrock/alloc.h>
 #include <bedrock/arena.h>
 #include <bedrock/compat_allocator.h>
+#include <bedrock/mutex_allocator.h>
 #include <bedrock/dynamic_arena.h>
 #include <bedrock/buddy_allocator.h>
 #include <bedrock/scratch.h>

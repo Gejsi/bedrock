@@ -33,6 +33,7 @@ Current Bedrock files:
 - `include/bedrock/mem/buddy_allocator.h`
 - `include/bedrock/mem/compat_allocator.h`
 - `include/bedrock/mem/dynamic_arena.h`
+- `include/bedrock/mem/mutex_allocator.h`
 - `include/bedrock/mem/rollback_stack.h`
 - `include/bedrock/mem/scratch.h`
 - `include/bedrock/mem/small_stack.h`
@@ -46,6 +47,7 @@ Current Bedrock files:
 - `src/mem/buddy_allocator.c`
 - `src/mem/compat_allocator.c`
 - `src/mem/dynamic_arena.c`
+- `src/mem/mutex_allocator.c`
 - `src/mem/rollback_stack.c`
 - `src/mem/scratch.c`
 - `src/mem/small_stack.c`
@@ -83,7 +85,7 @@ Current Bedrock files:
 | virtual memory API | `adapted` | `virtual.h`, `src/mem/virtual/*` | Reserve/commit/decommit/release/protect landed with an Odin-style `virtual/*` split: shared `virtual_platform`, shared BSD/macOS `virtual_posix`, per-OS Linux/Darwin/FreeBSD/NetBSD/OpenBSD files, Windows, and `other`. |
 | virtual growing/static arena core | `adapted` | `virtual_arena.h`, `src/mem/virtual/arena.c` | Growing and static arenas landed with allocator support, reset/destroy, mark/rewind, and optional trailing guard-page overflow protection. |
 | tracking allocator | `adapted` | `tracking_allocator.h`, `tracking_allocator.c` | Landed with a dense live-entry list plus a private pointer index; it still omits Odin's mutex, feature-query, and source-location machinery. |
-| mutex / locked allocator | `planned` | none | Useful later for shared allocators. |
+| mutex / locked allocator | `adapted` | `mutex_allocator.h`, `mutex_allocator.c` | Landed as an Odin-style serialized allocator wrapper around a backing allocator. Bedrock defaults an unset backing allocator to heap instead of using Odin's ambient context allocator. |
 | rollback stack allocator | `adapted` | `rollback_stack.h`, `rollback_stack.c` | Landed with Odin-style rollback/free collapse and singleton oversized blocks; Bedrock splits init into explicit buffered/dynamic entry points and reports invalid usage via statuses. |
 | selected low-level `mem.odin` helpers | `planned` | none | Future work should target portable helpers like `set`, `zero`, `copy`, `compare_ptrs`, and `check_zero_ptr`, not a broad port of `raw.odin`'s Odin-runtime layout surface. |
 | TLSF allocator | `deferred` | none | Odin has `tlsf/*`; Bedrock does not. |

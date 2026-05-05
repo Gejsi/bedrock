@@ -216,6 +216,23 @@ Important Bedrock-specific deviations from Odin for now:
 - Bedrock explicitly shifts the user payload forward if the wrapped header
   prefix grows and the parent resize keeps the same base pointer in place
 
+## Mutex Allocator Design
+
+Bedrock now also has a mutex allocator close to Odin's current shape.
+
+- wraps a backing allocator
+- serializes every allocation request through a `br_mutex`
+- keeps allocator objects non-thread-safe by default while providing an explicit
+  sharing wrapper
+
+Important Bedrock-specific deviations from Odin for now:
+
+- explicit `backing` allocator defaults to heap when unset, instead of using
+  Odin's ambient context allocator
+- the wrapper targets Bedrock's current alloc/free/resize/reset ABI, not Odin's
+  richer query-features/query-info modes
+- the embedded mutex uses Bedrock's zero-value-ready futex-backed sync layer
+
 ## Virtual Arena Design
 
 Bedrock now also has a VM-backed arena layer. The intended v1 shape is:
@@ -307,7 +324,7 @@ Allocator objects should be non-thread-safe by default.
 
 If callers want sharing, provide wrappers such as:
 
-- `br_locked_allocator`
+- `br_mutex_allocator`
 - per-thread arenas owned by user code
 
 Do not make every allocator pay synchronization costs by default.
