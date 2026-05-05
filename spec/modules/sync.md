@@ -116,6 +116,12 @@ Bedrock also follows the documented recursive try-lock behavior for same-thread
 reentry; the current Odin source appears to call `mutex_try_lock` in that
 branch.
 
+`Atomic_Mutex` keeps Odin's `Unlocked` / `Locked` / `Waiting` futex-state shape,
+but its contention path now follows Rust's futex mutex strategy more closely:
+CAS on the fast path, relaxed-load spinning, transition to `Waiting` only before
+sleeping, and another spin after wake. This is an implementation-level
+improvement, not a public API deviation.
+
 That is the main reason the current sync module should still be treated as a
 partial port, not as parity-complete.
 

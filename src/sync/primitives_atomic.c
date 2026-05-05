@@ -2,37 +2,45 @@
 
 #include <bedrock/sync/primitives_atomic.h>
 
-static void br__atomic_mutex_lock_slow(br_atomic_mutex *mutex, u32 state) {
-  u32 new_state = state;
-  i32 spin;
-  usize relax_count;
+static u32 br__atomic_mutex_spin(br_atomic_mutex *mutex) {
+  for (usize spin = 100u; spin > 0u; --spin) {
+    /*
+    Rust's futex mutex only loads while spinning so contenders do not keep
+    bouncing the cache line with CAS/exchange attempts.
+    */
+    u32 state = br_atomic_load_explicit(&mutex->state, BR_ATOMIC_RELAXED);
 
-  for (spin = 0; spin < 100; ++spin) {
-    u32 expected = BR_ATOMIC_MUTEX_UNLOCKED;
-    if (br_atomic_compare_exchange_weak_explicit(
-          &mutex->state, &expected, new_state, BR_ATOMIC_ACQUIRE, BR_ATOMIC_CONSUME)) {
-      return;
+    if (state != BR_ATOMIC_MUTEX_LOCKED) {
+      return state;
     }
 
-    state = expected;
-    if (state == BR_ATOMIC_MUTEX_WAITING) {
-      break;
-    }
-
-    for (relax_count = br_min_size((usize)spin + 1u, 32u); relax_count > 0u; --relax_count) {
-      br_cpu_relax();
-    }
+    br_cpu_relax();
   }
 
-  new_state = BR_ATOMIC_MUTEX_WAITING;
+  return br_atomic_load_explicit(&mutex->state, BR_ATOMIC_RELAXED);
+}
+
+static void br__atomic_mutex_lock_slow(br_atomic_mutex *mutex) {
+  u32 state = br__atomic_mutex_spin(mutex);
+
+  if (state == BR_ATOMIC_MUTEX_UNLOCKED) {
+    u32 expected = BR_ATOMIC_MUTEX_UNLOCKED;
+    if (br_atomic_compare_exchange_strong_explicit(
+          &mutex->state, &expected, BR_ATOMIC_MUTEX_LOCKED, BR_ATOMIC_ACQUIRE, BR_ATOMIC_RELAXED)) {
+      return;
+    }
+    state = expected;
+  }
+
   for (;;) {
-    if (br_atomic_exchange_explicit(&mutex->state, BR_ATOMIC_MUTEX_WAITING, BR_ATOMIC_ACQUIRE) ==
-        BR_ATOMIC_MUTEX_UNLOCKED) {
+    if (state != BR_ATOMIC_MUTEX_WAITING &&
+        br_atomic_exchange_explicit(&mutex->state, BR_ATOMIC_MUTEX_WAITING, BR_ATOMIC_ACQUIRE) ==
+          BR_ATOMIC_MUTEX_UNLOCKED) {
       return;
     }
 
-    BR_UNUSED(br_futex_wait(&mutex->state, new_state));
-    br_cpu_relax();
+    BR_UNUSED(br_futex_wait(&mutex->state, BR_ATOMIC_MUTEX_WAITING));
+    state = br__atomic_mutex_spin(mutex);
   }
 }
 
@@ -45,15 +53,16 @@ void br_atomic_mutex_init(br_atomic_mutex *mutex) {
 }
 
 void br_atomic_mutex_lock(br_atomic_mutex *mutex) {
-  u32 state;
+  u32 expected;
 
   if (mutex == NULL) {
     return;
   }
 
-  state = br_atomic_exchange_explicit(&mutex->state, BR_ATOMIC_MUTEX_LOCKED, BR_ATOMIC_ACQUIRE);
-  if (state != BR_ATOMIC_MUTEX_UNLOCKED) {
-    br__atomic_mutex_lock_slow(mutex, state);
+  expected = BR_ATOMIC_MUTEX_UNLOCKED;
+  if (!br_atomic_compare_exchange_strong_explicit(
+        &mutex->state, &expected, BR_ATOMIC_MUTEX_LOCKED, BR_ATOMIC_ACQUIRE, BR_ATOMIC_RELAXED)) {
+    br__atomic_mutex_lock_slow(mutex);
   }
 }
 
@@ -78,7 +87,7 @@ bool br_atomic_mutex_try_lock(br_atomic_mutex *mutex) {
   }
 
   return br_atomic_compare_exchange_strong_explicit(
-    &mutex->state, &expected, BR_ATOMIC_MUTEX_LOCKED, BR_ATOMIC_ACQUIRE, BR_ATOMIC_CONSUME);
+    &mutex->state, &expected, BR_ATOMIC_MUTEX_LOCKED, BR_ATOMIC_ACQUIRE, BR_ATOMIC_RELAXED);
 }
 
 void br_atomic_rw_mutex_init(br_atomic_rw_mutex *rw) {

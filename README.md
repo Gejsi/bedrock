@@ -3,9 +3,11 @@
 Bedrock is an Odin-inspired C library project aimed at replacing the parts of the
 C standard library that are awkward, underspecified, or missing entirely.
 
-The repo is in bootstrap mode. Odin is pinned as a reference submodule in
-`upstream/odin`, the design work is intentionally split into small documents
-instead of one giant context file, and the first C slice is already buildable.
+The repo is in bootstrap mode. Odin is pinned as the primary reference
+submodule in `upstream/odin`, Rust is pinned as a secondary implementation
+reference in `upstream/rust`, the design work is intentionally split into small
+documents instead of one giant context file, and the first C slice is already
+buildable.
 
 Primary docs:
 
@@ -15,6 +17,7 @@ Primary docs:
 - `spec/modules/threading.md`
 - `tracking/odin-port-matrix.md`
 - `decisions/ADR-0001-upstream-layout.md`
+- `decisions/ADR-0002-rust-reference.md`
 
 Current direction:
 
@@ -49,8 +52,7 @@ Build modes:
 ```sh
 make MODE=debug test
 make MODE=release test
-make MODE=asan test
-make MODE=ubsan test
+make MODE=sanitize test
 ```
 
 Convenience targets:
@@ -58,8 +60,7 @@ Convenience targets:
 ```sh
 make debug
 make release
-make asan
-make ubsan
+make sanitize
 ```
 
 The `Makefile` discovers `src/**/*.c` and `tests/**/*.c` automatically, so new
