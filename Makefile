@@ -54,10 +54,12 @@ DEPFLAGS := -MMD -MP
 DEBUG_CFLAGS := -O0 -g3 -DDEBUG -fno-omit-frame-pointer -fno-optimize-sibling-calls
 RELEASE_CFLAGS := -O3 -DNDEBUG
 SANITIZE_CFLAGS := -O1 -g3 -DDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls
+THREAD_SANITIZE_CFLAGS := -O1 -g3 -DDEBUG -fsanitize=thread -fno-omit-frame-pointer -fno-optimize-sibling-calls
 
 DEBUG_LDFLAGS :=
 RELEASE_LDFLAGS :=
 SANITIZE_LDFLAGS := -fsanitize=address,undefined
+THREAD_SANITIZE_LDFLAGS := -fsanitize=thread
 
 ifeq ($(MODE),debug)
 MODE_CFLAGS := $(DEBUG_CFLAGS)
@@ -71,8 +73,14 @@ MODE_LDFLAGS := $(SANITIZE_LDFLAGS)
 else ifeq ($(MODE),asan)
 MODE_CFLAGS := $(SANITIZE_CFLAGS)
 MODE_LDFLAGS := $(SANITIZE_LDFLAGS)
+else ifeq ($(MODE),thread-sanitize)
+MODE_CFLAGS := $(THREAD_SANITIZE_CFLAGS)
+MODE_LDFLAGS := $(THREAD_SANITIZE_LDFLAGS)
+else ifeq ($(MODE),tsan)
+MODE_CFLAGS := $(THREAD_SANITIZE_CFLAGS)
+MODE_LDFLAGS := $(THREAD_SANITIZE_LDFLAGS)
 else
-$(error Unsupported MODE '$(MODE)'; use debug, release, or sanitize)
+$(error Unsupported MODE '$(MODE)'; use debug, release, sanitize, or thread-sanitize)
 endif
 
 CFLAGS ?=
@@ -98,7 +106,7 @@ TEST_BINS := $(patsubst $(TEST_DIR)/%.c,$(BIN_DIR)/%,$(TEST_FILES))
 LIB_DEPS := $(LIB_OBJS:.o=.d)
 TEST_DEPS := $(addsuffix .d,$(TEST_BINS))
 
-.PHONY: all clean test check debug release sanitize asan format check-format print-config
+.PHONY: all clean test check debug release sanitize asan thread-sanitize tsan format check-format print-config
 
 all: $(LIB_TARGET)
 
@@ -115,6 +123,12 @@ sanitize:
 
 asan:
 	$(MAKE) MODE=sanitize test
+
+thread-sanitize:
+	$(MAKE) MODE=thread-sanitize test
+
+tsan:
+	$(MAKE) MODE=thread-sanitize test
 
 format:
 	$(CLANG_FORMAT) -i $(FORMAT_FILES)
