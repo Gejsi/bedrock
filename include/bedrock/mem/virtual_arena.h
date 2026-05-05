@@ -3,6 +3,7 @@
 
 #include <bedrock/mem/alloc.h>
 #include <bedrock/mem/virtual.h>
+#include <bedrock/sync/primitives.h>
 
 BR_EXTERN_C_BEGIN
 
@@ -26,6 +27,7 @@ typedef struct br_virtual_arena {
   usize minimum_block_size;
   br_virtual_arena_flags flags;
   usize temp_count;
+  br_mutex mutex;
 } br_virtual_arena;
 
 typedef struct br_virtual_arena_mark {
@@ -58,10 +60,10 @@ typedef struct br_virtual_arena_temp_result {
 /*
 Bedrock v1 only exposes Odin's virtual growing/static variants here. Buffer
 arenas already exist separately as `br_arena`, so this layer stays focused on
-virtual-memory-backed arenas. Unlike Odin's current implementation, Bedrock
-does not add a built-in mutex here yet because `thread`/`sync` has not landed.
-Overflow protection is available as a trailing guard page via `flags`; Bedrock
-does not currently expose Odin's broader memory-block flag surface directly.
+virtual-memory-backed arenas. Like Odin's current implementation, the virtual
+arena embeds a mutex and serializes public arena mutation operations. Overflow
+protection is available as a trailing guard page via `flags`; Bedrock does not
+currently expose Odin's broader memory-block flag surface directly.
 */
 
 void br_virtual_arena_init(br_virtual_arena *arena);
@@ -76,7 +78,7 @@ br_status br_virtual_arena_init_static(br_virtual_arena *arena, usize reserved, 
 void br_virtual_arena_reset(br_virtual_arena *arena);
 void br_virtual_arena_destroy(br_virtual_arena *arena);
 
-br_virtual_arena_mark br_virtual_arena_mark_save(const br_virtual_arena *arena);
+br_virtual_arena_mark br_virtual_arena_mark_save(br_virtual_arena *arena);
 br_status br_virtual_arena_rewind(br_virtual_arena *arena, br_virtual_arena_mark mark);
 
 /*
@@ -87,7 +89,7 @@ default on ownership mistakes.
 br_virtual_arena_temp_result br_virtual_arena_temp_begin(br_virtual_arena *arena);
 br_status br_virtual_arena_temp_end(br_virtual_arena_temp temp);
 br_status br_virtual_arena_temp_ignore(br_virtual_arena_temp temp);
-br_status br_virtual_arena_check_temp(const br_virtual_arena *arena);
+br_status br_virtual_arena_check_temp(br_virtual_arena *arena);
 
 br_alloc_result br_virtual_arena_alloc(br_virtual_arena *arena, usize size, usize alignment);
 br_alloc_result br_virtual_arena_alloc_uninit(br_virtual_arena *arena, usize size, usize alignment);

@@ -22,6 +22,8 @@ static br_alloc_result br__virtual_arena_result(void *ptr, usize size, br_status
   return result;
 }
 
+static void br__virtual_arena_reset_unlocked(br_virtual_arena *arena);
+
 static bool br__safe_add_size(usize a, usize b, usize *result) {
   if (a > SIZE_MAX - b) {
     return false;
@@ -416,9 +418,9 @@ static br_alloc_result br__virtual_arena_alloc_internal(br_virtual_arena *arena,
   return br__virtual_arena_result(NULL, 0u, BR_STATUS_INVALID_STATE);
 }
 
-static br_alloc_result br__virtual_arena_allocator_fn(void *ctx, const br_alloc_request *req) {
+static br_alloc_result br__virtual_arena_allocator_fn_unlocked(br_virtual_arena *arena,
+                                                               const br_alloc_request *req) {
   br_alloc_result result;
-  br_virtual_arena *arena = (br_virtual_arena *)ctx;
 
   if (req == NULL) {
     return br__virtual_arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
@@ -489,11 +491,28 @@ static br_alloc_result br__virtual_arena_allocator_fn(void *ctx, const br_alloc_
     case BR_ALLOC_OP_FREE:
       return br__virtual_arena_result(NULL, 0u, BR_STATUS_OK);
     case BR_ALLOC_OP_RESET:
-      br_virtual_arena_reset(arena);
+      br__virtual_arena_reset_unlocked(arena);
       return br__virtual_arena_result(NULL, 0u, BR_STATUS_OK);
   }
 
   return br__virtual_arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+}
+
+static br_alloc_result br__virtual_arena_allocator_fn(void *ctx, const br_alloc_request *req) {
+  br_virtual_arena *arena = (br_virtual_arena *)ctx;
+  br_alloc_result result;
+
+  if (req == NULL) {
+    return br__virtual_arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+  if (arena == NULL) {
+    return br__virtual_arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+
+  br_mutex_lock(&arena->mutex);
+  result = br__virtual_arena_allocator_fn_unlocked(arena, req);
+  br_mutex_unlock(&arena->mutex);
+  return result;
 }
 
 void br_virtual_arena_init(br_virtual_arena *arena) {
@@ -502,6 +521,7 @@ void br_virtual_arena_init(br_virtual_arena *arena) {
   }
 
   memset(arena, 0, sizeof(*arena));
+  arena->mutex = (br_mutex)BR_MUTEX_INIT;
 }
 
 br_status br_virtual_arena_init_growing(br_virtual_arena *arena, usize reserved) {
@@ -596,7 +616,7 @@ br_status br_virtual_arena_init_static(br_virtual_arena *arena, usize reserved, 
   return BR_STATUS_OK;
 }
 
-void br_virtual_arena_reset(br_virtual_arena *arena) {
+static void br__virtual_arena_reset_unlocked(br_virtual_arena *arena) {
   if (arena == NULL) {
     return;
   }
@@ -629,6 +649,16 @@ void br_virtual_arena_reset(br_virtual_arena *arena) {
   }
 }
 
+void br_virtual_arena_reset(br_virtual_arena *arena) {
+  if (arena == NULL) {
+    return;
+  }
+
+  br_mutex_lock(&arena->mutex);
+  br__virtual_arena_reset_unlocked(arena);
+  br_mutex_unlock(&arena->mutex);
+}
+
 void br_virtual_arena_destroy(br_virtual_arena *arena) {
   br_virtual_arena_block *block;
   br_virtual_arena_block *prev;
@@ -637,29 +667,38 @@ void br_virtual_arena_destroy(br_virtual_arena *arena) {
     return;
   }
 
+  br_mutex_lock(&arena->mutex);
   block = arena->curr_block;
   while (block != NULL) {
     prev = block->prev;
     br__virtual_block_destroy(block);
     block = prev;
   }
+  br_mutex_unlock(&arena->mutex);
 
   memset(arena, 0, sizeof(*arena));
 }
 
-br_virtual_arena_mark br_virtual_arena_mark_save(const br_virtual_arena *arena) {
+br_virtual_arena_mark br_virtual_arena_mark_save(br_virtual_arena *arena) {
   br_virtual_arena_mark mark;
 
   mark.block = NULL;
   mark.used = 0u;
+  if (arena == NULL) {
+    return mark;
+  }
+
+  br_mutex_lock(&arena->mutex);
   if (arena != NULL && arena->curr_block != NULL) {
     mark.block = arena->curr_block;
     mark.used = arena->curr_block->used;
   }
+  br_mutex_unlock(&arena->mutex);
   return mark;
 }
 
-br_status br_virtual_arena_rewind(br_virtual_arena *arena, br_virtual_arena_mark mark) {
+static br_status br__virtual_arena_rewind_unlocked(br_virtual_arena *arena,
+                                                   br_virtual_arena_mark mark) {
   br_virtual_arena_block *block;
   usize old_used;
 
@@ -719,7 +758,20 @@ br_status br_virtual_arena_rewind(br_virtual_arena *arena, br_virtual_arena_mark
   return BR_STATUS_INVALID_STATE;
 }
 
-br_virtual_arena_temp_result br_virtual_arena_temp_begin(br_virtual_arena *arena) {
+br_status br_virtual_arena_rewind(br_virtual_arena *arena, br_virtual_arena_mark mark) {
+  br_status status;
+
+  if (arena == NULL) {
+    return BR_STATUS_INVALID_ARGUMENT;
+  }
+
+  br_mutex_lock(&arena->mutex);
+  status = br__virtual_arena_rewind_unlocked(arena, mark);
+  br_mutex_unlock(&arena->mutex);
+  return status;
+}
+
+static br_virtual_arena_temp_result br__virtual_arena_temp_begin_unlocked(br_virtual_arena *arena) {
   if (arena == NULL) {
     return br__virtual_arena_temp_result(NULL, NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
   }
@@ -732,7 +784,20 @@ br_virtual_arena_temp_result br_virtual_arena_temp_begin(br_virtual_arena *arena
     arena, arena->curr_block, arena->curr_block->used, BR_STATUS_OK);
 }
 
-br_status br_virtual_arena_temp_end(br_virtual_arena_temp temp) {
+br_virtual_arena_temp_result br_virtual_arena_temp_begin(br_virtual_arena *arena) {
+  br_virtual_arena_temp_result result;
+
+  if (arena == NULL) {
+    return br__virtual_arena_temp_result(NULL, NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+
+  br_mutex_lock(&arena->mutex);
+  result = br__virtual_arena_temp_begin_unlocked(arena);
+  br_mutex_unlock(&arena->mutex);
+  return result;
+}
+
+static br_status br__virtual_arena_temp_end_unlocked(br_virtual_arena_temp temp) {
   br_virtual_arena *arena;
   usize old_used;
 
@@ -767,7 +832,20 @@ br_status br_virtual_arena_temp_end(br_virtual_arena_temp temp) {
   return BR_STATUS_OK;
 }
 
-br_status br_virtual_arena_temp_ignore(br_virtual_arena_temp temp) {
+br_status br_virtual_arena_temp_end(br_virtual_arena_temp temp) {
+  br_status status;
+
+  if (temp.arena == NULL) {
+    return BR_STATUS_INVALID_ARGUMENT;
+  }
+
+  br_mutex_lock(&temp.arena->mutex);
+  status = br__virtual_arena_temp_end_unlocked(temp);
+  br_mutex_unlock(&temp.arena->mutex);
+  return status;
+}
+
+static br_status br__virtual_arena_temp_ignore_unlocked(br_virtual_arena_temp temp) {
   if (temp.arena == NULL) {
     return BR_STATUS_INVALID_ARGUMENT;
   }
@@ -779,7 +857,20 @@ br_status br_virtual_arena_temp_ignore(br_virtual_arena_temp temp) {
   return BR_STATUS_OK;
 }
 
-br_status br_virtual_arena_check_temp(const br_virtual_arena *arena) {
+br_status br_virtual_arena_temp_ignore(br_virtual_arena_temp temp) {
+  br_status status;
+
+  if (temp.arena == NULL) {
+    return BR_STATUS_INVALID_ARGUMENT;
+  }
+
+  br_mutex_lock(&temp.arena->mutex);
+  status = br__virtual_arena_temp_ignore_unlocked(temp);
+  br_mutex_unlock(&temp.arena->mutex);
+  return status;
+}
+
+static br_status br__virtual_arena_check_temp_unlocked(const br_virtual_arena *arena) {
   if (arena == NULL) {
     return BR_STATUS_INVALID_ARGUMENT;
   }
@@ -787,13 +878,44 @@ br_status br_virtual_arena_check_temp(const br_virtual_arena *arena) {
   return arena->temp_count == 0u ? BR_STATUS_OK : BR_STATUS_INVALID_STATE;
 }
 
+br_status br_virtual_arena_check_temp(br_virtual_arena *arena) {
+  br_status status;
+
+  if (arena == NULL) {
+    return BR_STATUS_INVALID_ARGUMENT;
+  }
+
+  br_mutex_lock(&arena->mutex);
+  status = br__virtual_arena_check_temp_unlocked(arena);
+  br_mutex_unlock(&arena->mutex);
+  return status;
+}
+
 br_alloc_result br_virtual_arena_alloc(br_virtual_arena *arena, usize size, usize alignment) {
-  return br__virtual_arena_alloc_internal(arena, size, alignment, true);
+  br_alloc_result result;
+
+  if (arena == NULL) {
+    return br__virtual_arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+
+  br_mutex_lock(&arena->mutex);
+  result = br__virtual_arena_alloc_internal(arena, size, alignment, true);
+  br_mutex_unlock(&arena->mutex);
+  return result;
 }
 
 br_alloc_result
 br_virtual_arena_alloc_uninit(br_virtual_arena *arena, usize size, usize alignment) {
-  return br__virtual_arena_alloc_internal(arena, size, alignment, false);
+  br_alloc_result result;
+
+  if (arena == NULL) {
+    return br__virtual_arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+
+  br_mutex_lock(&arena->mutex);
+  result = br__virtual_arena_alloc_internal(arena, size, alignment, false);
+  br_mutex_unlock(&arena->mutex);
+  return result;
 }
 
 br_allocator br_virtual_arena_allocator(br_virtual_arena *arena) {

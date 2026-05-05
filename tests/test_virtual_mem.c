@@ -6,6 +6,7 @@
 
 #if !defined(_WIN32)
 #include <fcntl.h>
+#include <pthread.h>
 #include <unistd.h>
 #endif
 
@@ -348,6 +349,81 @@ static void test_virtual_arena_overflow_protection(void) {
   br_virtual_arena_destroy(&arena);
 }
 
+#if !defined(_WIN32)
+#define TEST_VIRTUAL_ARENA_THREAD_COUNT 4u
+#define TEST_VIRTUAL_ARENA_ITERATIONS 128u
+#define TEST_VIRTUAL_ARENA_ALLOC_SIZE 16u
+
+typedef struct test_virtual_arena_thread {
+  br_virtual_arena *arena;
+  br_atomic_bool *start;
+} test_virtual_arena_thread;
+
+static void test_virtual_arena_spin_until_bool(const br_atomic_bool *value, bool expected) {
+  while (br_atomic_load_explicit(value, BR_ATOMIC_ACQUIRE) != expected) {
+    br_cpu_relax();
+  }
+}
+
+static void *test_virtual_arena_worker(void *ctx) {
+  test_virtual_arena_thread *thread = (test_virtual_arena_thread *)ctx;
+
+  test_virtual_arena_spin_until_bool(thread->start, true);
+  for (usize i = 0u; i < TEST_VIRTUAL_ARENA_ITERATIONS; ++i) {
+    br_alloc_result allocation =
+      br_virtual_arena_alloc_uninit(thread->arena, TEST_VIRTUAL_ARENA_ALLOC_SIZE, 1u);
+
+    assert(allocation.status == BR_STATUS_OK);
+    assert(allocation.ptr != NULL);
+    memset(allocation.ptr, (u8)i, allocation.size);
+  }
+
+  return NULL;
+}
+
+static void test_virtual_arena_serializes_allocations(void) {
+  br_virtual_arena arena;
+  br_atomic_bool start;
+  test_virtual_arena_thread thread;
+  pthread_t threads[TEST_VIRTUAL_ARENA_THREAD_COUNT];
+  usize page_size = br_vm_page_size();
+  usize expected_used =
+    TEST_VIRTUAL_ARENA_THREAD_COUNT * TEST_VIRTUAL_ARENA_ITERATIONS * TEST_VIRTUAL_ARENA_ALLOC_SIZE;
+  usize reserve_pages;
+  usize reserved;
+
+  if (page_size == 0u) {
+    return;
+  }
+
+  reserve_pages = (expected_used + page_size - 1u) / page_size + 1u;
+  reserved = reserve_pages * page_size;
+
+  br_virtual_arena_init(&arena);
+  arena.default_commit_size = page_size;
+  assert(br_virtual_arena_init_static(&arena, reserved, page_size) == BR_STATUS_OK);
+
+  br_atomic_init(&start, false);
+  thread.arena = &arena;
+  thread.start = &start;
+
+  for (usize i = 0u; i < TEST_VIRTUAL_ARENA_THREAD_COUNT; ++i) {
+    assert(pthread_create(&threads[i], NULL, test_virtual_arena_worker, &thread) == 0);
+  }
+
+  br_atomic_store_explicit(&start, true, BR_ATOMIC_RELEASE);
+
+  for (usize i = 0u; i < TEST_VIRTUAL_ARENA_THREAD_COUNT; ++i) {
+    assert(pthread_join(threads[i], NULL) == 0);
+  }
+
+  assert(arena.total_used == expected_used);
+  assert(arena.temp_count == 0u);
+
+  br_virtual_arena_destroy(&arena);
+}
+#endif
+
 int main(void) {
   test_vm_reserve_commit_release();
   test_vm_map_file_readonly();
@@ -359,5 +435,8 @@ int main(void) {
   test_virtual_arena_temp_ignore();
   test_virtual_arena_temp_invalid();
   test_virtual_arena_overflow_protection();
+#if !defined(_WIN32)
+  test_virtual_arena_serializes_allocations();
+#endif
   return 0;
 }

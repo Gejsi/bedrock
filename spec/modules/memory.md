@@ -245,7 +245,8 @@ Bedrock now also has a VM-backed arena layer. The intended v1 shape is:
 Important Bedrock-specific deviations from Odin for now:
 
 - no buffer-backed variant in `virtual_arena`; fixed buffers stay in `br_arena`
-- no built-in mutex; the arena is intentionally single-threaded for now
+- virtual arena public mutation operations are serialized through an embedded
+  `br_mutex`, matching Odin's `virtual.Arena`
 - overflow protection is currently exposed as an arena-level trailing guard page
   flag, not Odin's broader per-memory-block flag surface
 - the VM backend now follows Odin's shared/per-OS split much more closely:
@@ -274,7 +275,6 @@ Bedrock now also has a first tracking allocator layer. The intended v1 shape is:
 
 Important Bedrock-specific deviations from Odin for now:
 
-- no built-in mutex yet
 - no exposed generic allocation map; Bedrock keeps a private pointer index
 - no allocator feature queries, so `clear_on_reset` is an explicit policy flag
 - no source-location tracking yet
@@ -320,11 +320,14 @@ This gives most of the practical upside without any hidden thread-local rules.
 
 ## Thread Safety
 
-Allocator objects should be non-thread-safe by default.
+Allocator objects should be non-thread-safe by default, except where the Odin
+source embeds synchronization directly.
 
 If callers want sharing, provide wrappers such as:
 
 - `br_mutex_allocator`
 - per-thread arenas owned by user code
 
-Do not make every allocator pay synchronization costs by default.
+Do not make every allocator pay synchronization costs by default. Bedrock
+currently follows Odin by embedding mutexes in `br_tracking_allocator` and
+`br_virtual_arena`, while keeping fixed-buffer and dynamic arenas lightweight.

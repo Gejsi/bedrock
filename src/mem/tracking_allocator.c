@@ -490,6 +490,21 @@ static void br__tracking_note_bad_free(br_tracking_allocator *tracking, void *me
   tracking->bad_free_count += 1u;
 }
 
+static void br__tracking_clear_unlocked(br_tracking_allocator *tracking) {
+  br__tracking_index_clear(tracking);
+  tracking->entry_count = 0u;
+  tracking->bad_free_count = 0u;
+  tracking->stats.current_memory_allocated = 0u;
+  tracking->stats.live_allocation_count = 0u;
+}
+
+static void br__tracking_reset_unlocked(br_tracking_allocator *tracking) {
+  br__tracking_index_clear(tracking);
+  tracking->entry_count = 0u;
+  tracking->bad_free_count = 0u;
+  memset(&tracking->stats, 0, sizeof(tracking->stats));
+}
+
 static bool br__tracking_add_entry(br_tracking_allocator *tracking,
                                    void *memory,
                                    usize size,
@@ -588,8 +603,8 @@ static void br__tracking_resize_entry(br_tracking_allocator *tracking,
   entry->status = status;
 }
 
-static br_alloc_result br__tracking_allocator_fn(void *ctx, const br_alloc_request *req) {
-  br_tracking_allocator *tracking = (br_tracking_allocator *)ctx;
+static br_alloc_result br__tracking_allocator_fn_unlocked(br_tracking_allocator *tracking,
+                                                          const br_alloc_request *req) {
   br_alloc_result result;
   usize entry_index;
 
@@ -701,6 +716,23 @@ static br_alloc_result br__tracking_allocator_fn(void *ctx, const br_alloc_reque
   return br__tracking_alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
 }
 
+static br_alloc_result br__tracking_allocator_fn(void *ctx, const br_alloc_request *req) {
+  br_tracking_allocator *tracking = (br_tracking_allocator *)ctx;
+  br_alloc_result result;
+
+  if (req == NULL) {
+    return br__tracking_alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+  if (tracking == NULL) {
+    return br__tracking_alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+
+  br_mutex_lock(&tracking->mutex);
+  result = br__tracking_allocator_fn_unlocked(tracking, req);
+  br_mutex_unlock(&tracking->mutex);
+  return result;
+}
+
 void br_tracking_allocator_init(br_tracking_allocator *tracking,
                                 br_allocator backing,
                                 br_allocator internals) {
@@ -711,6 +743,7 @@ void br_tracking_allocator_init(br_tracking_allocator *tracking,
   memset(tracking, 0, sizeof(*tracking));
   tracking->backing = backing;
   tracking->internals = internals.fn != NULL ? internals : br_allocator_heap();
+  tracking->mutex = (br_mutex)BR_MUTEX_INIT;
 }
 
 void br_tracking_allocator_destroy(br_tracking_allocator *tracking) {
@@ -720,6 +753,7 @@ void br_tracking_allocator_destroy(br_tracking_allocator *tracking) {
     return;
   }
 
+  br_mutex_lock(&tracking->mutex);
   allocator = br__tracking_internals_allocator(tracking);
   if (tracking->entries != NULL) {
     (void)br_allocator_free(
@@ -737,6 +771,7 @@ void br_tracking_allocator_destroy(br_tracking_allocator *tracking) {
     }
     (void)br_allocator_free(allocator, tracking->internal, sizeof(*tracking->internal));
   }
+  br_mutex_unlock(&tracking->mutex);
 
   memset(tracking, 0, sizeof(*tracking));
 }
@@ -746,11 +781,9 @@ void br_tracking_allocator_clear(br_tracking_allocator *tracking) {
     return;
   }
 
-  br__tracking_index_clear(tracking);
-  tracking->entry_count = 0u;
-  tracking->bad_free_count = 0u;
-  tracking->stats.current_memory_allocated = 0u;
-  tracking->stats.live_allocation_count = 0u;
+  br_mutex_lock(&tracking->mutex);
+  br__tracking_clear_unlocked(tracking);
+  br_mutex_unlock(&tracking->mutex);
 }
 
 void br_tracking_allocator_reset(br_tracking_allocator *tracking) {
@@ -758,10 +791,9 @@ void br_tracking_allocator_reset(br_tracking_allocator *tracking) {
     return;
   }
 
-  br__tracking_index_clear(tracking);
-  tracking->entry_count = 0u;
-  tracking->bad_free_count = 0u;
-  memset(&tracking->stats, 0, sizeof(tracking->stats));
+  br_mutex_lock(&tracking->mutex);
+  br__tracking_reset_unlocked(tracking);
+  br_mutex_unlock(&tracking->mutex);
 }
 
 br_allocator br_tracking_allocator_allocator(br_tracking_allocator *tracking) {

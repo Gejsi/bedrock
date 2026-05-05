@@ -213,11 +213,11 @@ responsibility split should be close.
 
 ## Why Sync Before Returning To Mem
 
-The sync rewrite is not a detour. It is the prerequisite for the missing
-thread-safe half of `mem`:
+The sync rewrite was not a detour. It unlocked the thread-safe half of `mem`:
 
 - `mutex_allocator`
 - mutex in `tracking_allocator`
 - mutex in virtual arena
 
-If Bedrock wants `mem` parity, `sync` has to stop being just a wrapper layer.
+Those pieces now use Bedrock's zero-value-ready sync primitives instead of
+native pthread/Windows object storage.

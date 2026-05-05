@@ -2,6 +2,7 @@
 #define BEDROCK_MEM_TRACKING_ALLOCATOR_H
 
 #include <bedrock/mem/alloc.h>
+#include <bedrock/sync/primitives.h>
 
 BR_EXTERN_C_BEGIN
 
@@ -36,6 +37,7 @@ typedef void (*br_tracking_allocator_bad_free_fn)(void *ctx,
 typedef struct br_tracking_allocator {
   br_allocator backing;
   br_allocator internals;
+  br_mutex mutex;
   /*
   Dense live allocation list kept for leak inspection and reporting.
   Lookup uses a private pointer index instead of scanning this array linearly.
@@ -55,7 +57,6 @@ typedef struct br_tracking_allocator {
 
 /*
 Bedrock's tracking allocator is intentionally smaller than Odin's current one:
-- no built-in mutex yet
 - private pointer index instead of exposing Odin's allocation_map directly
 - `clear_on_reset` is configured explicitly because Bedrock's allocator ABI
   does not yet expose Odin-style feature queries

@@ -169,6 +169,91 @@ static void test_tracking_allocator_many_allocations(void) {
   br_tracking_allocator_destroy(&tracking);
 }
 
+#if !defined(_WIN32)
+#include <pthread.h>
+
+#define TEST_TRACKING_THREAD_COUNT 4u
+#define TEST_TRACKING_ITERATIONS 1000u
+
+typedef struct test_tracking_allocator_thread {
+  br_allocator allocator;
+  br_atomic_bool *start;
+} test_tracking_allocator_thread;
+
+static void test_tracking_spin_until_bool(const br_atomic_bool *value, bool expected) {
+  while (br_atomic_load_explicit(value, BR_ATOMIC_ACQUIRE) != expected) {
+    br_cpu_relax();
+  }
+}
+
+static usize test_tracking_iteration_size(usize iteration) {
+  return (iteration % 31u) + 1u;
+}
+
+static usize test_tracking_expected_bytes_per_thread(void) {
+  usize total = 0u;
+
+  for (usize i = 0u; i < TEST_TRACKING_ITERATIONS; ++i) {
+    total += test_tracking_iteration_size(i);
+  }
+
+  return total;
+}
+
+static void *test_tracking_allocator_worker(void *ctx) {
+  test_tracking_allocator_thread *thread = (test_tracking_allocator_thread *)ctx;
+
+  test_tracking_spin_until_bool(thread->start, true);
+  for (usize i = 0u; i < TEST_TRACKING_ITERATIONS; ++i) {
+    usize size = test_tracking_iteration_size(i);
+    br_alloc_result allocation = br_allocator_alloc_uninit(thread->allocator, size, 8u);
+
+    assert(allocation.status == BR_STATUS_OK);
+    assert(allocation.ptr != NULL);
+    assert(br_allocator_free(thread->allocator, allocation.ptr, allocation.size) == BR_STATUS_OK);
+  }
+
+  return NULL;
+}
+
+static void test_tracking_allocator_serializes_state(void) {
+  br_tracking_allocator tracking;
+  br_allocator allocator;
+  br_atomic_bool start;
+  test_tracking_allocator_thread thread;
+  pthread_t threads[TEST_TRACKING_THREAD_COUNT];
+  usize expected_bytes = test_tracking_expected_bytes_per_thread() * TEST_TRACKING_THREAD_COUNT;
+
+  br_tracking_allocator_init(&tracking, br_allocator_heap(), br_allocator_heap());
+  allocator = br_tracking_allocator_allocator(&tracking);
+  br_atomic_init(&start, false);
+  thread.allocator = allocator;
+  thread.start = &start;
+
+  for (usize i = 0u; i < TEST_TRACKING_THREAD_COUNT; ++i) {
+    assert(pthread_create(&threads[i], NULL, test_tracking_allocator_worker, &thread) == 0);
+  }
+
+  br_atomic_store_explicit(&start, true, BR_ATOMIC_RELEASE);
+
+  for (usize i = 0u; i < TEST_TRACKING_THREAD_COUNT; ++i) {
+    assert(pthread_join(threads[i], NULL) == 0);
+  }
+
+  assert(tracking.entry_count == 0u);
+  assert(tracking.bad_free_count == 0u);
+  assert(tracking.stats.total_memory_allocated == expected_bytes);
+  assert(tracking.stats.total_memory_freed == expected_bytes);
+  assert(tracking.stats.total_allocation_count ==
+         TEST_TRACKING_THREAD_COUNT * TEST_TRACKING_ITERATIONS);
+  assert(tracking.stats.total_free_count == TEST_TRACKING_THREAD_COUNT * TEST_TRACKING_ITERATIONS);
+  assert(tracking.stats.current_memory_allocated == 0u);
+  assert(tracking.stats.live_allocation_count == 0u);
+
+  br_tracking_allocator_destroy(&tracking);
+}
+#endif
+
 int main(void) {
   test_tracking_allocator_stats();
   test_tracking_allocator_bad_free();
@@ -176,5 +261,8 @@ int main(void) {
   test_tracking_allocator_clear_and_reset();
   test_tracking_allocator_index_updates();
   test_tracking_allocator_many_allocations();
+#if !defined(_WIN32)
+  test_tracking_allocator_serializes_state();
+#endif
   return 0;
 }
