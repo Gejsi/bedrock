@@ -46,7 +46,7 @@ void br_mutex_allocator_init(br_mutex_allocator *mutex_allocator, br_allocator b
   mutex_allocator->mutex = (br_mutex)BR_MUTEX_INIT;
 }
 
-br_allocator br_mutex_allocator_allocator(br_mutex_allocator *mutex_allocator) {
+br_allocator br_mutex_allocator_as_allocator(br_mutex_allocator *mutex_allocator) {
   br_allocator allocator;
 
   allocator.fn = br__mutex_allocator_fn;

@@ -224,6 +224,8 @@ Bedrock now also has a mutex allocator close to Odin's current shape.
 - serializes every allocation request through a `br_mutex`
 - keeps allocator objects non-thread-safe by default while providing an explicit
   sharing wrapper
+- exposes `br_mutex_allocator_as_allocator` for the Odin-style conversion from
+  wrapper state to a generic allocator
 
 Important Bedrock-specific deviations from Odin for now:
 

@@ -8,7 +8,7 @@ static void test_mutex_allocator_default_backing(void) {
   br_alloc_result allocation;
 
   br_mutex_allocator_init(&mutex_allocator, (br_allocator){0});
-  allocator = br_mutex_allocator_allocator(&mutex_allocator);
+  allocator = br_mutex_allocator_as_allocator(&mutex_allocator);
 
   allocation = br_allocator_alloc(allocator, 32u, 16u);
   assert(allocation.status == BR_STATUS_OK);
@@ -26,7 +26,7 @@ static void test_mutex_allocator_forwards_reset(void) {
 
   br_arena_init(&arena, storage, sizeof(storage));
   br_mutex_allocator_init(&mutex_allocator, br_arena_allocator(&arena));
-  allocator = br_mutex_allocator_allocator(&mutex_allocator);
+  allocator = br_mutex_allocator_as_allocator(&mutex_allocator);
 
   allocation = br_allocator_alloc(allocator, 64u, 16u);
   assert(allocation.status == BR_STATUS_OK);
@@ -108,7 +108,7 @@ static void test_mutex_allocator_serializes_backing_calls(void) {
   checked_backing.ctx = &backing;
 
   br_mutex_allocator_init(&mutex_allocator, checked_backing);
-  allocator = br_mutex_allocator_allocator(&mutex_allocator);
+  allocator = br_mutex_allocator_as_allocator(&mutex_allocator);
   br_atomic_init(&start, false);
   thread.allocator = allocator;
   thread.start = &start;

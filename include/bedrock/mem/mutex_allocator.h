@@ -17,7 +17,11 @@ typedef struct br_mutex_allocator {
 } br_mutex_allocator;
 
 void br_mutex_allocator_init(br_mutex_allocator *mutex_allocator, br_allocator backing);
-br_allocator br_mutex_allocator_allocator(br_mutex_allocator *mutex_allocator);
+
+/*
+Return this mutex allocator as a generic allocator object.
+*/
+br_allocator br_mutex_allocator_as_allocator(br_mutex_allocator *mutex_allocator);
 
 BR_EXTERN_C_END
 
