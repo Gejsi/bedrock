@@ -28,15 +28,10 @@ COMMON_CFLAGS := $(BASE_CFLAGS) $(WARN_CFLAGS)
 ifeq ($(OS),Windows_NT)
 THREAD_CFLAGS :=
 THREAD_LDFLAGS :=
-POSIX_CPPFLAGS :=
 else
 THREAD_CFLAGS := -pthread
 THREAD_LDFLAGS := -pthread
-# Request POSIX.1-2008 declarations when compiling in strict C mode.
-POSIX_CPPFLAGS := -D_XOPEN_SOURCE=700
 endif
-
-CPPFLAGS += $(POSIX_CPPFLAGS)
 
 CC_VERSION := $(shell $(CC) --version 2>/dev/null | head -n 1)
 ifneq ($(findstring clang,$(CC_VERSION)),)
