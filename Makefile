@@ -28,14 +28,15 @@ COMMON_CFLAGS := $(BASE_CFLAGS) $(WARN_CFLAGS)
 ifeq ($(OS),Windows_NT)
 THREAD_CFLAGS :=
 THREAD_LDFLAGS :=
-THREAD_CPPFLAGS :=
+POSIX_CPPFLAGS :=
 else
 THREAD_CFLAGS := -pthread
 THREAD_LDFLAGS := -pthread
-THREAD_CPPFLAGS := -D_XOPEN_SOURCE=700
+# Request POSIX.1-2008 declarations when compiling in strict C mode.
+POSIX_CPPFLAGS := -D_XOPEN_SOURCE=700
 endif
 
-CPPFLAGS += $(THREAD_CPPFLAGS)
+CPPFLAGS += $(POSIX_CPPFLAGS)
 
 CC_VERSION := $(shell $(CC) --version 2>/dev/null | head -n 1)
 ifneq ($(findstring clang,$(CC_VERSION)),)
@@ -140,6 +141,7 @@ print-config:
 	@printf 'MODE=%s\n' '$(MODE)'
 	@printf 'COMPILER_FAMILY=%s\n' '$(COMPILER_FAMILY)'
 	@printf 'CC=%s\n' '$(CC)'
+	@printf 'CPPFLAGS=%s\n' '$(CPPFLAGS)'
 	@printf 'CFLAGS=%s\n' '$(CFLAGS)'
 	@printf 'LDFLAGS=%s\n' '$(LDFLAGS)'
 
