@@ -14,11 +14,13 @@ typedef struct br_tracking_allocator_entry {
   usize alignment;
   br_alloc_op op;
   br_status status;
+  br_source_location location;
 } br_tracking_allocator_entry;
 
 typedef struct br_tracking_allocator_bad_free {
   void *memory;
   usize size;
+  br_source_location location;
 } br_tracking_allocator_bad_free;
 
 typedef struct br_tracking_allocator_stats {
@@ -61,7 +63,6 @@ Bedrock's tracking allocator is intentionally smaller than Odin's current one:
 - `clear_on_reset` is configured explicitly because Bedrock's allocator ABI
   does not yet expose Odin-style feature queries
 - bad frees are recorded by default instead of trapping
-- no source-location tracking yet
 */
 
 void br_tracking_allocator_init(br_tracking_allocator *tracking,

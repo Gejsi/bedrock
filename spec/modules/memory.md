@@ -271,6 +271,8 @@ Bedrock now also has a first tracking allocator layer. The intended v1 shape is:
 - wrap an existing allocator
 - track live allocations and cumulative totals
 - keep a dense live-entry list for leak inspection
+- record source locations for allocations, resizes, and bad frees through the
+  allocator request path
 - use a private pointer index for fast lookup
 - record bad frees for later inspection
 - keep the wrapper explicit instead of relying on ambient context
@@ -279,7 +281,8 @@ Important Bedrock-specific deviations from Odin for now:
 
 - no exposed generic allocation map; Bedrock keeps a private pointer index
 - no allocator feature queries, so `clear_on_reset` is an explicit policy flag
-- no source-location tracking yet
+- source locations use C file/function/line macros, so there is no Odin-style
+  column or richer runtime location object yet
 
 ## Rollback Stack Allocator
 

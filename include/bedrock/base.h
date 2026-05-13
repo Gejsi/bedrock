@@ -20,6 +20,29 @@
 #define BR_STATIC_ASSERT(cond, msg) _Static_assert(cond, msg)
 #define BR_UNUSED(x) ((void)(x))
 
+typedef struct br_source_location {
+  const char *file;
+  const char *function;
+  usize line;
+} br_source_location;
+
+static inline br_source_location
+br_source_location_make(const char *file, const char *function, usize line) {
+  br_source_location location;
+
+  location.file = file;
+  location.function = function;
+  location.line = line;
+  return location;
+}
+
+static inline bool br_source_location_is_known(br_source_location location) {
+  return location.file != NULL || location.function != NULL || location.line != 0u;
+}
+
+#define BR_SOURCE_LOCATION br_source_location_make(__FILE__, __func__, (usize)__LINE__)
+#define BR_SOURCE_LOCATION_UNKNOWN br_source_location_make(NULL, NULL, 0u)
+
 typedef enum br_status {
   BR_STATUS_OK = 0,
   BR_STATUS_INVALID_ARGUMENT,

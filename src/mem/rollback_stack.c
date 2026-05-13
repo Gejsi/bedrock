@@ -206,7 +206,8 @@ static void br__rollback_collapse_freed_tail(br_rollback_stack_block *block) {
 
 static br_status br__rollback_make_block(usize capacity,
                                          br_allocator allocator,
-                                         br_rollback_stack_block **block_out) {
+                                         br_rollback_stack_block **block_out,
+                                         br_source_location location) {
   br_alloc_result allocated;
   usize total_size;
   br_rollback_stack_block *block;
@@ -219,8 +220,8 @@ static br_status br__rollback_make_block(usize capacity,
     return BR_STATUS_OUT_OF_MEMORY;
   }
 
-  allocated =
-    br_allocator_alloc_uninit(allocator, total_size, (usize) _Alignof(br_rollback_stack_block));
+  allocated = br_allocator_alloc_uninit_at(
+    allocator, total_size, (usize) _Alignof(br_rollback_stack_block), location);
   if (allocated.status != BR_STATUS_OK || allocated.ptr == NULL) {
     return allocated.status;
   }
@@ -232,7 +233,9 @@ static br_status br__rollback_make_block(usize capacity,
   return BR_STATUS_OK;
 }
 
-static void br__rollback_free_block(br_rollback_stack_block *block, br_allocator allocator) {
+static void br__rollback_free_block(br_rollback_stack_block *block,
+                                    br_allocator allocator,
+                                    br_source_location location) {
   usize total_size;
 
   if (block == NULL) {
@@ -240,7 +243,7 @@ static void br__rollback_free_block(br_rollback_stack_block *block, br_allocator
   }
 
   total_size = offsetof(br_rollback_stack_block, buffer) + block->capacity;
-  (void)br_allocator_free(allocator, block, total_size);
+  (void)br_allocator_free_at(allocator, block, total_size, location);
 }
 
 static void br__rollback_reset_head(br_rollback_stack *stack) {
@@ -266,15 +269,15 @@ static void br__rollback_free_all_extra_blocks(br_rollback_stack *stack) {
   block = stack->head->next_block;
   while (block != NULL) {
     next = block->next_block;
-    br__rollback_free_block(block, allocator);
+    br__rollback_free_block(block, allocator, BR_SOURCE_LOCATION_UNKNOWN);
     block = next;
   }
 
   br__rollback_reset_head(stack);
 }
 
-static br_alloc_result
-br__rollback_alloc(br_rollback_stack *stack, usize size, usize alignment, bool zeroed) {
+static br_alloc_result br__rollback_alloc(
+  br_rollback_stack *stack, usize size, usize alignment, bool zeroed, br_source_location location) {
   br_rollback_stack_block *block;
   br_rollback_stack_block *parent = NULL;
   br_allocator allocator;
@@ -321,7 +324,7 @@ br__rollback_alloc(br_rollback_stack *stack, usize size, usize alignment, bool z
         new_block_size = minimum_size_required;
       }
 
-      status = br__rollback_make_block(new_block_size, allocator, &block);
+      status = br__rollback_make_block(new_block_size, allocator, &block, location);
       if (status != BR_STATUS_OK) {
         return br__rollback_result(NULL, 0u, status);
       }
@@ -364,7 +367,8 @@ br__rollback_alloc(br_rollback_stack *stack, usize size, usize alignment, bool z
   }
 }
 
-static br_status br__rollback_free(br_rollback_stack *stack, void *ptr) {
+static br_status
+br__rollback_free(br_rollback_stack *stack, void *ptr, br_source_location location) {
   br_rollback_stack_block *parent = NULL;
   br_rollback_stack_block *block = NULL;
   br__rollback_header_bits *header_ptr = NULL;
@@ -401,7 +405,7 @@ static br_status br__rollback_free(br_rollback_stack *stack, void *ptr) {
 
   if (parent != NULL && block->offset == 0u) {
     parent->next_block = block->next_block;
-    br__rollback_free_block(block, br__rollback_block_allocator(stack->block_allocator));
+    br__rollback_free_block(block, br__rollback_block_allocator(stack->block_allocator), location);
   }
 
   return BR_STATUS_OK;
@@ -412,7 +416,8 @@ static br_alloc_result br__rollback_resize(br_rollback_stack *stack,
                                            usize old_size,
                                            usize new_size,
                                            usize alignment,
-                                           bool zeroed) {
+                                           bool zeroed,
+                                           br_source_location location) {
   br_rollback_stack_block *block = NULL;
   br__rollback_header_bits *header_ptr = NULL;
   br_alloc_result result;
@@ -429,10 +434,10 @@ static br_alloc_result br__rollback_resize(br_rollback_stack *stack,
   }
 
   if (ptr == NULL) {
-    return br__rollback_alloc(stack, new_size, alignment, zeroed);
+    return br__rollback_alloc(stack, new_size, alignment, zeroed, location);
   }
   if (new_size == 0u) {
-    return br__rollback_result(NULL, 0u, br__rollback_free(stack, ptr));
+    return br__rollback_result(NULL, 0u, br__rollback_free(stack, ptr, location));
   }
   if (old_size == 0u) {
     return br__rollback_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
@@ -465,7 +470,7 @@ static br_alloc_result br__rollback_resize(br_rollback_stack *stack,
     return br__rollback_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
   }
 
-  result = br__rollback_alloc(stack, new_size, alignment, false);
+  result = br__rollback_alloc(stack, new_size, alignment, false, location);
   if (result.status != BR_STATUS_OK) {
     return result;
   }
@@ -480,7 +485,7 @@ static br_alloc_result br__rollback_resize(br_rollback_stack *stack,
     memset((u8 *)result.ptr + copy_size, 0, new_size - copy_size);
   }
 
-  result.status = br__rollback_free(stack, ptr);
+  result.status = br__rollback_free(stack, ptr, location);
   if (result.status != BR_STATUS_OK) {
     return br__rollback_result(NULL, 0u, result.status);
   }
@@ -497,15 +502,17 @@ static br_alloc_result br__rollback_allocator_fn(void *ctx, const br_alloc_reque
 
   switch (req->op) {
     case BR_ALLOC_OP_ALLOC:
-      return br__rollback_alloc(stack, req->size, req->alignment, true);
+      return br__rollback_alloc(stack, req->size, req->alignment, true, req->location);
     case BR_ALLOC_OP_ALLOC_UNINIT:
-      return br__rollback_alloc(stack, req->size, req->alignment, false);
+      return br__rollback_alloc(stack, req->size, req->alignment, false, req->location);
     case BR_ALLOC_OP_RESIZE:
-      return br__rollback_resize(stack, req->ptr, req->old_size, req->size, req->alignment, true);
+      return br__rollback_resize(
+        stack, req->ptr, req->old_size, req->size, req->alignment, true, req->location);
     case BR_ALLOC_OP_RESIZE_UNINIT:
-      return br__rollback_resize(stack, req->ptr, req->old_size, req->size, req->alignment, false);
+      return br__rollback_resize(
+        stack, req->ptr, req->old_size, req->size, req->alignment, false, req->location);
     case BR_ALLOC_OP_FREE:
-      return br__rollback_result(NULL, 0u, br__rollback_free(stack, req->ptr));
+      return br__rollback_result(NULL, 0u, br__rollback_free(stack, req->ptr, req->location));
     case BR_ALLOC_OP_RESET:
       br_rollback_stack_reset(stack);
       return br__rollback_result(NULL, 0u, BR_STATUS_OK);
@@ -559,7 +566,7 @@ br_status br_rollback_stack_init_dynamic(br_rollback_stack *stack,
   }
 
   block_allocator = br__rollback_block_allocator(block_allocator);
-  status = br__rollback_make_block(block_size, block_allocator, &block);
+  status = br__rollback_make_block(block_size, block_allocator, &block, BR_SOURCE_LOCATION_UNKNOWN);
   if (status != BR_STATUS_OK) {
     return status;
   }
@@ -582,7 +589,7 @@ void br_rollback_stack_destroy(br_rollback_stack *stack) {
   allocator = br__rollback_block_allocator(stack->block_allocator);
   br__rollback_free_all_extra_blocks(stack);
   if (stack->head_owned) {
-    br__rollback_free_block(stack->head, allocator);
+    br__rollback_free_block(stack->head, allocator, BR_SOURCE_LOCATION_UNKNOWN);
   }
 
   memset(stack, 0, sizeof(*stack));
@@ -597,26 +604,28 @@ void br_rollback_stack_reset(br_rollback_stack *stack) {
 }
 
 br_alloc_result br_rollback_stack_alloc(br_rollback_stack *stack, usize size, usize alignment) {
-  return br__rollback_alloc(stack, size, alignment, true);
+  return br__rollback_alloc(stack, size, alignment, true, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
 br_alloc_result
 br_rollback_stack_alloc_uninit(br_rollback_stack *stack, usize size, usize alignment) {
-  return br__rollback_alloc(stack, size, alignment, false);
+  return br__rollback_alloc(stack, size, alignment, false, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
 br_alloc_result br_rollback_stack_resize(
   br_rollback_stack *stack, void *ptr, usize old_size, usize new_size, usize alignment) {
-  return br__rollback_resize(stack, ptr, old_size, new_size, alignment, true);
+  return br__rollback_resize(
+    stack, ptr, old_size, new_size, alignment, true, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
 br_alloc_result br_rollback_stack_resize_uninit(
   br_rollback_stack *stack, void *ptr, usize old_size, usize new_size, usize alignment) {
-  return br__rollback_resize(stack, ptr, old_size, new_size, alignment, false);
+  return br__rollback_resize(
+    stack, ptr, old_size, new_size, alignment, false, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
 br_status br_rollback_stack_free(br_rollback_stack *stack, void *ptr) {
-  return br__rollback_free(stack, ptr);
+  return br__rollback_free(stack, ptr, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
 br_allocator br_rollback_stack_allocator(br_rollback_stack *stack) {

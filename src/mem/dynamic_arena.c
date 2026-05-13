@@ -46,10 +46,8 @@ static bool br__dynamic_arena_align_size(usize size, usize alignment, usize *res
   return true;
 }
 
-static bool br__dynamic_arena_reserve_ptr_array(br_dynamic_arena *arena,
-                                                void ***data,
-                                                usize *cap,
-                                                usize min_cap) {
+static bool br__dynamic_arena_reserve_ptr_array(
+  br_dynamic_arena *arena, void ***data, usize *cap, usize min_cap, br_source_location location) {
   br_allocator allocator;
   br_alloc_result resized;
   usize new_cap;
@@ -71,8 +69,12 @@ static bool br__dynamic_arena_reserve_ptr_array(br_dynamic_arena *arena,
     new_cap *= 2u;
   }
 
-  resized = br_allocator_resize_uninit(
-    allocator, *data, *cap * sizeof(**data), new_cap * sizeof(**data), (usize) _Alignof(void *));
+  resized = br_allocator_resize_uninit_at(allocator,
+                                          *data,
+                                          *cap * sizeof(**data),
+                                          new_cap * sizeof(**data),
+                                          (usize) _Alignof(void *),
+                                          location);
   if (resized.status != BR_STATUS_OK) {
     return false;
   }
@@ -82,12 +84,16 @@ static bool br__dynamic_arena_reserve_ptr_array(br_dynamic_arena *arena,
   return true;
 }
 
-static br_status br__dynamic_arena_push_ptr(
-  br_dynamic_arena *arena, void ***data, usize *count, usize *cap, void *ptr) {
+static br_status br__dynamic_arena_push_ptr(br_dynamic_arena *arena,
+                                            void ***data,
+                                            usize *count,
+                                            usize *cap,
+                                            void *ptr,
+                                            br_source_location location) {
   if (arena == NULL || data == NULL || count == NULL || cap == NULL) {
     return BR_STATUS_INVALID_ARGUMENT;
   }
-  if (!br__dynamic_arena_reserve_ptr_array(arena, data, cap, *count + 1u)) {
+  if (!br__dynamic_arena_reserve_ptr_array(arena, data, cap, *count + 1u, location)) {
     return BR_STATUS_OUT_OF_MEMORY;
   }
 
@@ -105,7 +111,8 @@ static void *br__dynamic_arena_pop_ptr(void **data, usize *count) {
   return data[*count];
 }
 
-static br_status br__dynamic_arena_cycle_new_block(br_dynamic_arena *arena) {
+static br_status br__dynamic_arena_cycle_new_block(br_dynamic_arena *arena,
+                                                   br_source_location location) {
   br_alloc_result allocated;
   void *new_block;
   br_status status;
@@ -119,8 +126,8 @@ static br_status br__dynamic_arena_cycle_new_block(br_dynamic_arena *arena) {
 
   new_block = br__dynamic_arena_pop_ptr(arena->unused_blocks, &arena->unused_count);
   if (new_block == NULL) {
-    allocated = br_allocator_alloc(
-      br__dynamic_arena_block_allocator(arena), arena->block_size, arena->alignment);
+    allocated = br_allocator_alloc_at(
+      br__dynamic_arena_block_allocator(arena), arena->block_size, arena->alignment, location);
     if (allocated.status != BR_STATUS_OK) {
       return allocated.status;
     }
@@ -133,15 +140,19 @@ static br_status br__dynamic_arena_cycle_new_block(br_dynamic_arena *arena) {
   current block.
   */
   if (arena->current_block != NULL) {
-    status = br__dynamic_arena_push_ptr(
-      arena, &arena->used_blocks, &arena->used_count, &arena->used_cap, arena->current_block);
+    status = br__dynamic_arena_push_ptr(arena,
+                                        &arena->used_blocks,
+                                        &arena->used_count,
+                                        &arena->used_cap,
+                                        arena->current_block,
+                                        location);
     if (status != BR_STATUS_OK) {
       if (arena->unused_count < arena->unused_cap && arena->unused_blocks != NULL) {
         arena->unused_blocks[arena->unused_count] = new_block;
         arena->unused_count += 1u;
       } else if (allocated.ptr == new_block) {
-        (void)br_allocator_free(
-          br__dynamic_arena_block_allocator(arena), new_block, arena->block_size);
+        (void)br_allocator_free_at(
+          br__dynamic_arena_block_allocator(arena), new_block, arena->block_size, location);
       }
       return status;
     }
@@ -153,8 +164,10 @@ static br_status br__dynamic_arena_cycle_new_block(br_dynamic_arena *arena) {
   return BR_STATUS_OK;
 }
 
-static br_alloc_result
-br__dynamic_arena_alloc_internal(br_dynamic_arena *arena, usize size, bool zeroed) {
+static br_alloc_result br__dynamic_arena_alloc_internal(br_dynamic_arena *arena,
+                                                        usize size,
+                                                        bool zeroed,
+                                                        br_source_location location) {
   br_alloc_result allocated;
   br_status status;
   usize needed;
@@ -172,10 +185,11 @@ br__dynamic_arena_alloc_internal(br_dynamic_arena *arena, usize size, bool zeroe
   }
 
   if (size >= arena->out_band_size) {
-    allocated =
-      zeroed ? br_allocator_alloc(br__dynamic_arena_array_allocator(arena), size, arena->alignment)
-             : br_allocator_alloc_uninit(
-                 br__dynamic_arena_array_allocator(arena), size, arena->alignment);
+    allocated = zeroed
+                  ? br_allocator_alloc_at(
+                      br__dynamic_arena_array_allocator(arena), size, arena->alignment, location)
+                  : br_allocator_alloc_uninit_at(
+                      br__dynamic_arena_array_allocator(arena), size, arena->alignment, location);
     if (allocated.status != BR_STATUS_OK) {
       return allocated;
     }
@@ -183,10 +197,11 @@ br__dynamic_arena_alloc_internal(br_dynamic_arena *arena, usize size, bool zeroe
                                         &arena->out_band_allocations,
                                         &arena->out_band_count,
                                         &arena->out_band_cap,
-                                        allocated.ptr);
+                                        allocated.ptr,
+                                        location);
     if (status != BR_STATUS_OK) {
-      (void)br_allocator_free(
-        br__dynamic_arena_array_allocator(arena), allocated.ptr, allocated.size);
+      (void)br_allocator_free_at(
+        br__dynamic_arena_array_allocator(arena), allocated.ptr, allocated.size, location);
       return br__dynamic_arena_result(NULL, 0u, status);
     }
     return allocated;
@@ -199,7 +214,7 @@ br__dynamic_arena_alloc_internal(br_dynamic_arena *arena, usize size, bool zeroe
     return br__dynamic_arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
   }
   if (arena->bytes_left < needed) {
-    status = br__dynamic_arena_cycle_new_block(arena);
+    status = br__dynamic_arena_cycle_new_block(arena, location);
     if (status != BR_STATUS_OK) {
       return br__dynamic_arena_result(NULL, 0u, status);
     }
@@ -217,15 +232,19 @@ br__dynamic_arena_alloc_internal(br_dynamic_arena *arena, usize size, bool zeroe
   return br__dynamic_arena_result(memory, size, BR_STATUS_OK);
 }
 
-static br_alloc_result br__dynamic_arena_resize_internal(
-  br_dynamic_arena *arena, void *ptr, usize old_size, usize new_size, bool zeroed) {
+static br_alloc_result br__dynamic_arena_resize_internal(br_dynamic_arena *arena,
+                                                         void *ptr,
+                                                         usize old_size,
+                                                         usize new_size,
+                                                         bool zeroed,
+                                                         br_source_location location) {
   br_alloc_result result;
 
   if (arena == NULL) {
     return br__dynamic_arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
   }
   if (ptr == NULL) {
-    return br__dynamic_arena_alloc_internal(arena, new_size, zeroed);
+    return br__dynamic_arena_alloc_internal(arena, new_size, zeroed, location);
   }
   if (new_size == 0u) {
     /*
@@ -241,7 +260,7 @@ static br_alloc_result br__dynamic_arena_resize_internal(
     return br__dynamic_arena_result(ptr, new_size, BR_STATUS_OK);
   }
 
-  result = br__dynamic_arena_alloc_internal(arena, new_size, false);
+  result = br__dynamic_arena_alloc_internal(arena, new_size, false, location);
   if (result.status != BR_STATUS_OK) {
     return result;
   }
@@ -263,13 +282,15 @@ static br_alloc_result br__dynamic_arena_allocator_fn(void *ctx, const br_alloc_
 
   switch (req->op) {
     case BR_ALLOC_OP_ALLOC:
-      return br__dynamic_arena_alloc_internal(arena, req->size, true);
+      return br__dynamic_arena_alloc_internal(arena, req->size, true, req->location);
     case BR_ALLOC_OP_ALLOC_UNINIT:
-      return br__dynamic_arena_alloc_internal(arena, req->size, false);
+      return br__dynamic_arena_alloc_internal(arena, req->size, false, req->location);
     case BR_ALLOC_OP_RESIZE:
-      return br__dynamic_arena_resize_internal(arena, req->ptr, req->old_size, req->size, true);
+      return br__dynamic_arena_resize_internal(
+        arena, req->ptr, req->old_size, req->size, true, req->location);
     case BR_ALLOC_OP_RESIZE_UNINIT:
-      return br__dynamic_arena_resize_internal(arena, req->ptr, req->old_size, req->size, false);
+      return br__dynamic_arena_resize_internal(
+        arena, req->ptr, req->old_size, req->size, false, req->location);
     case BR_ALLOC_OP_FREE:
       return br__dynamic_arena_result(NULL, 0u, BR_STATUS_NOT_SUPPORTED);
     case BR_ALLOC_OP_RESET:
@@ -372,7 +393,8 @@ void br_dynamic_arena_reset(br_dynamic_arena *arena) {
                                    &arena->unused_blocks,
                                    &arena->unused_count,
                                    &arena->unused_cap,
-                                   arena->current_block) == BR_STATUS_OK) {
+                                   arena->current_block,
+                                   BR_SOURCE_LOCATION_UNKNOWN) == BR_STATUS_OK) {
       arena->current_block = NULL;
       arena->current_pos = NULL;
     }
@@ -383,7 +405,8 @@ void br_dynamic_arena_reset(br_dynamic_arena *arena) {
                                    &arena->unused_blocks,
                                    &arena->unused_count,
                                    &arena->unused_cap,
-                                   arena->used_blocks[i]) != BR_STATUS_OK) {
+                                   arena->used_blocks[i],
+                                   BR_SOURCE_LOCATION_UNKNOWN) != BR_STATUS_OK) {
       break;
     }
   }
@@ -425,21 +448,23 @@ void br_dynamic_arena_free_all(br_dynamic_arena *arena) {
 }
 
 br_alloc_result br_dynamic_arena_alloc(br_dynamic_arena *arena, usize size) {
-  return br__dynamic_arena_alloc_internal(arena, size, true);
+  return br__dynamic_arena_alloc_internal(arena, size, true, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
 br_alloc_result br_dynamic_arena_alloc_uninit(br_dynamic_arena *arena, usize size) {
-  return br__dynamic_arena_alloc_internal(arena, size, false);
+  return br__dynamic_arena_alloc_internal(arena, size, false, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
 br_alloc_result
 br_dynamic_arena_resize(br_dynamic_arena *arena, void *ptr, usize old_size, usize new_size) {
-  return br__dynamic_arena_resize_internal(arena, ptr, old_size, new_size, true);
+  return br__dynamic_arena_resize_internal(
+    arena, ptr, old_size, new_size, true, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
 br_alloc_result
 br_dynamic_arena_resize_uninit(br_dynamic_arena *arena, void *ptr, usize old_size, usize new_size) {
-  return br__dynamic_arena_resize_internal(arena, ptr, old_size, new_size, false);
+  return br__dynamic_arena_resize_internal(
+    arena, ptr, old_size, new_size, false, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
 br_allocator br_dynamic_arena_allocator(br_dynamic_arena *arena) {

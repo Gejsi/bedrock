@@ -37,7 +37,8 @@ static br_allocator br__scratch_backup_allocator(const br_scratch *scratch) {
   return allocator;
 }
 
-static bool br__scratch_reserve_leaks(br_scratch *scratch, usize min_cap) {
+static bool
+br__scratch_reserve_leaks(br_scratch *scratch, usize min_cap, br_source_location location) {
   br_allocator allocator;
   br_alloc_result resized;
   usize new_cap;
@@ -63,11 +64,13 @@ static bool br__scratch_reserve_leaks(br_scratch *scratch, usize min_cap) {
     new_cap *= 2u;
   }
 
-  resized = br_allocator_resize_uninit(allocator,
-                                       scratch->leaked_allocations,
-                                       scratch->leaked_cap * sizeof(*scratch->leaked_allocations),
-                                       new_cap * sizeof(*scratch->leaked_allocations),
-                                       (usize) _Alignof(br_scratch_leaked_allocation));
+  resized =
+    br_allocator_resize_uninit_at(allocator,
+                                  scratch->leaked_allocations,
+                                  scratch->leaked_cap * sizeof(*scratch->leaked_allocations),
+                                  new_cap * sizeof(*scratch->leaked_allocations),
+                                  (usize) _Alignof(br_scratch_leaked_allocation),
+                                  location);
   if (resized.status != BR_STATUS_OK) {
     return false;
   }
@@ -77,7 +80,14 @@ static bool br__scratch_reserve_leaks(br_scratch *scratch, usize min_cap) {
   return true;
 }
 
-static br_status br__scratch_ensure_initialized(br_scratch *scratch) {
+static br_status br__scratch_init_internal(br_scratch *scratch,
+                                           usize size,
+                                           br_allocator backup_allocator,
+                                           br_source_location location);
+static br_status
+br__scratch_free_internal(br_scratch *scratch, void *ptr, br_source_location location);
+
+static br_status br__scratch_ensure_initialized(br_scratch *scratch, br_source_location location) {
   br_allocator allocator;
 
   if (scratch == NULL) {
@@ -92,7 +102,7 @@ static br_status br__scratch_ensure_initialized(br_scratch *scratch) {
     return BR_STATUS_INVALID_STATE;
   }
 
-  return br_scratch_init(scratch, BR_SCRATCH_DEFAULT_BACKING_SIZE, allocator);
+  return br__scratch_init_internal(scratch, BR_SCRATCH_DEFAULT_BACKING_SIZE, allocator, location);
 }
 
 static br_status br__scratch_validate_alignment(usize *alignment) {
@@ -110,8 +120,8 @@ static br_status br__scratch_validate_alignment(usize *alignment) {
   return BR_STATUS_OK;
 }
 
-static br_alloc_result
-br__scratch_alloc_internal(br_scratch *scratch, usize size, usize alignment, bool zeroed) {
+static br_alloc_result br__scratch_alloc_internal(
+  br_scratch *scratch, usize size, usize alignment, bool zeroed, br_source_location location) {
   br_allocator backup_allocator;
   br_alloc_result result;
   br_status status;
@@ -128,7 +138,7 @@ br__scratch_alloc_internal(br_scratch *scratch, usize size, usize alignment, boo
     return br__scratch_result(NULL, 0u, BR_STATUS_OK);
   }
 
-  status = br__scratch_ensure_initialized(scratch);
+  status = br__scratch_ensure_initialized(scratch, location);
   if (status != BR_STATUS_OK) {
     return br__scratch_result(NULL, 0u, status);
   }
@@ -165,14 +175,14 @@ br__scratch_alloc_internal(br_scratch *scratch, usize size, usize alignment, boo
     return br__scratch_result(NULL, 0u, BR_STATUS_INVALID_STATE);
   }
 
-  result = zeroed ? br_allocator_alloc(backup_allocator, size, alignment)
-                  : br_allocator_alloc_uninit(backup_allocator, size, alignment);
+  result = zeroed ? br_allocator_alloc_at(backup_allocator, size, alignment, location)
+                  : br_allocator_alloc_uninit_at(backup_allocator, size, alignment, location);
   if (result.status != BR_STATUS_OK || result.ptr == NULL) {
     return result;
   }
 
-  if (!br__scratch_reserve_leaks(scratch, scratch->leaked_count + 1u)) {
-    (void)br_allocator_free(backup_allocator, result.ptr, result.size);
+  if (!br__scratch_reserve_leaks(scratch, scratch->leaked_count + 1u, location)) {
+    (void)br_allocator_free_at(backup_allocator, result.ptr, result.size, location);
     return br__scratch_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
   }
 
@@ -182,7 +192,8 @@ br__scratch_alloc_internal(br_scratch *scratch, usize size, usize alignment, boo
   return result;
 }
 
-static br_status br__scratch_remove_leak(br_scratch *scratch, usize index) {
+static br_status
+br__scratch_remove_leak(br_scratch *scratch, usize index, br_source_location location) {
   br_allocator allocator;
   br_status status;
 
@@ -195,8 +206,10 @@ static br_status br__scratch_remove_leak(br_scratch *scratch, usize index) {
     return BR_STATUS_INVALID_STATE;
   }
 
-  status = br_allocator_free(
-    allocator, scratch->leaked_allocations[index].memory, scratch->leaked_allocations[index].size);
+  status = br_allocator_free_at(allocator,
+                                scratch->leaked_allocations[index].memory,
+                                scratch->leaked_allocations[index].size,
+                                location);
   if (status != BR_STATUS_OK) {
     return status;
   }
@@ -210,8 +223,13 @@ static br_status br__scratch_remove_leak(br_scratch *scratch, usize index) {
   return BR_STATUS_OK;
 }
 
-static br_alloc_result br__scratch_resize_internal(
-  br_scratch *scratch, void *ptr, usize old_size, usize new_size, usize alignment, bool zeroed) {
+static br_alloc_result br__scratch_resize_internal(br_scratch *scratch,
+                                                   void *ptr,
+                                                   usize old_size,
+                                                   usize new_size,
+                                                   usize alignment,
+                                                   bool zeroed,
+                                                   br_source_location location) {
   br_alloc_result result;
   br_status status;
 
@@ -223,16 +241,16 @@ static br_alloc_result br__scratch_resize_internal(
     return br__scratch_result(NULL, 0u, status);
   }
   if (ptr == NULL) {
-    return br__scratch_alloc_internal(scratch, new_size, alignment, zeroed);
+    return br__scratch_alloc_internal(scratch, new_size, alignment, zeroed, location);
   }
   if (new_size == 0u) {
-    return br__scratch_result(NULL, 0u, br_scratch_free(scratch, ptr));
+    return br__scratch_result(NULL, 0u, br__scratch_free_internal(scratch, ptr, location));
   }
   if (old_size == 0u) {
     return br__scratch_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
   }
 
-  status = br__scratch_ensure_initialized(scratch);
+  status = br__scratch_ensure_initialized(scratch, location);
   if (status != BR_STATUS_OK) {
     return br__scratch_result(NULL, 0u, status);
   }
@@ -247,7 +265,7 @@ static br_alloc_result br__scratch_resize_internal(
     return br__scratch_result(ptr, new_size, BR_STATUS_OK);
   }
 
-  result = br__scratch_alloc_internal(scratch, new_size, alignment, false);
+  result = br__scratch_alloc_internal(scratch, new_size, alignment, false, location);
   if (result.status != BR_STATUS_OK) {
     return result;
   }
@@ -257,7 +275,7 @@ static br_alloc_result br__scratch_resize_internal(
     memset((u8 *)result.ptr + old_size, 0, new_size - old_size);
   }
 
-  status = br_scratch_free(scratch, ptr);
+  status = br__scratch_free_internal(scratch, ptr, location);
   if (status != BR_STATUS_OK) {
     return br__scratch_result(NULL, 0u, status);
   }
@@ -275,17 +293,18 @@ static br_alloc_result br__scratch_allocator_fn(void *ctx, const br_alloc_reques
 
   switch (req->op) {
     case BR_ALLOC_OP_ALLOC:
-      return br__scratch_alloc_internal(scratch, req->size, req->alignment, true);
+      return br__scratch_alloc_internal(scratch, req->size, req->alignment, true, req->location);
     case BR_ALLOC_OP_ALLOC_UNINIT:
-      return br__scratch_alloc_internal(scratch, req->size, req->alignment, false);
+      return br__scratch_alloc_internal(scratch, req->size, req->alignment, false, req->location);
     case BR_ALLOC_OP_RESIZE:
       return br__scratch_resize_internal(
-        scratch, req->ptr, req->old_size, req->size, req->alignment, true);
+        scratch, req->ptr, req->old_size, req->size, req->alignment, true, req->location);
     case BR_ALLOC_OP_RESIZE_UNINIT:
       return br__scratch_resize_internal(
-        scratch, req->ptr, req->old_size, req->size, req->alignment, false);
+        scratch, req->ptr, req->old_size, req->size, req->alignment, false, req->location);
     case BR_ALLOC_OP_FREE:
-      return br__scratch_result(NULL, 0u, br_scratch_free(scratch, req->ptr));
+      return br__scratch_result(
+        NULL, 0u, br__scratch_free_internal(scratch, req->ptr, req->location));
     case BR_ALLOC_OP_RESET:
       br_scratch_free_all(scratch);
       return br__scratch_result(NULL, 0u, BR_STATUS_OK);
@@ -298,7 +317,10 @@ static br_allocator_fn br__scratch_allocator_fn_ptr(void) {
   return br__scratch_allocator_fn;
 }
 
-br_status br_scratch_init(br_scratch *scratch, usize size, br_allocator backup_allocator) {
+static br_status br__scratch_init_internal(br_scratch *scratch,
+                                           usize size,
+                                           br_allocator backup_allocator,
+                                           br_source_location location) {
   br_alloc_result result;
 
   if (scratch == NULL || size == 0u) {
@@ -316,7 +338,7 @@ br_status br_scratch_init(br_scratch *scratch, usize size, br_allocator backup_a
     return BR_STATUS_INVALID_STATE;
   }
 
-  result = br_allocator_alloc(backup_allocator, size, (usize)(2u * _Alignof(void *)));
+  result = br_allocator_alloc_at(backup_allocator, size, (usize)(2u * _Alignof(void *)), location);
   if (result.status != BR_STATUS_OK) {
     return result.status;
   }
@@ -331,6 +353,10 @@ br_status br_scratch_init(br_scratch *scratch, usize size, br_allocator backup_a
   scratch->leaked_count = 0u;
   scratch->leaked_cap = 0u;
   return BR_STATUS_OK;
+}
+
+br_status br_scratch_init(br_scratch *scratch, usize size, br_allocator backup_allocator) {
+  return br__scratch_init_internal(scratch, size, backup_allocator, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
 void br_scratch_destroy(br_scratch *scratch) {
@@ -383,14 +409,15 @@ void br_scratch_free_all(br_scratch *scratch) {
 }
 
 br_alloc_result br_scratch_alloc(br_scratch *scratch, usize size, usize alignment) {
-  return br__scratch_alloc_internal(scratch, size, alignment, true);
+  return br__scratch_alloc_internal(scratch, size, alignment, true, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
 br_alloc_result br_scratch_alloc_uninit(br_scratch *scratch, usize size, usize alignment) {
-  return br__scratch_alloc_internal(scratch, size, alignment, false);
+  return br__scratch_alloc_internal(scratch, size, alignment, false, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
-br_status br_scratch_free(br_scratch *scratch, void *ptr) {
+static br_status
+br__scratch_free_internal(br_scratch *scratch, void *ptr, br_source_location location) {
   uptr start;
   uptr end;
   uptr old_ptr;
@@ -427,21 +454,27 @@ br_status br_scratch_free(br_scratch *scratch, void *ptr) {
     read literally.
     */
     if (scratch->leaked_allocations[i].memory == ptr) {
-      return br__scratch_remove_leak(scratch, i);
+      return br__scratch_remove_leak(scratch, i, location);
     }
   }
 
   return BR_STATUS_INVALID_ARGUMENT;
 }
 
+br_status br_scratch_free(br_scratch *scratch, void *ptr) {
+  return br__scratch_free_internal(scratch, ptr, BR_SOURCE_LOCATION_UNKNOWN);
+}
+
 br_alloc_result
 br_scratch_resize(br_scratch *scratch, void *ptr, usize old_size, usize new_size, usize alignment) {
-  return br__scratch_resize_internal(scratch, ptr, old_size, new_size, alignment, true);
+  return br__scratch_resize_internal(
+    scratch, ptr, old_size, new_size, alignment, true, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
 br_alloc_result br_scratch_resize_uninit(
   br_scratch *scratch, void *ptr, usize old_size, usize new_size, usize alignment) {
-  return br__scratch_resize_internal(scratch, ptr, old_size, new_size, alignment, false);
+  return br__scratch_resize_internal(
+    scratch, ptr, old_size, new_size, alignment, false, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
 br_allocator br_scratch_allocator(br_scratch *scratch) {

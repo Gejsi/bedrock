@@ -467,7 +467,10 @@ static void br__tracking_record_free(br_tracking_allocator *tracking, usize size
   tracking->stats.current_memory_allocated -= size;
 }
 
-static void br__tracking_note_bad_free(br_tracking_allocator *tracking, void *memory, usize size) {
+static void br__tracking_note_bad_free(br_tracking_allocator *tracking,
+                                       void *memory,
+                                       usize size,
+                                       br_source_location location) {
   br_tracking_allocator_bad_free bad_free;
 
   if (tracking == NULL || memory == NULL) {
@@ -476,6 +479,7 @@ static void br__tracking_note_bad_free(br_tracking_allocator *tracking, void *me
 
   bad_free.memory = memory;
   bad_free.size = size;
+  bad_free.location = location;
 
   if (tracking->bad_free_fn != NULL) {
     tracking->bad_free_fn(tracking->bad_free_ctx, &bad_free);
@@ -510,7 +514,8 @@ static bool br__tracking_add_entry(br_tracking_allocator *tracking,
                                    usize size,
                                    usize alignment,
                                    br_alloc_op op,
-                                   br_status status) {
+                                   br_status status,
+                                   br_source_location location) {
   br_tracking_allocator_entry *entry;
   usize entry_index;
 
@@ -532,6 +537,7 @@ static bool br__tracking_add_entry(br_tracking_allocator *tracking,
   entry->alignment = alignment;
   entry->op = op;
   entry->status = status;
+  entry->location = location;
   tracking->entry_count += 1u;
 
   br__tracking_record_alloc(tracking, size);
@@ -573,7 +579,8 @@ static void br__tracking_resize_entry(br_tracking_allocator *tracking,
                                       usize new_size,
                                       usize new_alignment,
                                       br_alloc_op op,
-                                      br_status status) {
+                                      br_status status,
+                                      br_source_location location) {
   br_tracking_allocator_entry *entry;
   usize old_size;
 
@@ -601,6 +608,7 @@ static void br__tracking_resize_entry(br_tracking_allocator *tracking,
   entry->alignment = new_alignment;
   entry->op = op;
   entry->status = status;
+  entry->location = location;
 }
 
 static br_alloc_result br__tracking_allocator_fn_unlocked(br_tracking_allocator *tracking,
@@ -622,10 +630,15 @@ static br_alloc_result br__tracking_allocator_fn_unlocked(br_tracking_allocator 
       if (result.status != BR_STATUS_OK) {
         return result;
       }
-      if (!br__tracking_add_entry(
-            tracking, result.ptr, result.size, req->alignment, req->op, result.status)) {
+      if (!br__tracking_add_entry(tracking,
+                                  result.ptr,
+                                  result.size,
+                                  req->alignment,
+                                  req->op,
+                                  result.status,
+                                  req->location)) {
         if (result.ptr != NULL) {
-          (void)br_allocator_free(tracking->backing, result.ptr, result.size);
+          (void)br_allocator_free_at(tracking->backing, result.ptr, result.size, req->location);
         }
         return br__tracking_alloc_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
       }
@@ -636,7 +649,7 @@ static br_alloc_result br__tracking_allocator_fn_unlocked(br_tracking_allocator 
         return br__tracking_alloc_result(NULL, 0u, BR_STATUS_OK);
       }
       if (!br__tracking_index_find(tracking, req->ptr, &entry_index)) {
-        br__tracking_note_bad_free(tracking, req->ptr, req->old_size);
+        br__tracking_note_bad_free(tracking, req->ptr, req->old_size, req->location);
         return br__tracking_alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
       }
 
@@ -666,7 +679,7 @@ static br_alloc_result br__tracking_allocator_fn_unlocked(br_tracking_allocator 
     case BR_ALLOC_OP_RESIZE_UNINIT:
       if (req->ptr != NULL) {
         if (!br__tracking_index_find(tracking, req->ptr, &entry_index)) {
-          br__tracking_note_bad_free(tracking, req->ptr, req->old_size);
+          br__tracking_note_bad_free(tracking, req->ptr, req->old_size, req->location);
           return br__tracking_alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
         }
 
@@ -695,7 +708,8 @@ static br_alloc_result br__tracking_allocator_fn_unlocked(br_tracking_allocator 
                                   result.size,
                                   req->alignment,
                                   req->op,
-                                  result.status);
+                                  result.status,
+                                  req->location);
         return result;
       }
 
@@ -703,10 +717,15 @@ static br_alloc_result br__tracking_allocator_fn_unlocked(br_tracking_allocator 
       if (result.status != BR_STATUS_OK) {
         return result;
       }
-      if (!br__tracking_add_entry(
-            tracking, result.ptr, result.size, req->alignment, req->op, result.status)) {
+      if (!br__tracking_add_entry(tracking,
+                                  result.ptr,
+                                  result.size,
+                                  req->alignment,
+                                  req->op,
+                                  result.status,
+                                  req->location)) {
         if (result.ptr != NULL) {
-          (void)br_allocator_free(tracking->backing, result.ptr, result.size);
+          (void)br_allocator_free_at(tracking->backing, result.ptr, result.size, req->location);
         }
         return br__tracking_alloc_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
       }

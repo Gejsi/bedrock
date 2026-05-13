@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <string.h>
 
 #include <bedrock.h>
 
@@ -54,6 +55,79 @@ static void test_tracking_allocator_bad_free(void) {
   assert(tracking.bad_frees[0].size == 24u);
 
   assert(br_allocator_free(br_allocator_heap(), foreign.ptr, 24u) == BR_STATUS_OK);
+  br_tracking_allocator_destroy(&tracking);
+}
+
+static void test_tracking_allocator_source_locations(void) {
+  br_tracking_allocator tracking;
+  br_allocator allocator;
+  br_alloc_result allocation;
+  br_alloc_result resized;
+  br_alloc_result foreign;
+  usize alloc_line;
+  usize resize_line;
+  usize bad_free_line;
+
+  br_tracking_allocator_init(&tracking, br_allocator_heap(), br_allocator_heap());
+  allocator = br_tracking_allocator_allocator(&tracking);
+
+  alloc_line = (usize)__LINE__ + 1u;
+  allocation = br_allocator_alloc(allocator, 12u, 8u);
+  assert(allocation.status == BR_STATUS_OK);
+  assert(tracking.entry_count == 1u);
+  assert(tracking.entries[0].location.line == alloc_line);
+  assert(tracking.entries[0].location.file != NULL);
+  assert(strstr(tracking.entries[0].location.file, "test_tracking_allocator.c") != NULL);
+  assert(tracking.entries[0].location.function != NULL);
+  assert(strcmp(tracking.entries[0].location.function, __func__) == 0);
+
+  resize_line = (usize)__LINE__ + 1u;
+  resized = br_allocator_resize(allocator, allocation.ptr, allocation.size, 20u, 8u);
+  assert(resized.status == BR_STATUS_OK);
+  assert(tracking.entry_count == 1u);
+  assert(tracking.entries[0].memory == resized.ptr);
+  assert(tracking.entries[0].location.line == resize_line);
+  assert(strcmp(tracking.entries[0].location.function, __func__) == 0);
+
+  foreign = br_allocator_alloc(br_allocator_heap(), 24u, 8u);
+  assert(foreign.status == BR_STATUS_OK);
+  bad_free_line = (usize)__LINE__ + 1u;
+  assert(br_allocator_free(allocator, foreign.ptr, foreign.size) == BR_STATUS_INVALID_ARGUMENT);
+  assert(tracking.bad_free_count == 1u);
+  assert(tracking.bad_frees[0].location.line == bad_free_line);
+  assert(tracking.bad_frees[0].location.file != NULL);
+  assert(strstr(tracking.bad_frees[0].location.file, "test_tracking_allocator.c") != NULL);
+  assert(tracking.bad_frees[0].location.function != NULL);
+  assert(strcmp(tracking.bad_frees[0].location.function, __func__) == 0);
+
+  assert(br_allocator_free(allocator, resized.ptr, resized.size) == BR_STATUS_OK);
+  assert(br_allocator_free(br_allocator_heap(), foreign.ptr, foreign.size) == BR_STATUS_OK);
+  br_tracking_allocator_destroy(&tracking);
+}
+
+static void test_tracking_allocator_preserves_locations_through_wrappers(void) {
+  br_tracking_allocator tracking;
+  br_compat_allocator compat;
+  br_allocator allocator;
+  br_alloc_result allocation;
+  usize alloc_line;
+
+  br_tracking_allocator_init(&tracking, br_allocator_heap(), br_allocator_heap());
+  br_compat_allocator_init(&compat, br_tracking_allocator_allocator(&tracking));
+  allocator = br_compat_allocator_allocator(&compat);
+
+  alloc_line = (usize)__LINE__ + 1u;
+  allocation = br_allocator_alloc(allocator, 32u, 16u);
+  assert(allocation.status == BR_STATUS_OK);
+  assert(tracking.entry_count == 1u);
+  assert(tracking.entries[0].location.line == alloc_line);
+  assert(tracking.entries[0].location.file != NULL);
+  assert(strstr(tracking.entries[0].location.file, "test_tracking_allocator.c") != NULL);
+  assert(tracking.entries[0].location.function != NULL);
+  assert(strcmp(tracking.entries[0].location.function, __func__) == 0);
+
+  assert(br_allocator_free(allocator, allocation.ptr, allocation.size) == BR_STATUS_OK);
+  assert(tracking.entry_count == 0u);
   br_tracking_allocator_destroy(&tracking);
 }
 
@@ -257,6 +331,8 @@ static void test_tracking_allocator_serializes_state(void) {
 int main(void) {
   test_tracking_allocator_stats();
   test_tracking_allocator_bad_free();
+  test_tracking_allocator_source_locations();
+  test_tracking_allocator_preserves_locations_through_wrappers();
   test_tracking_allocator_clear_on_reset();
   test_tracking_allocator_clear_and_reset();
   test_tracking_allocator_index_updates();
