@@ -45,11 +45,8 @@ static br_allocator br__compat_parent(const br_compat_allocator *compat) {
   return br_allocator_heap();
 }
 
-static br_alloc_result br__compat_alloc_internal(br_compat_allocator *compat,
-                                                 usize size,
-                                                 usize alignment,
-                                                 bool zeroed,
-                                                 br_source_location location) {
+static br_alloc_result
+br__compat_alloc_internal(br_compat_allocator *compat, usize size, usize alignment, bool zeroed) {
   br_allocator parent;
   br_alloc_result allocation;
   br__compat_header *header;
@@ -77,8 +74,8 @@ static br_alloc_result br__compat_alloc_internal(br_compat_allocator *compat,
   req_size = size + prefix;
 
   parent = br__compat_parent(compat);
-  allocation = zeroed ? br_allocator_alloc_at(parent, req_size, alignment, location)
-                      : br_allocator_alloc_uninit_at(parent, req_size, alignment, location);
+  allocation = zeroed ? br_allocator_alloc(parent, req_size, alignment)
+                      : br_allocator_alloc_uninit(parent, req_size, alignment);
   if (allocation.status != BR_STATUS_OK) {
     return allocation;
   }
@@ -93,8 +90,7 @@ static br_alloc_result br__compat_alloc_internal(br_compat_allocator *compat,
   return br__compat_result(data, size, BR_STATUS_OK);
 }
 
-static br_status
-br__compat_free_internal(br_compat_allocator *compat, void *ptr, br_source_location location) {
+static br_status br__compat_free_internal(br_compat_allocator *compat, void *ptr) {
   br__compat_header *header;
   br_allocator parent;
   usize prefix;
@@ -114,7 +110,7 @@ br__compat_free_internal(br_compat_allocator *compat, void *ptr, br_source_locat
   }
   orig_size = header->size + prefix;
   parent = br__compat_parent(compat);
-  return br_allocator_free_at(parent, (u8 *)ptr - prefix, orig_size, location);
+  return br_allocator_free(parent, (u8 *)ptr - prefix, orig_size);
 }
 
 static br_alloc_result br__compat_resize_internal(br_compat_allocator *compat,
@@ -122,8 +118,7 @@ static br_alloc_result br__compat_resize_internal(br_compat_allocator *compat,
                                                   usize old_size,
                                                   usize new_size,
                                                   usize alignment,
-                                                  bool zeroed,
-                                                  br_source_location location) {
+                                                  bool zeroed) {
   br__compat_header *header;
   br_allocator parent;
   br_alloc_result allocation;
@@ -148,10 +143,10 @@ static br_alloc_result br__compat_resize_internal(br_compat_allocator *compat,
     return br__compat_result(NULL, 0u, status);
   }
   if (ptr == NULL) {
-    return br__compat_alloc_internal(compat, new_size, alignment, zeroed, location);
+    return br__compat_alloc_internal(compat, new_size, alignment, zeroed);
   }
   if (new_size == 0u) {
-    return br__compat_result(NULL, 0u, br__compat_free_internal(compat, ptr, location));
+    return br__compat_result(NULL, 0u, br__compat_free_internal(compat, ptr));
   }
 
   header = br__compat_header_from_user_ptr(ptr);
@@ -173,11 +168,11 @@ static br_alloc_result br__compat_resize_internal(br_compat_allocator *compat,
   }
 
   parent = br__compat_parent(compat);
-  allocation = zeroed
-                 ? br_allocator_resize_at(
-                     parent, (u8 *)ptr - orig_prefix, orig_size, req_size, new_alignment, location)
-                 : br_allocator_resize_uninit_at(
-                     parent, (u8 *)ptr - orig_prefix, orig_size, req_size, new_alignment, location);
+  allocation =
+    zeroed
+      ? br_allocator_resize(parent, (u8 *)ptr - orig_prefix, orig_size, req_size, new_alignment)
+      : br_allocator_resize_uninit(
+          parent, (u8 *)ptr - orig_prefix, orig_size, req_size, new_alignment);
   if (allocation.status != BR_STATUS_OK) {
     return allocation;
   }
@@ -217,20 +212,19 @@ static br_alloc_result br__compat_allocator_fn(void *ctx, const br_alloc_request
 
   switch (req->op) {
     case BR_ALLOC_OP_ALLOC:
-      return br__compat_alloc_internal(compat, req->size, req->alignment, true, req->location);
+      return br__compat_alloc_internal(compat, req->size, req->alignment, true);
     case BR_ALLOC_OP_ALLOC_UNINIT:
-      return br__compat_alloc_internal(compat, req->size, req->alignment, false, req->location);
+      return br__compat_alloc_internal(compat, req->size, req->alignment, false);
     case BR_ALLOC_OP_RESIZE:
       return br__compat_resize_internal(
-        compat, req->ptr, req->old_size, req->size, req->alignment, true, req->location);
+        compat, req->ptr, req->old_size, req->size, req->alignment, true);
     case BR_ALLOC_OP_RESIZE_UNINIT:
       return br__compat_resize_internal(
-        compat, req->ptr, req->old_size, req->size, req->alignment, false, req->location);
+        compat, req->ptr, req->old_size, req->size, req->alignment, false);
     case BR_ALLOC_OP_FREE:
-      return br__compat_result(NULL, 0u, br__compat_free_internal(compat, req->ptr, req->location));
+      return br__compat_result(NULL, 0u, br__compat_free_internal(compat, req->ptr));
     case BR_ALLOC_OP_RESET:
-      return br__compat_result(
-        NULL, 0u, br_allocator_reset_at(br__compat_parent(compat), req->location));
+      return br__compat_result(NULL, 0u, br_allocator_reset(br__compat_parent(compat)));
   }
 
   return br__compat_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);

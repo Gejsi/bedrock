@@ -1,4 +1,3 @@
-#define BEDROCK_NO_ALLOCATOR_LOCATION_MACROS
 #include <bedrock/mem/alloc.h>
 
 #include <stdlib.h>
@@ -156,34 +155,15 @@ static br_alloc_result br__fail_allocator_fn(void *ctx, const br_alloc_request *
   return br__alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
 }
 
-br_alloc_result br_allocator_call_at(br_allocator allocator,
-                                     const br_alloc_request *req,
-                                     br_source_location location) {
-  br_alloc_request request;
-
+br_alloc_result br_allocator_call(br_allocator allocator, const br_alloc_request *req) {
   if (allocator.fn == NULL) {
     return br__alloc_result(NULL, 0u, BR_STATUS_NOT_SUPPORTED);
   }
-  if (req == NULL) {
-    return br__alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
-  }
 
-  request = *req;
-  if (!br_source_location_is_known(request.location)) {
-    request.location = location;
-  }
-
-  return allocator.fn(allocator.ctx, &request);
+  return allocator.fn(allocator.ctx, req);
 }
 
-br_alloc_result br_allocator_call(br_allocator allocator, const br_alloc_request *req) {
-  return br_allocator_call_at(allocator, req, BR_SOURCE_LOCATION_UNKNOWN);
-}
-
-br_alloc_result br_allocator_alloc_at(br_allocator allocator,
-                                      usize size,
-                                      usize alignment,
-                                      br_source_location location) {
+br_alloc_result br_allocator_alloc(br_allocator allocator, usize size, usize alignment) {
   br_alloc_request req;
 
   req.op = BR_ALLOC_OP_ALLOC;
@@ -191,18 +171,10 @@ br_alloc_result br_allocator_alloc_at(br_allocator allocator,
   req.old_size = 0u;
   req.size = size;
   req.alignment = alignment;
-  req.location = location;
   return br_allocator_call(allocator, &req);
 }
 
-br_alloc_result br_allocator_alloc(br_allocator allocator, usize size, usize alignment) {
-  return br_allocator_alloc_at(allocator, size, alignment, BR_SOURCE_LOCATION_UNKNOWN);
-}
-
-br_alloc_result br_allocator_alloc_uninit_at(br_allocator allocator,
-                                             usize size,
-                                             usize alignment,
-                                             br_source_location location) {
+br_alloc_result br_allocator_alloc_uninit(br_allocator allocator, usize size, usize alignment) {
   br_alloc_request req;
 
   req.op = BR_ALLOC_OP_ALLOC_UNINIT;
@@ -210,20 +182,11 @@ br_alloc_result br_allocator_alloc_uninit_at(br_allocator allocator,
   req.old_size = 0u;
   req.size = size;
   req.alignment = alignment;
-  req.location = location;
   return br_allocator_call(allocator, &req);
 }
 
-br_alloc_result br_allocator_alloc_uninit(br_allocator allocator, usize size, usize alignment) {
-  return br_allocator_alloc_uninit_at(allocator, size, alignment, BR_SOURCE_LOCATION_UNKNOWN);
-}
-
-br_alloc_result br_allocator_resize_at(br_allocator allocator,
-                                       void *ptr,
-                                       usize old_size,
-                                       usize new_size,
-                                       usize alignment,
-                                       br_source_location location) {
+br_alloc_result br_allocator_resize(
+  br_allocator allocator, void *ptr, usize old_size, usize new_size, usize alignment) {
   br_alloc_request req;
 
   req.op = BR_ALLOC_OP_RESIZE;
@@ -231,22 +194,11 @@ br_alloc_result br_allocator_resize_at(br_allocator allocator,
   req.old_size = old_size;
   req.size = new_size;
   req.alignment = alignment;
-  req.location = location;
   return br_allocator_call(allocator, &req);
 }
 
-br_alloc_result br_allocator_resize(
+br_alloc_result br_allocator_resize_uninit(
   br_allocator allocator, void *ptr, usize old_size, usize new_size, usize alignment) {
-  return br_allocator_resize_at(
-    allocator, ptr, old_size, new_size, alignment, BR_SOURCE_LOCATION_UNKNOWN);
-}
-
-br_alloc_result br_allocator_resize_uninit_at(br_allocator allocator,
-                                              void *ptr,
-                                              usize old_size,
-                                              usize new_size,
-                                              usize alignment,
-                                              br_source_location location) {
   br_alloc_request req;
 
   req.op = BR_ALLOC_OP_RESIZE_UNINIT;
@@ -254,20 +206,10 @@ br_alloc_result br_allocator_resize_uninit_at(br_allocator allocator,
   req.old_size = old_size;
   req.size = new_size;
   req.alignment = alignment;
-  req.location = location;
   return br_allocator_call(allocator, &req);
 }
 
-br_alloc_result br_allocator_resize_uninit(
-  br_allocator allocator, void *ptr, usize old_size, usize new_size, usize alignment) {
-  return br_allocator_resize_uninit_at(
-    allocator, ptr, old_size, new_size, alignment, BR_SOURCE_LOCATION_UNKNOWN);
-}
-
-br_status br_allocator_free_at(br_allocator allocator,
-                               void *ptr,
-                               usize old_size,
-                               br_source_location location) {
+br_status br_allocator_free(br_allocator allocator, void *ptr, usize old_size) {
   br_alloc_request req;
   br_alloc_result result;
 
@@ -276,16 +218,11 @@ br_status br_allocator_free_at(br_allocator allocator,
   req.old_size = old_size;
   req.size = 0u;
   req.alignment = 0u;
-  req.location = location;
   result = br_allocator_call(allocator, &req);
   return result.status;
 }
 
-br_status br_allocator_free(br_allocator allocator, void *ptr, usize old_size) {
-  return br_allocator_free_at(allocator, ptr, old_size, BR_SOURCE_LOCATION_UNKNOWN);
-}
-
-br_status br_allocator_reset_at(br_allocator allocator, br_source_location location) {
+br_status br_allocator_reset(br_allocator allocator) {
   br_alloc_request req;
   br_alloc_result result;
 
@@ -294,13 +231,8 @@ br_status br_allocator_reset_at(br_allocator allocator, br_source_location locat
   req.old_size = 0u;
   req.size = 0u;
   req.alignment = 0u;
-  req.location = location;
   result = br_allocator_call(allocator, &req);
   return result.status;
-}
-
-br_status br_allocator_reset(br_allocator allocator) {
-  return br_allocator_reset_at(allocator, BR_SOURCE_LOCATION_UNKNOWN);
 }
 
 br_allocator br_allocator_heap(void) {
