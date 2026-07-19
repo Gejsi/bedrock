@@ -25,7 +25,7 @@ Develop Bedrock with a Claude Code agent team:
 - Scope contract: the port matrix as written. `exclude` rows stay out,
   `redesign` rows wait until the port waves finish, and removal of
   already-landed code happens only from the judge's cut list with the
-  maintainer's explicit approval.
+  explicit recorded approval.
 - CI (GitHub Actions) is the merge gate: Linux and macOS across debug,
   release, sanitize, and thread-sanitize; Windows informational until proven
   green; clang-format check.

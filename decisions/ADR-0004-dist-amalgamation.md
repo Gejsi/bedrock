@@ -6,7 +6,7 @@ Superseded (July 19, 2026).
 
 The generated distribution was removed: no `dist/` artifacts, no
 `tools/amalgamate.py`, no `dist`/`check-dist`/`dist-smoke` targets, no CI dist
-job. The maintainer's supported consumption model is vendored source plus static
+job. The supported consumption model is vendored source plus static
 link (see `README.md` "Using Bedrock" and the Distribution Model section of
 `spec/foundation.md`) — building tooling in a script language also conflicted
 with the C-and-make-only toolchain rule now recorded in `CLAUDE.md`.
@@ -87,6 +87,6 @@ kind of interaction that only appears once translation units are merged.
 - Future work: the living cut list (`tracking/cut-list.md`) floats DEMOTE
   candidates — modules kept in the tree but excluded from the default `dist/`
   (e.g. debug-only `tracking_allocator`, niche `buddy_allocator`). The generator
-  folds everything today; selective exclusion is deferred until the maintainer
+  folds everything today; selective exclusion is deferred until the project
   makes those CUT/KEEP/DEMOTE calls, at which point a filter can key off the
   cut list rather than a hardcoded set.

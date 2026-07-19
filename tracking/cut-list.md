@@ -1,9 +1,9 @@
 # Living Cut List
 
-Bedrock ports Odin's stdlib, but the maintainer's end goal explicitly includes a
+Bedrock ports Odin's stdlib, but the project's end goal explicitly includes a
 post-port reckoning: "some of the stuff was just too much and i didn't really
 care." This file is the standing input to that decision. It is NOT a set of
-decisions — final CUT/KEEP/DEMOTE calls are the maintainer's at the end of the
+decisions — final CUT/KEEP/DEMOTE calls land in the decisions log at the end of the
 port. It exists so that decision is easy and evidence-based instead of vibes.
 
 Updated as modules land. Analysis by the consumer-advocate seat.
@@ -16,15 +16,15 @@ Updated as modules land. Analysis by the consumer-advocate seat.
   documented as opt-in/non-default (and excluded from any future bundled
   distribution, should one return).
 - **KEEP** — earns its place in the batteries-included core.
-- **Confidence** — how sure the advocate is, independent of how the maintainer
+- **Confidence** — how sure the advocate is, independent of how the project
   will weigh it.
 
-Guiding tension: the maintainer values "include and don't think," so a fatter
+Guiding tension: the project values "include and don't think," so a fatter
 library is fine *if every piece is obviously useful*. The enemy is not size; it
 is choice-paralysis and museum pieces — code ported because it existed in Odin,
 not because a C dev wants it.
 
-Maintainer's stated philosophy (July 19, 2026): **"code is a liability."**
+Guiding philosophy (recorded July 19, 2026): **"code is a liability."**
 Cutting is good, and the same logic applies BEFORE porting — a package that
 isn't worth porting should not be ported at all. This list therefore covers
 both landed code (CUT/KEEP/DEMOTE) and, as a pre-port scrutiny section, the
@@ -82,7 +82,7 @@ external demand, judged per item.
   Bedrock's own philosophy this solves a problem the library chose not to have.
 - **Cost:** 277 lines + a semantically subtle header-shifting resize path.
 - **Why cut:** it's an escape hatch *against* foundation.md's explicit-size
-  design. KEEP only if the maintainer wants an official malloc/free facade;
+  design. KEEP only if the project wants an official malloc/free facade;
   otherwise it cuts cleanly. This is the one call that hinges on a philosophy
   decision, not a usage one.
 
@@ -127,7 +127,7 @@ external demand, judged per item.
   builds on bufio.Reader read_slice/read_rune, the scanner does its own
   buffering over a raw reader, and ini iterates a string — NONE consumes
   lookahead_reader. Recommendation upgraded DEMOTE -> **CUT** (bufio.Reader
-  peek + the future scanner cover every peek story). Maintainer decision
+  peek + the future scanner cover every peek story). Decision
   pending in the log below.
 
 ## KEEP — narrower than peers
@@ -135,7 +135,7 @@ external demand, judged per item.
 ### varint / LEB128 (encoding pilot)
 
 - Genuinely useful (DWARF/WASM/protobuf-style formats) but a narrower audience
-  than hex/base64/endian, which nearly everyone hits. The maintainer put it in
+  than hex/base64/endian, which nearly everyone hits. It was put in
   the pilot deliberately, so keep — but it's the first encoding to demote if
   the pilot ever needs trimming.
 
@@ -163,7 +163,7 @@ external demand, judged per item.
 - **Odin `raw.odin` runtime-layout surface:** the matrix already says don't
   broadly port. Endorsed.
 
-## If the maintainer takes the high-confidence cuts
+## If the project takes the high-confidence cuts
 
 Cutting small_stack + compat + rollback removes ~1,267 impl+hdr lines and ~375
 test lines, dropping the allocator count 13 -> 10 with zero capability a C dev
@@ -238,7 +238,7 @@ Hard SKIPs strike the timezone tarpit (~41k), iso8601, TSC/perf, the string
 oddity cluster (justify, expand_tabs, scrub, snake/kebab, reverse,
 levenshtein), sync benaphores, and the per-OS-split-as-a-goal. The rfc3339
 "port the timestamp piece + minimal datetime slice" recommendation is the one
-judgment call needing the maintainer's explicit eye.
+judgment call needing the project's explicit eye.
 
 ## Pre-port scrutiny — supporting evidence (verified)
 
@@ -251,9 +251,9 @@ judgment call needing the maintainer's explicit eye.
   stdlib for these at all.
 - **SKIP — real demand, owned by a named dedicated lib:** json (cJSON / jsmn /
   yyjson dominate). csv and ini have the same shape (libcsv, inih), but stay
-  PORT per the maintainer's accepted decision: small, dependency-free, and the
+  PORT per the project's accepted decision: small, dependency-free, and the
   "don't make me fetch a parser" story fits a stdlib replacement. If the
-  maintainer ever cuts deeper, "SKIP and point at inih/libcsv" is an
+  project ever cuts deeper, "SKIP and point at inih/libcsv" is an
   evidence-backed fallback, not a gut call.
 
 ### rfc3339 minimal datetime closure (the concrete porter scope)
@@ -269,11 +269,11 @@ year_range, add_days_to_date, the gcd/lcm/interval_mod toolkit. SKIP: all of
 timezone/ and every TZ_* type. This closure IS the wave-3 rfc3339 porter task
 boundary.
 
-## Decisions log (maintainer fills in at end of port)
+## Decisions log
 
 | Candidate | Decision | Date | Note |
 | --- | --- | --- | --- |
-| mem virtual file mapping API | CUT | 2026-07-19 | maintainer: file APIs do not belong in the memory module; returns with a future os module if ever |
+| mem virtual file mapping API | CUT | 2026-07-19 | file APIs do not belong in the memory module; returns with a future os module if ever |
 | time/timezone | SKIP | 2026-07-19 | pre-port strike; tz databases out of scope |
 | time/iso8601 | SKIP | 2026-07-19 | rfc3339 is the one timestamp format |
 | time/TSC-perf | SKIP | 2026-07-19 | br_tick suffices for ordinary timing |
@@ -281,8 +281,9 @@ boundary.
 | sync benaphores | SKIP | 2026-07-19 | redundant vs mutex/sema |
 | sync per-OS primitive split | SKIP (as goal) | 2026-07-19 | capability already exists |
 | rfc3339 + minimal datetime slice | PORT | 2026-07-19 | slice being mapped; datetime remainder DEFER |
-| strconv, hash, math/rand, uuid, base32 | PORT | 2026-07-19 | full-enumeration additions; strconv is the priority (checklist already depends on it) |
-| core/thread | PORT (promoted from defer) | 2026-07-19 | maintainer: threading is very important; scoped per spec/modules/threading.md |
+| strconv, math/rand, uuid, base32 | PORT | 2026-07-19 | full-enumeration additions; strconv is the priority (checklist already depends on it) |
+| core/hash | SKIP | 2026-07-19 | reversed same-day PORT: zlib crc32 / xxHash are already C; Odin's reimplementation motive (avoid foreign linking) is moot in a C library; hashmap needs are internal |
+| core/thread | PORT (promoted from defer) | 2026-07-19 | threading prioritized; scoped per spec/modules/threading.md |
 | math core float functions | SKIP | 2026-07-19 | libm is the answer; struck outright |
 | text/regex | SKIP | 2026-07-19 | PCRE2 is the answer, as cJSON is for json |
 | time/stopwatch | DEFER | 2026-07-19 | on concrete demand |

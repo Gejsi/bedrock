@@ -27,7 +27,7 @@ API contract stays Odin's.
   need no Makefile edits
 - The build toolchain is C + make ONLY: host tools live in `tools/*.c` and are
   compiled by the Makefile. Never introduce script-language build dependencies
-  (python, shell beyond POSIX make recipes, etc.) — maintainer directive
+  (python, shell beyond POSIX make recipes, etc.)
 
 ## Conventions
 
@@ -35,7 +35,7 @@ API contract stays Odin's.
 - Type spelling is two-layered BY DESIGN: public headers under `include/` are
   spelled in standard C types (`size_t`, `uint32_t`, ...) — that is the ABI
   rule; implementation and test code (`src/`, `tests/`) PREFERS the short
-  aliases (`usize`, `u32`, ...) — that is the maintainer's style
+  aliases (`usize`, `u32`, ...) — that is the project's style
 - Public header comments PRESENT the API to consumers: describe behavior and
   contracts only. Never reference Odin, Go, Rust, or porting provenance in
   them — a consumer does not care where the design came from. Provenance and

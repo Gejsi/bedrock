@@ -6,7 +6,7 @@ need redesign, and which ones should stay out of scope.
 Detailed status for the currently active module ports lives in
 `tracking/odin-coverage-checklist.md`.
 
-Priority (July 19, 2026, maintainer): complete and audit the landed core
+Priority (July 19, 2026): complete and audit the landed core
 modules before expanding new module families. Encodings base64/varint and the
 parser wave (csv/ini/scanner) are queued behind core completion.
 
@@ -30,7 +30,7 @@ parser wave (csv/ini/scanner) are queued behind core completion.
 | `core/math/bits` | v1 | Mostly portability shims and bit helpers. |
 | `core/container/*` | redesign | Keep the ideas; implement as generated typed containers. Demand-ranked coverage for the redesign (from the July 19, 2026 evidence survey): dynamic array, queue, priority_queue, small_array, bit_array are the common set; pick ONE balanced tree (Odin ships both avl and rbtree); lru/pool/handle_map opt-in; topological_sort/xar/intrusive specialist. |
 | `core/sort` | redesign | Use erased generic algorithms plus optional typed sugar. |
-| `core/thread` | v1 (promoted July 19, 2026) | Maintainer: "threading is very important." Minimal explicit thread layer per spec/modules/threading.md — create/join/detach/yield over pthreads/Win32, user data by pointer, no context inheritance, pools later. Prerequisites now met (sync complete and audited); Bedrock's own tests become the first consumer, replacing their raw pthread guards. |
+| `core/thread` | v1 (promoted July 19, 2026) | Minimal explicit thread layer per spec/modules/threading.md — create/join/detach/yield over pthreads/Win32, user data by pointer, no context inheritance, pools later. Prerequisites now met (sync complete and audited); Bedrock's own tests become the first consumer, replacing their raw pthread guards. |
 | `core/sync` | partial v1 | Core blocking primitives, public `Sema`, a useful first extended slice, `sync/atomic`, native thread IDs, Linux/Windows/Darwin/FreeBSD/NetBSD/OpenBSD futex wait/timeout/wake, `Atomic_Mutex`, `Atomic_RW_Mutex`, `Atomic_Recursive_Mutex`, `Atomic_Cond`, `Atomic_Sema`, public timeout waits, `Auto_Reset_Event`, `Parker`, and `One_Shot_Event` landed. Public primitives now delegate to the atomic/futex layer and are zero-value-ready; Haiku/WASM futex backends, missing extended primitives, and Odin's real per-OS primitive tree still remain. |
 | `core/fmt` | exclude v1 | Too tied to `any`, RTTI, and formatter dispatch. |
 | `core/encoding/json` | exclude v1 | Too RTTI-heavy for a clean first pass. |
@@ -48,17 +48,16 @@ parser wave (csv/ini/scanner) are queued behind core completion.
 
 The rows above were a selection; the rows below complete the enumeration so
 every Odin `core/` package has an explicit decision. Recommendations pending
-the maintainer's ruling use the cut-list methodology; sizes are Odin source
+the final ruling use the cut-list methodology; sizes are Odin source
 lines at `2c25fb9`.
 
-### PORT (accepted by the maintainer, July 19, 2026)
+### PORT (accepted July 19, 2026)
 
 | Package | Size | Rationale |
 | --- | --- | --- |
 | `core/strconv` | 3180 | Number/string parse and format. The coverage checklist already depends on it (builder write_int/write_float), and it is the most-reached-for stdlib facility C under-serves (strtol/snprintf are clumsy and locale-tainted). Highest-value un-ported package. |
 | `core/encoding/base32` | 231 | Tiny table-driven sibling of the ported base64. |
 | `core/encoding/uuid` | 1058 | Parse/format/generate — common and small. Scoped per evidence: v4 + v7 only (they need just rand + time); v3/v5 require MD5/SHA1 and stay out with the excluded crypto surface. |
-| `core/hash` | 3629 | Non-cryptographic hashes — daily-driver for checksums and hash tables, not covered by libc, no security surface (crypto stays excluded). Scoped per evidence: crc32/crc64 plus xxhash; the copy-paste tier (fnv, djb2, murmur, jenkins, sdbm, adler) skipped. |
 | `core/math/rand` | 2235 | Seedable PRNG — a genuine C gap (rand() is bad and global). Focused core: generator + int/float/range/shuffle; distributions on demand. |
 
 ### DEFER (gate on a concrete consumer)
@@ -73,11 +72,12 @@ lines at `2c25fb9`.
 | `core/encoding/cbor` | 3806 | Real but niche binary serialization; below json in demand. |
 | `core/unicode/utf16` | subtree | Windows/JS interop transcode; add when a consumer hits it. |
 
-### SKIP (ruled by the maintainer, July 19, 2026)
+### SKIP (ruled July 19, 2026)
 
 | Package | Rationale |
 | --- | --- |
 | `core/math` (float functions, 4471 lines) | libm already ships all of it and every C program links it; reimplementing adds nothing for Bedrock's goals. Struck outright. |
+| `core/hash` (3629 lines) | The C ecosystem already provides these in C (zlib's crc32, the vendorable single-file xxHash); Odin reimplemented them mainly to avoid foreign linking, a motive that is moot in a C library. The future hash map uses a small internal hash function, not a public package. Struck July 19, 2026 (reversing the same-day PORT). |
 | `core/text/regex` (4068 lines) | Genuine demand, but a correctness-and-fuzz mini-language of its own; the ecosystem answer is PCRE2, the same way json's answer is cJSON. Struck. |
 | `core/text/i18n`, `text/match`, `text/edit`, `text/table` | Application/presentation concerns, not stdlib primitives. |
 | `core/encoding/asn1`, `encoding/pem` | Crypto/PKI-adjacent; belong with the excluded crypto surface. |
