@@ -165,9 +165,9 @@ statics (which BR_BITS_FORCE_FALLBACK keeps self-contained).
 #undef br_bits_field_insert_i64
 
 /* Small deterministic PRNG (xorshift64*) for randomized u32/u64 sweeps. */
-static uint64_t rng_state = 0x9e3779b97f4a7c15ull;
-static uint64_t next_rand(void) {
-  uint64_t x = rng_state;
+static u64 rng_state = 0x9e3779b97f4a7c15ull;
+static u64 next_rand(void) {
+  u64 x = rng_state;
   x ^= x >> 12;
   x ^= x << 25;
   x ^= x >> 27;
@@ -178,7 +178,7 @@ static uint64_t next_rand(void) {
 /* Differential: native tier vs forced fallback, exhaustive over u8 and u16. */
 static void test_diff_u8_u16(void) {
   for (int i = 0; i < 256; ++i) {
-    uint8_t x = (uint8_t)i;
+    u8 x = (u8)i;
     assert(br_bits_count_ones_u8(x) == brfb_count_ones_u8(x));
     assert(br_bits_count_zeros_u8(x) == brfb_count_zeros_u8(x));
     assert(br_bits_clz_u8(x) == brfb_clz_u8(x));
@@ -187,7 +187,7 @@ static void test_diff_u8_u16(void) {
     assert(br_bits_reverse_u8(x) == brfb_reverse_u8(x));
   }
   for (int i = 0; i < 65536; ++i) {
-    uint16_t x = (uint16_t)i;
+    u16 x = (u16)i;
     assert(br_bits_count_ones_u16(x) == brfb_count_ones_u16(x));
     assert(br_bits_count_zeros_u16(x) == brfb_count_zeros_u16(x));
     assert(br_bits_clz_u16(x) == brfb_clz_u16(x));
@@ -200,12 +200,12 @@ static void test_diff_u8_u16(void) {
 
 /* Differential: native vs fallback over random u32/u64, plus 0 and all-ones. */
 static void test_diff_u32_u64(void) {
-  uint32_t seeds32[] = {0u, 1u, 0xffffffffu, 0x80000000u, 0x00000001u, 0xdeadbeefu};
-  uint64_t seeds64[] = {0u, 1u, ~(uint64_t)0, (uint64_t)1 << 63, 0x0123456789abcdefull};
-  size_t i;
+  u32 seeds32[] = {0u, 1u, 0xffffffffu, 0x80000000u, 0x00000001u, 0xdeadbeefu};
+  u64 seeds64[] = {0u, 1u, ~(u64)0, (u64)1 << 63, 0x0123456789abcdefull};
+  usize i;
 
   for (i = 0; i < sizeof(seeds32) / sizeof(seeds32[0]); ++i) {
-    uint32_t x = seeds32[i];
+    u32 x = seeds32[i];
     assert(br_bits_count_ones_u32(x) == brfb_count_ones_u32(x));
     assert(br_bits_clz_u32(x) == brfb_clz_u32(x));
     assert(br_bits_ctz_u32(x) == brfb_ctz_u32(x));
@@ -214,7 +214,7 @@ static void test_diff_u32_u64(void) {
     assert(br_bits_byteswap_u32(x) == brfb_byteswap_u32(x));
   }
   for (i = 0; i < sizeof(seeds64) / sizeof(seeds64[0]); ++i) {
-    uint64_t x = seeds64[i];
+    u64 x = seeds64[i];
     assert(br_bits_count_ones_u64(x) == brfb_count_ones_u64(x));
     assert(br_bits_clz_u64(x) == brfb_clz_u64(x));
     assert(br_bits_ctz_u64(x) == brfb_ctz_u64(x));
@@ -223,9 +223,9 @@ static void test_diff_u32_u64(void) {
     assert(br_bits_byteswap_u64(x) == brfb_byteswap_u64(x));
   }
   for (i = 0; i < 200000; ++i) {
-    uint64_t r = next_rand();
-    uint32_t x32 = (uint32_t)r;
-    uint64_t x64 = r;
+    u64 r = next_rand();
+    u32 x32 = (u32)r;
+    u64 x64 = r;
     assert(br_bits_count_ones_u32(x32) == brfb_count_ones_u32(x32));
     assert(br_bits_clz_u32(x32) == brfb_clz_u32(x32));
     assert(br_bits_ctz_u32(x32) == brfb_ctz_u32(x32));
@@ -267,11 +267,11 @@ static void test_known_values(void) {
 
 /* Property tests over random inputs. */
 static void test_properties(void) {
-  size_t i;
+  usize i;
   for (i = 0; i < 200000; ++i) {
-    uint64_t r = next_rand();
-    uint32_t x = (uint32_t)r;
-    uint64_t y = r;
+    u64 r = next_rand();
+    u32 x = (u32)r;
+    u64 y = r;
     unsigned k = (unsigned)(r >> 40);
 
     /* popcount + count_zeros == width */
@@ -304,7 +304,7 @@ static void test_rotate_edges(void) {
 
 /* add / sub carry / borrow chains, checked against a wider type. */
 static void test_add_sub(void) {
-  size_t i;
+  usize i;
   br_bits_add_u32_result a;
   br_bits_sub_u32_result s;
 
@@ -321,18 +321,18 @@ static void test_add_sub(void) {
   assert(s.diff == 2u && !s.borrow_out);
 
   for (i = 0; i < 100000; ++i) {
-    uint64_t r = next_rand();
-    uint32_t x = (uint32_t)r;
-    uint32_t y = (uint32_t)(r >> 32);
+    u64 r = next_rand();
+    u32 x = (u32)r;
+    u32 y = (u32)(r >> 32);
     bool cin = (r & 1u) != 0u;
-    uint64_t wide_add = (uint64_t)x + (uint64_t)y + (uint64_t)(cin ? 1u : 0u);
+    u64 wide_add = (u64)x + (u64)y + (u64)(cin ? 1u : 0u);
     br_bits_add_u32_result ar = br_bits_add_u32(x, y, cin);
-    assert(ar.sum == (uint32_t)wide_add);
+    assert(ar.sum == (u32)wide_add);
     assert(ar.carry_out == ((wide_add >> 32) != 0u));
 
     {
       br_bits_add_u64_result ar64 = br_bits_add_u64(x, y, cin);
-      assert(ar64.sum == (uint64_t)x + (uint64_t)y + (cin ? 1u : 0u));
+      assert(ar64.sum == (u64)x + (u64)y + (cin ? 1u : 0u));
       assert(!ar64.carry_out); /* 32-bit inputs never overflow u64 */
     }
   }
@@ -340,27 +340,27 @@ static void test_add_sub(void) {
 
 /* mul (hi,lo): check u32 against u64, u64 against __int128 where available. */
 static void test_mul(void) {
-  size_t i;
+  usize i;
   br_bits_mul_u32_result m32;
 
   m32 = br_bits_mul_u32(0xffffffffu, 0xffffffffu);
-  assert(((uint64_t)m32.hi << 32 | m32.lo) == 0xfffffffe00000001ull);
+  assert(((u64)m32.hi << 32 | m32.lo) == 0xfffffffe00000001ull);
 
   for (i = 0; i < 200000; ++i) {
-    uint64_t r1 = next_rand();
-    uint64_t r2 = next_rand();
-    uint32_t x = (uint32_t)r1;
-    uint32_t y = (uint32_t)r2;
+    u64 r1 = next_rand();
+    u64 r2 = next_rand();
+    u32 x = (u32)r1;
+    u32 y = (u32)r2;
     br_bits_mul_u32_result m = br_bits_mul_u32(x, y);
-    uint64_t expect = (uint64_t)x * (uint64_t)y;
-    assert(((uint64_t)m.hi << 32 | m.lo) == expect);
+    u64 expect = (u64)x * (u64)y;
+    assert(((u64)m.hi << 32 | m.lo) == expect);
 
     {
       br_bits_mul_u64_result m64 = br_bits_mul_u64(r1, r2);
 #if defined(__SIZEOF_INT128__)
       unsigned __int128 e = (unsigned __int128)r1 * (unsigned __int128)r2;
-      assert(m64.hi == (uint64_t)(e >> 64));
-      assert(m64.lo == (uint64_t)e);
+      assert(m64.hi == (u64)(e >> 64));
+      assert(m64.lo == (u64)e);
 #else
       /* Without 128-bit: check the low half at least. */
       assert(m64.lo == r1 * r2);
@@ -371,7 +371,7 @@ static void test_mul(void) {
 
 /* div: status contract and reconstruction quo*y + rem == (hi:lo). */
 static void test_div(void) {
-  size_t i;
+  usize i;
   br_bits_div_u32_result d32;
   br_bits_div_u64_result d64;
 
@@ -390,27 +390,27 @@ static void test_div(void) {
   assert(d32.status == BR_STATUS_OK && d32.quo == 14u && d32.rem == 2u);
 
   for (i = 0; i < 200000; ++i) {
-    uint64_t r = next_rand();
-    uint32_t hi = (uint32_t)(r >> 40); /* keep hi small so hi < y is likely */
-    uint32_t lo = (uint32_t)r;
-    uint32_t y = (uint32_t)(next_rand() | 1u); /* nonzero */
+    u64 r = next_rand();
+    u32 hi = (u32)(r >> 40); /* keep hi small so hi < y is likely */
+    u32 lo = (u32)r;
+    u32 y = (u32)(next_rand() | 1u); /* nonzero */
     if (y <= hi) {
       continue;
     }
     d32 = br_bits_div_u32(hi, lo, y);
     assert(d32.status == BR_STATUS_OK);
     {
-      uint64_t z = ((uint64_t)hi << 32) | lo;
-      assert((uint64_t)d32.quo * (uint64_t)y + (uint64_t)d32.rem == z);
+      u64 z = ((u64)hi << 32) | lo;
+      assert((u64)d32.quo * (u64)y + (u64)d32.rem == z);
       assert(d32.rem < y);
     }
   }
 
 #if defined(__SIZEOF_INT128__)
   for (i = 0; i < 200000; ++i) {
-    uint64_t hi = next_rand() >> 40;
-    uint64_t lo = next_rand();
-    uint64_t y = next_rand() | 1u;
+    u64 hi = next_rand() >> 40;
+    u64 lo = next_rand();
+    u64 y = next_rand() | 1u;
     if (y <= hi) {
       continue;
     }
@@ -434,8 +434,8 @@ static void test_is_power_of_two(void) {
   assert(!br_bits_is_power_of_two_i32(0));
   assert(!br_bits_is_power_of_two_i32(-8)); /* negatives are not powers of two */
   assert(br_bits_is_power_of_two_i32(16));
-  assert(br_bits_is_power_of_two_i8((int8_t)64));
-  assert(!br_bits_is_power_of_two_i8((int8_t)-128));
+  assert(br_bits_is_power_of_two_i8((i8)64));
+  assert(!br_bits_is_power_of_two_i8((i8)-128));
 }
 
 static void test_bitfields(void) {
@@ -446,9 +446,9 @@ static void test_bitfields(void) {
   assert(br_bits_field_extract_u32(0xabcd1234u, 4u, 0u) == 0u);
 
   /* signed extract sign-extends. Field 0xF in 4 bits == -1. */
-  assert(br_bits_field_extract_i32((int32_t)0x000000f0, 4u, 4u) == -1);
-  assert(br_bits_field_extract_i32((int32_t)0x00000070, 4u, 4u) == 7);
-  assert(br_bits_field_extract_i8((int8_t)0xf0, 4u, 4u) == -1);
+  assert(br_bits_field_extract_i32((i32)0x000000f0, 4u, 4u) == -1);
+  assert(br_bits_field_extract_i32((i32)0x00000070, 4u, 4u) == 7);
+  assert(br_bits_field_extract_i8((i8)0xf0, 4u, 4u) == -1);
 
   /* insert: replace bits [offset, offset+bits) with insert's low bits. */
   assert(br_bits_field_insert_u32(0x00000000u, 0xffu, 8u, 8u) == 0x0000ff00u);
@@ -458,8 +458,8 @@ static void test_bitfields(void) {
 
   /* round-trip: insert then extract returns the low `bits` of the inserted. */
   {
-    uint32_t base = 0xdeadbeefu;
-    uint32_t v = br_bits_field_insert_u32(base, 0x2au, 5u, 6u);
+    u32 base = 0xdeadbeefu;
+    u32 v = br_bits_field_insert_u32(base, 0x2au, 5u, 6u);
     assert(br_bits_field_extract_u32(v, 5u, 6u) == (0x2au & 0x3fu));
   }
 }

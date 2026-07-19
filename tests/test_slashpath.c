@@ -106,7 +106,7 @@ static void test_split(void) {
     {"/", "/", ""},
     {"", "", ""},
   };
-  size_t i;
+  usize i;
 
   for (i = 0u; i < sizeof(cases) / sizeof(cases[0]); ++i) {
     br_slashpath_split_result r = br_slashpath_split(sv(cases[i].path));
@@ -151,7 +151,7 @@ static void test_dir(void) {
     {"a/b/c.", "a/b"},
     {"a/b/c.x", "a/b"},
   };
-  size_t i;
+  usize i;
 
   for (i = 0u; i < sizeof(cases) / sizeof(cases[0]); ++i) {
     br_string_rewrite_result r = br_slashpath_dir(sv(cases[i].path), br_allocator_heap());
@@ -178,7 +178,7 @@ static void test_name(void) {
   assert(sv_eq(br_slashpath_name(sv("")), ""));
 }
 
-static void assert_join(const char *want, const br_string_view *elems, size_t n) {
+static void assert_join(const char *want, const br_string_view *elems, usize n) {
   br_string_result r = br_slashpath_join(elems, n, br_allocator_heap());
   assert(r.status == BR_STATUS_OK);
   assert(sv_eq(br_string_view_from_string(r.value), want));

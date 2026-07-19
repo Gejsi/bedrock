@@ -120,7 +120,7 @@ static br_string_rewrite_result br__slashpath_lazy_result(br__slashpath_lazy *lb
 
 br_slashpath_split_result br_slashpath_split(br_string_view path) {
   br_slashpath_split_result result;
-  ptrdiff_t i = br_string_last_index_byte(path, (uint8_t)'/');
+  isize i = br_string_last_index_byte(path, (u8)'/');
   usize cut = i < 0 ? 0u : (usize)i + 1u;
 
   result.dir = br__slashpath_view(path.data, cut);
@@ -130,7 +130,7 @@ br_slashpath_split_result br_slashpath_split(br_string_view path) {
 
 br_string_view br_slashpath_base(br_string_view path) {
   usize end;
-  ptrdiff_t slash;
+  isize slash;
 
   if (path.len == 0u) {
     return br__slashpath_view(BR__SLASHPATH_DOT, 1u);
@@ -145,7 +145,7 @@ br_string_view br_slashpath_base(br_string_view path) {
     return br__slashpath_view(BR__SLASHPATH_SLASH, 1u);
   }
 
-  slash = br_string_last_index_byte(br__slashpath_view(path.data, end), (uint8_t)'/');
+  slash = br_string_last_index_byte(br__slashpath_view(path.data, end), (u8)'/');
   if (slash >= 0) {
     return br__slashpath_view(path.data + (usize)slash + 1u, end - ((usize)slash + 1u));
   }
@@ -256,9 +256,9 @@ br_string_rewrite_result br_slashpath_dir(br_string_view path, br_allocator allo
 }
 
 br_string_result
-br_slashpath_join(const br_string_view *elems, size_t elem_count, br_allocator allocator) {
-  size_t i;
-  size_t first;
+br_slashpath_join(const br_string_view *elems, usize elem_count, br_allocator allocator) {
+  usize i;
+  usize first;
   bool any = false;
   usize total = 0u;
   char *buf;
@@ -358,7 +358,7 @@ static br_match_result br__slashpath_match_result(bool matched, br_status status
 }
 
 static bool br__slashpath_contains_slash(br_string_view s) {
-  return br_string_index_byte(s, (uint8_t)'/') >= 0;
+  return br_string_index_byte(s, (u8)'/') >= 0;
 }
 
 /*
