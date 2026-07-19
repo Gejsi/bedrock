@@ -21,6 +21,20 @@ All issues below were verified present in upstream Odin at `2c25fb9`
 - Bedrock: `br_utf8_encode` validates first and encodes the replacement rune,
   emitting `EF BF BD`; locked by `tests/test_utf8.c`.
 
+## `core/mem` dynamic arena out-band ignores `minimum_alignment`
+
+- File: `core/mem/allocators.odin`
+- Area: `dynamic_arena_alloc_bytes_non_zeroed` (out-band branch)
+- Issue: the doc comment states "All allocations will be aligned at a minimum
+  to a boundary specified by `minimum_alignment`" (allocators.odin:1656-1657),
+  but the out-band branch forwards only the raw request alignment
+  (allocators.odin:1803), never applying `max(a.minimum_alignment, alignment)`
+  the way the in-band path does (allocators.odin:1809).
+- Expected: floor the out-band alignment by `minimum_alignment` too.
+- Effect: an out-band (large) allocation can come back aligned below the
+  arena's configured minimum, contradicting the documented contract.
+- Bedrock: floors the out-band path by `minimum_alignment`.
+
 ## `core/encoding/hex` decode leak on invalid input
 
 - File: `core/encoding/hex/hex.odin`
