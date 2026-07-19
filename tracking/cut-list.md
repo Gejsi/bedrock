@@ -164,6 +164,74 @@ lines from the "don't think" surface while keeping them opt-in. That is the
 biggest readability/dist win available, concentrated in the module that is
 half the codebase.
 
+## Pre-port scrutiny (roadmap, not-yet-ported)
+
+"Code is a liability" applied BEFORE porting: if a row isn't worth porting,
+strike it from the matrix now rather than port-then-cut. Sizes are Odin source
+lines @2c25fb9. Recommendations: PORT (worth it), DEFER (only on concrete
+demand), SKIP (strike from matrix).
+
+### Matrix v1 rows not yet ported
+
+| Row | One-liner | Realistic user | Rec | Confidence |
+| --- | --- | --- | --- | --- |
+| slashpath | pure lexical `/`-path clean/join/split/match | anyone handling URL-ish or virtual paths | PORT (designed) | high |
+| csv (~16k) | RFC 4180 reader/writer | config/data-import code — very common | PORT | high |
+| ini (~5k) | INI config reader | config loading — common, small | PORT | high |
+| rfc3339 (~9k + drags datetime ~20k) | timestamp parse/format | logs, APIs, config timestamps | PORT (rfc3339 + minimal datetime ONLY) | medium |
+| time: datetime (~20k) | calendar date/time record + civil math | date arithmetic | DEFER (except the slice rfc3339 needs) | medium |
+| time: timezone (~41k) | IANA tz database + TZif parser + Windows tz | tz-aware conversion | SKIP | high |
+| time: iso8601 (~5k) | ISO-8601 parse/format | overlaps rfc3339 | SKIP | medium |
+| time: stopwatch | start/stop accumulator over tick | trivial timing | DEFER (tiny, on demand) | medium |
+| time: TSC/perf (~7k + per-OS) | raw CPU timestamp counter | micro-benchmarking | SKIP | high |
+
+Notes:
+
+- **rfc3339 is the subtle one.** It imports `core:time/datetime`, so
+  "rfc3339-only" really means rfc3339 plus the civil-date primitives it
+  transitively calls (date/ordinal conversion, validation) — but NOT the
+  timezone tarpit (rfc3339 handles offsets as fixed `+HH:MM`, no IANA db).
+  Recommendation: port rfc3339 + only that datetime slice; defer the rest of
+  datetime; skip timezone entirely.
+- **timezone = hard SKIP.** ~41k lines including a bespoke TZif binary parser
+  and a 16k Windows-tz mapping. OS tz databases are a versioning/maintenance
+  tarpit with near-zero demand in a stdlib replacement's first life.
+- **iso8601 SKIP** as duplicative of rfc3339 (port one timestamp format; keep
+  the stricter, machine-oriented one).
+- **TSC/perf SKIP:** per-arch asm, niche; `br_tick` already covers ordinary
+  timing.
+
+### Checklist `planned` rows inside landed modules
+
+| Row | One-liner | Realistic user | Rec | Confidence |
+| --- | --- | --- | --- | --- |
+| bytes/strings: case conversion | ASCII+Unicode case ops | extremely common | PORT (ASCII now; Unicode tables deferred) | high |
+| strings: cut / substring helpers | small ergonomic slicers | common | PORT | high |
+| bytes/strings: fields / fields_proc | whitespace/predicate tokenize | common in parsing | PORT | high |
+| bytes/strings: split iterators | allocation-free split loop | common; avoids list alloc | PORT | high |
+| bytes/strings: trim cutset / space / null | trim by set/space | very common | PORT | high |
+| bytes/strings: index_proc / trim_*_proc | predicate scans | niche vs cutset trims | DEFER | medium |
+| strings: intern table | dedup strings into a pool | compilers/symbol tables | DEFER | medium |
+| strings: snake/kebab case munging | identifier case conversion | codegen niche | SKIP | medium |
+| bytes/strings: reverse | reverse bytes/runes | rare, trivial to inline | SKIP | medium |
+| bytes/strings: scrub | replace invalid UTF-8 runs | overlaps to_valid_utf8; niche | SKIP | medium |
+| bytes/strings: expand_tabs | tabs -> spaces | terminal pretty-print niche | SKIP | high |
+| bytes/strings: justify | pad string to width | a fmt concern; fmt is excluded | SKIP | high |
+| bytes/strings: levenshtein | edit distance | app-level, not stdlib | SKIP | medium |
+| bufio: scanner | tokenized line/split reader | line-by-line input — common | PORT | high |
+| sync: benaphores | cheap counting lock | redundant vs mutex/sema | SKIP | medium |
+| sync: per-OS primitive split | Odin's per-OS file layout | refactor, no new capability | SKIP (as a goal) | high |
+| sync: Haiku / WASM futexes | niche-target backends | nobody targets these in v1 | DEFER (on demand) | high |
+| mem: low-level set/zero/copy/compare | portable mem helpers | used everywhere | PORT | high |
+
+### Net
+
+Hard SKIPs strike the timezone tarpit (~41k), iso8601, TSC/perf, the string
+oddity cluster (justify, expand_tabs, scrub, snake/kebab, reverse,
+levenshtein), sync benaphores, and the per-OS-split-as-a-goal. The rfc3339
+"port the timestamp piece + minimal datetime slice" recommendation is the one
+judgment call needing the maintainer's explicit eye.
+
 ## Decisions log (maintainer fills in at end of port)
 
 | Candidate | Decision | Date | Note |
