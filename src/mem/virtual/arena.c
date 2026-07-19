@@ -49,7 +49,7 @@ static br_status br__align_up_size(usize value, usize alignment, usize *result) 
   return BR_STATUS_OK;
 }
 
-static br_status br__normalize_alignment(usize alignment, usize minimum, usize *result) {
+static br_status br__vm_arena_normalize_alignment(usize alignment, usize minimum, usize *result) {
   if (alignment == 0u) {
     alignment = BR_DEFAULT_ALIGNMENT;
   }
@@ -102,8 +102,8 @@ static br_status br__virtual_block_create(usize committed,
     return BR_STATUS_INVALID_ARGUMENT;
   }
 
-  status =
-    br__normalize_alignment(alignment, (usize) _Alignof(br__vm_platform_memory_block), &alignment);
+  status = br__vm_arena_normalize_alignment(
+    alignment, (usize) _Alignof(br__vm_platform_memory_block), &alignment);
   if (status != BR_STATUS_OK) {
     return status;
   }
@@ -256,7 +256,7 @@ static br_alloc_result br__virtual_block_alloc(br_virtual_arena_block *block,
     return br__virtual_arena_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
   }
 
-  status = br__normalize_alignment(alignment, 1u, &alignment);
+  status = br__vm_arena_normalize_alignment(alignment, 1u, &alignment);
   if (status != BR_STATUS_OK) {
     return br__virtual_arena_result(NULL, 0u, status);
   }
@@ -373,7 +373,7 @@ static br_alloc_result br__virtual_arena_alloc_internal(br_virtual_arena *arena,
         arena->default_commit_size = default_commit_size;
         arena->minimum_block_size = minimum_block_size;
 
-        status = br__normalize_alignment(alignment, 1u, &alignment);
+        status = br__vm_arena_normalize_alignment(alignment, 1u, &alignment);
         if (status != BR_STATUS_OK) {
           return br__virtual_arena_result(NULL, 0u, status);
         }
