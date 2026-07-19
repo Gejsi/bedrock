@@ -300,6 +300,57 @@ static void test_strings_fields(void) {
   assert(br_string_view_list_free(r.value, br_allocator_heap()) == BR_STATUS_OK);
 }
 
+static void test_strings_cut_substring(void) {
+  /* "héllo" with é = U+00E9 (2 bytes): 5 runes, 6 bytes. */
+  static const u8 hello[] = {'h', 0xc3u, 0xa9u, 'l', 'l', 'o'};
+  br_string_view s = br_string_view_make(hello, BR_ARRAY_COUNT(hello));
+  bool ok;
+  br_string_view got;
+
+  /* cut(offset, length) is rune-indexed. */
+  assert(
+    br_string_equal(br_string_cut(s, 0u, 2u), br_string_view_make(hello, 3u))); /* "hé" = 3 bytes */
+  assert(br_string_equal(br_string_cut(s, 3u, 0u), BR_STR_LIT("lo"))); /* runes 3..4 to end */
+  assert(br_string_equal(br_string_cut(s, 1u, 1u), br_string_view_make(hello + 1, 2u))); /* "é" */
+  /* Offset past the end yields empty. */
+  assert(br_string_cut(s, 10u, 0u).len == 0u);
+  /* Length past the end clamps to the end. */
+  assert(br_string_equal(br_string_cut(s, 3u, 99u), BR_STR_LIT("lo")));
+
+  /* substring(start, end) with bounds flag. */
+  got = br_string_substring(s, 0u, 5u, &ok);
+  assert(ok);
+  assert(br_string_equal(got, s));
+  got = br_string_substring(s, 1u, 3u, &ok);
+  assert(ok);
+  assert(br_string_equal(got, br_string_view_make(hello + 1, 3u))); /* "él" */
+  /* Out of range and inverted range report ok = false, empty view. */
+  got = br_string_substring(s, 0u, 99u, &ok);
+  assert(!ok);
+  assert(got.len == 0u);
+  got = br_string_substring(s, 3u, 1u, &ok);
+  assert(!ok);
+  assert(got.len == 0u);
+}
+
+static void test_strings_prefix(void) {
+  /* Common prefix stops at a whole-rune boundary; the shared "té" is 3 bytes. */
+  static const u8 a[] = {'t', 0xc3u, 0xa9u, 'a'};
+  static const u8 b[] = {'t', 0xc3u, 0xa9u, 'b'};
+  br_string_view va = br_string_view_make(a, BR_ARRAY_COUNT(a));
+  br_string_view vb = br_string_view_make(b, BR_ARRAY_COUNT(b));
+
+  assert(br_string_prefix_length(BR_STR_LIT("testing"), BR_STR_LIT("test")) == 4u);
+  assert(br_string_prefix_length(BR_STR_LIT("telephone"), BR_STR_LIT("te")) == 2u);
+  assert(br_string_prefix_length(BR_STR_LIT("abc"), BR_STR_LIT("xyz")) == 0u);
+  assert(br_string_equal(br_string_common_prefix(BR_STR_LIT("testing"), BR_STR_LIT("test")),
+                         BR_STR_LIT("test")));
+
+  /* A rune that shares its lead byte but differs later must not partially match. */
+  assert(br_string_prefix_length(va, vb) == 3u);
+  assert(br_string_equal(br_string_common_prefix(va, vb), br_string_view_make(a, 3u)));
+}
+
 int main(void) {
   test_strings_compare_and_search();
   test_strings_views();
@@ -311,5 +362,7 @@ int main(void) {
   test_strings_case_conversion();
   test_strings_trim();
   test_strings_fields();
+  test_strings_cut_substring();
+  test_strings_prefix();
   return 0;
 }

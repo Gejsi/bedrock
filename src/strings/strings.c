@@ -533,6 +533,97 @@ br_string_view br_string_truncate_to_rune(br_string_view s, br_rune value) {
   return br_string_view_make(s.data, (usize)index);
 }
 
+/* Byte offset of rune index `rune_index` in `s`. If the string has fewer runes,
+   returns s.len and sets *in_bounds to false; otherwise sets it true. */
+static usize br__string_rune_offset(br_string_view s, usize rune_index, bool *in_bounds) {
+  usize offset = 0u;
+  usize count = 0u;
+
+  while (offset < s.len) {
+    br_utf8_decode_result decoded;
+
+    if (count == rune_index) {
+      *in_bounds = true;
+      return offset;
+    }
+    decoded = br_utf8_decode(br_bytes_view_make(s.data + offset, s.len - offset));
+    offset += decoded.width > 0u ? decoded.width : 1u;
+    count += 1u;
+  }
+
+  /* Reaching the end is in bounds only when the index lands exactly there. */
+  *in_bounds = (count == rune_index);
+  return s.len;
+}
+
+br_string_view br_string_cut(br_string_view s, usize rune_offset, usize rune_length) {
+  bool in_bounds;
+  usize start = br__string_rune_offset(s, rune_offset, &in_bounds);
+  br_string_view rest = br_string_view_make(s.data + start, s.len - start);
+  usize end;
+
+  if (rune_length == 0u) {
+    return rest;
+  }
+
+  end = br__string_rune_offset(rest, rune_length, &in_bounds);
+  return br_string_view_make(rest.data, end);
+}
+
+br_string_view br_string_substring(br_string_view s, usize rune_start, usize rune_end, bool *ok) {
+  bool start_ok;
+  bool end_ok;
+  usize start_off;
+  usize end_off;
+
+  if (rune_end < rune_start) {
+    if (ok != NULL) {
+      *ok = false;
+    }
+    return br_string_view_make(s.data, 0u);
+  }
+
+  start_off = br__string_rune_offset(s, rune_start, &start_ok);
+  end_off = br__string_rune_offset(s, rune_end, &end_ok);
+  if (!start_ok || !end_ok) {
+    if (ok != NULL) {
+      *ok = false;
+    }
+    return br_string_view_make(s.data, 0u);
+  }
+
+  if (ok != NULL) {
+    *ok = true;
+  }
+  return br_string_view_make(s.data + start_off, end_off - start_off);
+}
+
+size_t br_string_prefix_length(br_string_view a, br_string_view b) {
+  usize common = br_min_size(a.len, b.len);
+  usize i = 0u;
+  usize last_boundary = 0u;
+
+  /* Walk runes of `a` in lockstep with `b`, stopping at the first rune that
+     differs or that would exceed the shared byte length. Returns the byte
+     length up to the last whole matching rune. */
+  while (i < common) {
+    br_utf8_decode_result da = br_utf8_decode(br_bytes_view_make(a.data + i, a.len - i));
+    usize width = da.width > 0u ? da.width : 1u;
+
+    if (i + width > common || memcmp(a.data + i, b.data + i, width) != 0) {
+      break;
+    }
+    i += width;
+    last_boundary = i;
+  }
+
+  return last_boundary;
+}
+
+br_string_view br_string_common_prefix(br_string_view a, br_string_view b) {
+  return br_string_view_make(a.data, br_string_prefix_length(a, b));
+}
+
 br_string_view br_string_trim_prefix(br_string_view s, br_string_view prefix) {
   br_bytes_view trimmed;
 

@@ -193,7 +193,7 @@ Current Bedrock files:
 | replace / remove family | `adapted` | `strings.h`, `strings.c` | Implemented with explicit rewrite results; empty-old replacement follows rune boundaries. |
 | split family | `adapted` | `strings.h`, `strings.c` | Implemented; empty-separator behavior follows Odin's rune-aware string semantics. |
 | line split / iterators | `planned` | none | Not landed. |
-| cut / substring helpers | `planned` | none | Not landed. |
+| cut / substring helpers | `adapted` | `strings.h`, `strings.c` | `cut`, `substring` (with a bool bounds flag), `prefix_length`, and `common_prefix` landed as rune-indexed sub-view helpers following Odin. String-only, matching Odin (no bytes mirror). |
 | equal_fold | `planned` | none | Depends on higher Unicode case-folding support. |
 | trim cutset / trim_space / trim_null | `adapted` | `strings.h`, `strings.c` | Landed (delegate to the bytes trim family). Cutset trimming is rune-aware (decodes the cutset as UTF-8 and matches runes at each edge, matching Odin and Go). `trim_space` is ASCII-whitespace-only — a documented deviation from Odin's Unicode `is_space`, deferred until the space tables land. |
 | fields / fields_proc | `adapted` | `strings.h`, `strings.c` | `fields` landed: splits on runs of ASCII whitespace, no empty fields, into the existing view-list result. ASCII-only (bytes >= 0x80 are field content), a documented deviation from Odin's Unicode `is_space` fallback. `fields_proc` (predicate variant) is deferred with the rest of the `_proc` family. Mirrored in `bytes.h`/`bytes.c`. |

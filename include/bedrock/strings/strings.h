@@ -225,6 +225,36 @@ If `value` does not occur, the original string view is returned.
 br_string_view br_string_truncate_to_rune(br_string_view s, br_rune value);
 
 /*
+Return the substring of `s` starting at rune index `rune_offset` spanning
+`rune_length` runes. A `rune_length` of 0 means "to the end of the string".
+
+`rune_offset` past the end yields an empty view; `rune_length` past the end is
+clamped to the end. Rune-indexed, following Odin's `cut`.
+*/
+br_string_view br_string_cut(br_string_view s, size_t rune_offset, size_t rune_length);
+
+/*
+Return the rune subrange `[rune_start, rune_end)` of `s`.
+
+`ok` (when non-NULL) reports whether both indices were in bounds
+(`rune_start <= rune_end` and both no greater than the rune count). When the
+range is out of bounds, an empty view is returned and `*ok` is false. Follows
+Odin's `substring`.
+*/
+br_string_view br_string_substring(br_string_view s, size_t rune_start, size_t rune_end, bool *ok);
+
+/*
+Return the length in bytes of the longest common prefix of `a` and `b`, not
+splitting a multibyte UTF-8 rune. Follows Odin's `prefix_length`.
+*/
+size_t br_string_prefix_length(br_string_view a, br_string_view b);
+
+/*
+Return the longest common prefix of `a` and `b` as a sub-view of `a`.
+*/
+br_string_view br_string_common_prefix(br_string_view a, br_string_view b);
+
+/*
 Trim `prefix` from the start of `s` when present.
 */
 br_string_view br_string_trim_prefix(br_string_view s, br_string_view prefix);
