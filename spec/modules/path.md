@@ -10,7 +10,7 @@ future `filepath` module and own the `br_path_` name; this module is
 
 | Package | Bedrock header | Impl | Status |
 | --- | --- | --- | --- |
-| path/slashpath | path/slashpath.h | src/path/slashpath.c | planned |
+| path/slashpath | path/slashpath.h | src/path/slashpath.c | v1 |
 
 Module umbrella: include/bedrock/path.h.
 
@@ -99,11 +99,19 @@ br_match_result br_slashpath_match(br_string_view pattern, br_string_view name);
 ## Intentional deviations from Odin
 
 - clean/dir avoid Odin's always-clone by aliasing the input via
-  `br_string_rewrite_result` when unchanged.
+  `br_string_rewrite_result` when unchanged. The degenerate results `""`/reduces-
+  to-nothing (`"."`) and all-slashes (`"/"`) alias a static literal with
+  `allocated=false`, so even those stay allocation-free.
 - Named `br_slashpath_` (Odin package `slashpath`); `br_path_` reserved for a
   future OS-path module.
 - No implicit context allocator; explicit `br_allocator` on allocating calls.
 - match returns a typed status, not Odin's `Match_Error` enum.
+- match follows Go's syntax validation, not Odin's: a `failed` flag keeps
+  validating the rest of a chunk after the name is exhausted, and the top level
+  scans the trailing pattern against an empty name. Odin's port drops both and
+  so under-reports malformed patterns (e.g. `"a["` vs `"a"`); Bedrock returns
+  `BR_STATUS_INVALID_ARGUMENT` there, matching Go and Go's test vectors. See
+  `tracking/odin-suspected-bugs.md`.
 
 ## Testing and fuzzing
 
