@@ -184,3 +184,25 @@ and deliberately not copy this.
 - Expected: timeout should restore `PARKER_EMPTY` unless an `unpark` raced and installed `PARKER_NOTIFIED`.
 - Effect: a later `park` before another `unpark` can underflow the futex state away from valid parker states.
 - Bedrock: timeout wait returns `bool` and cleans up the state transition.
+
+## `core/strconv` parse_f32 double-rounds through f64
+
+- File: `core/strconv/strconv.odin`
+- Area: `parse_f32` (:748-751), `parse_f32_prefix` (:819)
+- Issue: parses at f64 precision and then narrows (`f32(parse_f64(s))`) — two
+  consecutive roundings (decimal→f64, then f64→f32) instead of one
+  correctly-rounded decimal→f32. Go's `atof32` runs the entire conversion with
+  float32 parameters (`floatBits(&float32info)`, internal/strconv/atof.go
+  :574-628) specifically to avoid this double-rounding.
+- Expected: round decimal→f32 in a single step. Odin's own decimal engine is
+  `Float_Info`-parameterized and already supports it
+  (`decimal_to_float_bits(&d, &_f32_info)`); the cast shortcut bypasses that.
+- Effect: up to 1 ULP error for inputs near an f32 rounding boundary. Witness
+  (machine-checked against `strtof` as the correctly-rounded oracle):
+  `parse_f32("1.00000017881393432617187499")` yields bits `0x3f800002`
+  (1.00000024) where the correctly rounded f32 is `0x3f800001` (1.00000012);
+  `"1.0000000596046448"` errs 1 ULP in the other direction. Precision bug, not
+  a crash.
+- Bedrock: `br_parse_f32` rounds natively at f32 precision through the shared
+  parameterized decimal engine (never f64-then-narrow), gated by the Paxson
+  f32 vectors (`spec/modules/strconv.md`).
