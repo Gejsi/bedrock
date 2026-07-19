@@ -22,6 +22,28 @@ early termination or data loss). Internal list-vs-iterator inconsistency only.
 Bedrock's split iterator keeps trailing empties, matching its own list and
 Go's SplitSeq.
 
+## `core/mem` check_zero_ptr reads out of bounds
+
+- File: `core/mem/mem.odin`
+- Area: `check_zero_ptr`, word-alignment path (:292-310)
+- Issue: the prologue loop `for b in start..<start_aligned` (:296) reads the
+  range `[start, start_aligned)` with no clamp to `end`. For a small unaligned
+  length that does not reach the next `align_of(uintptr)` boundary (canonical
+  repro: len=3 at an odd address), `align_forward` rounds `start_aligned` PAST
+  `end`, so the prologue reads up to `align_of(uintptr) - 1` (7) bytes beyond
+  the caller's buffer. In the same repro `end_aligned` also rounds below
+  `start`, adding a 1-byte under-read in the epilogue. The `{1,2,4,8}`
+  fast-path switch hides the most common small sizes, but 3/5/6/7 (any small
+  non-power-of-two length) at a sufficiently unaligned address reach the
+  broken path.
+- Expected: the word-alignment strategy is only valid when the region spans an
+  aligned word; small regions need a clamped or plain byte loop.
+- Effect: out-of-bounds read on both sides of the buffer — can fault against a
+  guard page and trips AddressSanitizer. Memory safety, not conformance.
+- Bedrock: `br_mem_check_zero` (mem helpers port) uses a straight in-bounds
+  loop that never reads outside `[start, end)`, with the len=3-at-odd-address
+  repro as a regression test.
+
 ## `core/path/slashpath` match under-reports malformed patterns
 
 - File: `core/path/slashpath/match.odin`
