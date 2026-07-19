@@ -38,7 +38,8 @@ Umbrella `include/bedrock/rand.h`.
   offer. Sharing one `br_rand` across threads without external synchronization
   is a data race, same as any other mutable value.
 - Draw calls return the number directly (no `br_status`) — generation is a hot
-  path and cannot fail. Only entropy seeding returns a status.
+  path and cannot fail; every generator state, including the zero value, is
+  valid (see the zero-value contract). Only entropy seeding returns a status.
 - Standard C types in the signatures; short aliases stay internal.
 
 ## Generator: PCG64 DXSM
@@ -59,9 +60,9 @@ Step (`state = state*MUL + INC`, mod 2^128) over the landed bits primitives —
 mulHi=2549297995355413924  mulLo=4865540595714422341
 incHi=6364136223846793005  incLo=1442695040888963407
 {hi,lo} = br_bits_mul_u64(r->lo, mulLo)
-hi += r->hi*mulLo + r->lo*mulHi
-{lo,c} = br_bits_add_u64(lo, incLo, 0)
-{hi,_} = br_bits_add_u64(hi, incHi, c)
+hi += r->hi*mulLo + r->lo*mulHi        /* ordinary wrapping u64 adds; mod 2^64, no carry tracked */
+{lo,c}  = br_bits_add_u64(lo, incLo, false)  /* carry_out -> c */
+{hi,_}  = br_bits_add_u64(hi, incHi, c)      /* c is carry_in here */
 r->hi = hi; r->lo = lo
 ```
 DXSM output (on the step's returned hi/lo):
@@ -96,7 +97,9 @@ exactly matching Go's documented "a zero PCG is equivalent to NewPCG(0, 0)".
 Unlike `br_thread`, `br_rand` IS zero-value-ready — PCG's fixed nonzero
 increment moves the state off zero on the first step, so the all-zero state is
 not a fixed point and the DXSM `(lo|1)` never collapses. No init call is
-required; seed only to choose a different stream.
+required; seed only to choose a different stream. This is why generation is
+status-free: every state including zero is valid, not because a degenerate
+unseeded case is tolerated.
 
 ## Draw API (status-free — hot path)
 
@@ -112,7 +115,7 @@ float  br_rand_f32(br_rand *r);  /* [0,1): top 24 bits * 2^-24 */
 ```
 
 Bounded draws use Lemire multiply-shift-reject, matching Go v2's `uint64n`:
-power-of-two `bound` takes a mask fast path; otherwise `{hi,lo} =
+a power-of-two `bound` takes a mask fast path (`draw & (bound-1)`); otherwise `{hi,lo} =
 br_bits_mul_u64(draw, bound)`, return `hi`, and reject (redraw) only when
 `lo < (-bound % bound)` — the expensive modulo is computed only inside the rare
 `lo < bound` case, so most draws skip it. Exactly uniform, no modulo bias.
