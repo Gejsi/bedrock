@@ -85,13 +85,10 @@ LDFLAGS ?=
 LDFLAGS += $(MODE_LDFLAGS) $(THREAD_LDFLAGS)
 
 TEST_CFLAGS := $(filter-out -DNDEBUG,$(CFLAGS))
+# Leak detection (LSan) runs by default with ASan on Linux. Apple clang does
+# not support it, so macOS sanitize runs are unaffected. Do not disable it
+# globally; scope any intentional-leak test with LSAN_OPTIONS suppressions.
 TEST_ENV :=
-ifeq ($(MODE),sanitize)
-TEST_ENV += ASAN_OPTIONS=detect_leaks=0
-endif
-ifeq ($(MODE),asan)
-TEST_ENV += ASAN_OPTIONS=detect_leaks=0
-endif
 
 SRC_FILES := $(shell find $(SRC_DIR) -type f -name '*.c' | sort)
 TEST_FILES := $(shell find $(TEST_DIR) -type f -name '*.c' | sort)
