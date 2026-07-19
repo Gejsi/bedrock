@@ -2,9 +2,29 @@
 
 ## Status
 
-Accepted.
+Superseded (July 19, 2026).
 
-## Decision
+The generated distribution was removed: no `dist/` artifacts, no
+`tools/amalgamate.py`, no `dist`/`check-dist`/`dist-smoke` targets, no CI dist
+job. The maintainer's supported consumption model is vendored source plus static
+link (see `README.md` "Using Bedrock" and the Distribution Model section of
+`spec/foundation.md`) — building tooling in a script language also conflicted
+with the C-and-make-only toolchain rule now recorded in `CLAUDE.md`.
+
+The decision below is kept as historical record, and the lessons it captured are
+deliberately retained because they apply to any future unity/amalgamation
+revival:
+
+- **Feature-test macro hoisting**, including the non-obvious `_DARWIN_C_SOURCE`:
+  a single-unit build makes `_POSIX_C_SOURCE` apply to the Darwin backends,
+  hiding BSD extensions (`MAP_ANONYMOUS`, `pthread_threadid_np`) unless
+  `_DARWIN_C_SOURCE` is also defined. This surfaced only once translation units
+  were merged and would recur in any future amalgamation.
+- **Module-prefixed file-scope statics**: two modules defining the same
+  `static` helper collide when folded into one unit. The naming rule that
+  prevents it now lives in `CLAUDE.md` and stands on its own.
+
+## Decision (historical)
 
 - Keep the modular tree (`include/bedrock/<module>/<file>.h`, `src/**/*.c`) as
   the single source of truth. Never hand-edit the amalgamation.

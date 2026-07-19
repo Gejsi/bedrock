@@ -22,7 +22,7 @@ Primary docs:
 Current direction:
 
 - explicit allocators instead of hidden ambient context
-- modular source tree with generated stb-style release artifacts
+- modular source tree consumed by vendoring and static linking
 - honest C APIs where Odin semantics do not map cleanly
 
 Current implemented bootstrap:
@@ -70,6 +70,49 @@ make sanitize
 
 The `Makefile` discovers `src/**/*.c` and `tests/**/*.c` automatically, so new
 modules and tests do not need to be hardcoded into the build.
+
+## Using Bedrock
+
+Bedrock is consumed as vendored source with static linking. There are no
+generated single-header or prebuilt artifacts, and dynamic libraries are
+deliberately unsupported.
+
+1. Vendor the repository into your project — copy the tree or add it as a git
+   submodule.
+2. Build the static library: `make` (or `make MODE=release`) produces
+   `build/<mode>/lib/libbedrock.a`.
+3. Compile your code against the headers with `-I<bedrock>/include` and link the
+   archive:
+
+   ```sh
+   cc -I<bedrock>/include my_app.c <bedrock>/build/release/lib/libbedrock.a -pthread
+   ```
+
+   (`-pthread` is needed because the `sync` and `time` modules use it.)
+
+Linking the whole `libbedrock.a` is the zero-thought default: the linker drops
+objects you do not reference. If you want a smaller build, compile only the
+`src/` subdirectories you use. A module needs itself plus everything it depends
+on (transitively). Verified direct dependencies:
+
+| Module | Directly depends on |
+| --- | --- |
+| `types`, `base` | (none) |
+| `time` | (none) |
+| `unicode` | `bytes` |
+| `bytes` | `unicode`, `mem`, `io` |
+| `io` | `unicode` |
+| `mem` | `sync` |
+| `sync` | `time` |
+| `strings` | `unicode`, `io` |
+| `bufio` | `bytes`, `io`, `mem`, `strings` |
+| `encoding` | `bytes`, `io` |
+| `path` | `strings`, `unicode` |
+
+`bytes` and `unicode` are mutually dependent (a rune-aware `bytes` layer over a
+`bytes`-view UTF-8 decoder), so they always compile together. `mem` pulls in
+`sync` only for the mutex embedded in a few allocators, which in turn pulls in
+`time`. When in doubt, link the whole archive.
 
 The public ABI is spelled entirely in standard C types (`size_t`, `uint32_t`,
 `int64_t`, `double`, ...). The short aliases like `u32` and `usize` are optional

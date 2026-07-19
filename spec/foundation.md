@@ -32,14 +32,17 @@ The source tree should stay modular:
 - `src/` for implementation
 - `spec/`, `tracking/`, and `decisions/` for project memory
 
-Release artifacts should be generated from that tree:
+The supported consumption model is vendored source plus static link: a consumer
+vendors the repository (copy or git submodule), runs `make` to produce
+`build/<mode>/lib/libbedrock.a`, compiles against `-Iinclude`, and links the
+archive. Per-module granularity is available by compiling only the `src/`
+subdirectories a project needs (see `README.md` "Using Bedrock"). Dynamic
+libraries are deliberately unsupported.
 
-- `dist/bedrock.h`
-- `dist/bedrock.c`
-
-If a single-header distribution is wanted later, generate it from the same
-source of truth with a `BEDROCK_IMPLEMENTATION` mode. Do not author the project
-as one giant hand-maintained amalgamated header.
+There are no generated distribution artifacts. An earlier single-header
+amalgamator was removed (see `decisions/ADR-0004-dist-amalgamation.md`); the
+build toolchain is C and make only. Do not author the project as one giant
+hand-maintained amalgamated header.
 
 ## Naming
 
