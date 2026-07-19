@@ -236,6 +236,14 @@ judgment call needing the maintainer's explicit eye.
 
 | Candidate | Decision | Date | Note |
 | --- | --- | --- | --- |
+| time/timezone | SKIP | 2026-07-19 | pre-port strike; tz databases out of scope |
+| time/iso8601 | SKIP | 2026-07-19 | rfc3339 is the one timestamp format |
+| time/TSC-perf | SKIP | 2026-07-19 | br_tick suffices for ordinary timing |
+| string oddities (justify, expand_tabs, scrub, snake/kebab, reverse, levenshtein) | SKIP | 2026-07-19 | pre-port strike |
+| sync benaphores | SKIP | 2026-07-19 | redundant vs mutex/sema |
+| sync per-OS primitive split | SKIP (as goal) | 2026-07-19 | capability already exists |
+| rfc3339 + minimal datetime slice | PORT | 2026-07-19 | slice being mapped; datetime remainder DEFER |
+| time/stopwatch | DEFER | 2026-07-19 | on concrete demand |
 | small_stack | | | |
 | compat_allocator | | | |
 | rollback_stack | | | |

@@ -147,7 +147,8 @@ Current Bedrock files:
 | predicate / proc-based scans and trims | `planned` | none | `index_proc`, `trim_left_proc`, etc. not started. |
 | trim cutset / trim_space / trim_null | `planned` | none | Not started. |
 | split iterators / split_multi / fields | `planned` | none | Not started. |
-| reverse / scrub / expand_tabs / partition / justify / alias helpers | `planned` | none | Not started. |
+| partition / alias helpers | `planned` | none | Not started. |
+| reverse / scrub / expand_tabs / justify | `excluded` | none | Struck July 19, 2026 pre-port (see cut list): niche text-processing surface. |
 
 Summary:
 - `bytes` is a real middle slice of the Odin module.
@@ -199,7 +200,8 @@ Current Bedrock files:
 | conversion module (`to_lower`, `to_upper`, case conversion) | `planned` | none | Not landed. |
 | intern table | `planned` | none | Not landed. |
 | ascii set helper | `planned` | none | Not landed. |
-| reverse / scrub / expand_tabs / partition / justify / edit distance | `planned` | none | Not landed. |
+| partition | `planned` | none | Not landed. |
+| reverse / scrub / expand_tabs / justify / edit distance / case munging | `excluded` | none | Struck July 19, 2026 pre-port (see cut list). |
 
 Summary:
 - `strings` has the core operational slice.
@@ -355,9 +357,9 @@ Current Bedrock files:
 | `atomic.odin` surface | `adapted` | `sync/atomic.h`, `src/sync/atomic.c`, `tests/test_sync_atomic.c` | Landed as a C11-atomic-backed layer with Bedrock names and memory-order aliases. Bedrock intentionally keeps C's compare-exchange `expected` pointer contract instead of emulating Odin's tuple-return API, and currently requires compiler/target support for C11 atomics. |
 | `primitives_internal.odin` | `adapted` | `src/sync/primitives_internal.c` | Public primitive wrappers now live in an Odin-shaped internal bridge over the atomic/futex layer. Bedrock keeps C-style explicit `init`/`destroy` reset/no-op helpers. |
 | `primitives_atomic.odin` | `adapted` | `sync/primitives_atomic.h`, `src/sync/primitives_atomic.c`, `tests/test_sync_futex.c` | `Atomic_Mutex`, `Atomic_RW_Mutex`, `Atomic_Recursive_Mutex`, `Atomic_Cond`, and `Atomic_Sema` landed on top of Bedrock futex, including atomic condition/semaphore timeout waits. `Atomic_Mutex` keeps Odin's three-state shape but uses Rust-style relaxed-load spinning and a CAS fast path. `Atomic_Recursive_Mutex` stores owner atomically to avoid C data races and follows documented recursive try-lock behavior rather than Odin's current same-owner `mutex_try_lock` branch. |
-| per-OS primitive split (`linux`, `darwin`, `freebsd`, `netbsd`, `openbsd`, `haiku`, `wasm`) | `planned` | none | Current thread ID dispatch is still consolidated in `src/sync/primitives.c` rather than Odin's actual per-OS primitive files. |
+| per-OS primitive split (`linux`, `darwin`, `freebsd`, `netbsd`, `openbsd`, `haiku`, `wasm`) | `excluded` | none | Struck as a goal July 19, 2026 (cut list): a file-layout refactor with no new capability; thread ID dispatch stays consolidated in `src/sync/primitives.c`. |
 | Futex public surface and backends | `adapted` | `sync/futex.h`, `src/sync/futex_*.c`, `tests/test_sync_futex.c` | Futex wait/timeout-wait/signal/broadcast landed for Linux, Windows, Darwin, FreeBSD, NetBSD, and OpenBSD; Linux is locally tested, other source ports still need target-specific verification. Windows runtime-resolves Odin's `RtlWaitOnAddress` path plus wake functions so users do not need extra sync import libraries, Darwin weak-imports newer `os_sync_*` APIs with `__ulock_*` fallback, and FreeBSD uses the native no-timeout `_umtx_op` form instead of Odin's 4-hour timeout loop. Haiku and WASM are still missing. |
-| benaphores / recursive benaphores | `planned` | none | Not landed yet. |
+| benaphores / recursive benaphores | `excluded` | none | Struck July 19, 2026 pre-port (cut list): redundant against the existing mutex/sema surface. |
 | timeout-based waits | `adapted` | `sync/futex.h`, `sync/primitives_atomic.h`, `sync/primitives.h`, `sync/extended.h` | Timeout waits landed for futex, atomic cond/sema, public cond/sema, and wait groups. |
 | `sync/chan` | `deferred` | none | Channels are a later step, not part of the initial blocking-primitives slice. |
 
