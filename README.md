@@ -73,9 +73,15 @@ modules and tests do not need to be hardcoded into the build.
 
 ## Using Bedrock
 
-Bedrock is consumed as vendored source with static linking. There are no
-generated single-header or prebuilt artifacts, and dynamic libraries are
-deliberately unsupported.
+Bedrock is consumed as vendored source with static linking — the right default
+for a foundation library: the linker drops objects you do not reference, and a
+meaningful part of the API is inline code that compiles into your program
+anyway. There are no prebuilt artifacts yet. Once the library cuts versioned
+releases, the plan is raylib-style per-platform archives (`include/` +
+`libbedrock.a`, checksummed) on the releases page, with dynamic builds possibly
+following as optional, version-locked artifacts — Bedrock does not promise a
+stable ABI across versions, so any future `.so`/`.dll` is pinned to its
+release rather than swappable underneath your program.
 
 1. Vendor the repository into your project — copy the tree or add it as a git
    submodule.

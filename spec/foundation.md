@@ -36,12 +36,19 @@ The supported consumption model is vendored source plus static link: a consumer
 vendors the repository (copy or git submodule), runs `make` to produce
 `build/<mode>/lib/libbedrock.a`, compiles against `-Iinclude`, and links the
 archive. Per-module granularity is available by compiling only the `src/`
-subdirectories a project needs (see `README.md` "Using Bedrock"). Dynamic
-libraries are deliberately unsupported.
+subdirectories a project needs (see `README.md` "Using Bedrock").
 
-There are no generated distribution artifacts. An earlier single-header
-amalgamator was removed (see `decisions/ADR-0004-dist-amalgamation.md`); the
-build toolchain is C and make only. Do not author the project as one giant
+Static is the default, not a dogma. When versioned releases begin, the release
+page ships raylib-style per-platform archives (`include/` + `libbedrock.a`,
+checksummed), built by CI from this same tree. Dynamic builds may follow as
+optional artifacts with one honest constraint: Bedrock exposes by-value structs
+and static-inline functions throughout its headers, so there is no stable
+cross-version ABI — a `.so`/`.dll` is version-locked to its release (raylib's
+de-facto model), never a system library swappable underneath existing binaries.
+
+There are no generated source artifacts. An earlier single-header amalgamator
+was removed (see `decisions/ADR-0004-dist-amalgamation.md`); the build
+toolchain is C and make only. Do not author the project as one giant
 hand-maintained amalgamated header.
 
 ## Naming
