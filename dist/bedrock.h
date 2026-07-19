@@ -1103,28 +1103,7 @@ typedef struct br_vm_region_result {
   br_status status;
 } br_vm_region_result;
 
-typedef struct br_vm_mapped_file {
-  uint8_t *data;
-  size_t size;
-} br_vm_mapped_file;
-
-typedef enum br_vm_map_file_error {
-  BR_VM_MAP_FILE_ERROR_NONE = 0,
-  BR_VM_MAP_FILE_ERROR_INVALID_ARGUMENT,
-  BR_VM_MAP_FILE_ERROR_OPEN_FAILURE,
-  BR_VM_MAP_FILE_ERROR_STAT_FAILURE,
-  BR_VM_MAP_FILE_ERROR_NEGATIVE_SIZE,
-  BR_VM_MAP_FILE_ERROR_TOO_LARGE_SIZE,
-  BR_VM_MAP_FILE_ERROR_MAP_FAILURE
-} br_vm_map_file_error;
-
-typedef struct br_vm_mapped_file_result {
-  br_vm_mapped_file value;
-  br_vm_map_file_error error;
-} br_vm_mapped_file_result;
-
 typedef uint32_t br_vm_protect_flags;
-typedef uint32_t br_vm_map_file_flags;
 
 enum {
   BR_VM_PROTECT_READ = 1u << 0,
@@ -1133,8 +1112,6 @@ enum {
 };
 
 #define BR_VM_PROTECT_NONE ((br_vm_protect_flags)0u)
-
-enum { BR_VM_MAP_FILE_READ = 1u << 0, BR_VM_MAP_FILE_WRITE = 1u << 1 };
 
 /* Returns 0 when Bedrock does not have a VM backend for the current platform. */
 size_t br_vm_page_size(void);
@@ -1163,14 +1140,6 @@ exposes the raw primitive but not Odin's higher-level overflow-protected memory
 block flags yet.
 */
 bool br_vm_protect(void *ptr, size_t size, br_vm_protect_flags flags);
-
-/*
-This currently maps from a filesystem path rather than an already-open file
-handle. That is a Bedrock v1 simplification; Odin exposes both path and file
-entry points.
-*/
-br_vm_mapped_file_result br_vm_map_file(const char *path, br_vm_map_file_flags flags);
-void br_vm_unmap_file(br_vm_mapped_file mapping);
 
 BR_EXTERN_C_END
 
@@ -3821,11 +3790,7 @@ typedef struct br__vm_platform_memory_block {
   usize reserved_total;
 } br__vm_platform_memory_block;
 
-typedef iptr br__vm_native_file;
-
 br_vm_region_result br__vm_region_result(u8 *data, usize size, br_status status);
-br_vm_mapped_file_result
-br__vm_mapped_file_result(u8 *data, usize size, br_vm_map_file_error error);
 
 usize br__vm_cached_page_size(void);
 usize br__vm_platform_page_size_query(void);
@@ -3835,10 +3800,6 @@ br_status br__vm_platform_commit(void *ptr, usize size);
 void br__vm_platform_decommit(void *ptr, usize size);
 void br__vm_platform_release(void *ptr, usize size);
 bool br__vm_platform_protect(void *ptr, usize size, br_vm_protect_flags flags);
-
-br_vm_mapped_file_result
-br__vm_platform_map_open_file(br__vm_native_file file, usize size, br_vm_map_file_flags flags);
-void br__vm_platform_unmap_file(br_vm_mapped_file mapping);
 
 br__vm_platform_memory_block *
 br__vm_platform_memory_alloc(usize to_commit, usize to_reserve, br_status *status);
@@ -11983,16 +11944,6 @@ br_vm_region_result br__vm_region_result(u8 *data, usize size, br_status status)
   return result;
 }
 
-br_vm_mapped_file_result
-br__vm_mapped_file_result(u8 *data, usize size, br_vm_map_file_error error) {
-  br_vm_mapped_file_result result;
-
-  result.value.data = data;
-  result.value.size = size;
-  result.error = error;
-  return result;
-}
-
 usize br__vm_cached_page_size(void) {
   static usize cached_page_size = 0u;
 
@@ -12023,186 +11974,6 @@ br_vm_region_result br_vm_reserve_commit(usize size) {
   }
 
   return result;
-}
-
-/* ==== src/mem/virtual/file.c ==== */
-
-#if defined(BR__VM_TARGET_WINDOWS)
-
-#include <windows.h>
-
-static br_vm_map_file_error
-br__vm_open_file_path(const char *path, br_vm_map_file_flags flags, br__vm_native_file *file_out) {
-  DWORD desired_access = 0u;
-  HANDLE file;
-
-  if (file_out == NULL) {
-    return BR_VM_MAP_FILE_ERROR_INVALID_ARGUMENT;
-  }
-
-  if ((flags & BR_VM_MAP_FILE_READ) != 0u) {
-    desired_access |= GENERIC_READ;
-  }
-  if ((flags & BR_VM_MAP_FILE_WRITE) != 0u) {
-    desired_access |= GENERIC_READ | GENERIC_WRITE;
-  }
-
-  file = CreateFileA(
-    path, desired_access, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-  if (file == INVALID_HANDLE_VALUE) {
-    return BR_VM_MAP_FILE_ERROR_OPEN_FAILURE;
-  }
-
-  *file_out = (br__vm_native_file)(iptr)file;
-  return BR_VM_MAP_FILE_ERROR_NONE;
-}
-
-static br_vm_map_file_error br__vm_query_file_size(br__vm_native_file file, i64 *size_out) {
-  LARGE_INTEGER file_size;
-  HANDLE handle = (HANDLE)(iptr)file;
-
-  if (size_out == NULL) {
-    return BR_VM_MAP_FILE_ERROR_INVALID_ARGUMENT;
-  }
-  if (GetFileSizeEx(handle, &file_size) == 0) {
-    return BR_VM_MAP_FILE_ERROR_STAT_FAILURE;
-  }
-  if (file_size.QuadPart < 0) {
-    return BR_VM_MAP_FILE_ERROR_NEGATIVE_SIZE;
-  }
-
-  *size_out = (i64)file_size.QuadPart;
-  return BR_VM_MAP_FILE_ERROR_NONE;
-}
-
-static void br__vm_close_file(br__vm_native_file file) {
-  HANDLE handle = (HANDLE)(iptr)file;
-
-  if (handle != NULL && handle != INVALID_HANDLE_VALUE) {
-    (void)CloseHandle(handle);
-  }
-}
-
-#elif defined(BR__VM_TARGET_LINUX) || defined(BR__VM_TARGET_POSIX)
-
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
-static br_vm_map_file_error
-br__vm_open_file_path(const char *path, br_vm_map_file_flags flags, br__vm_native_file *file_out) {
-  int open_flags = O_RDONLY;
-  int fd;
-
-  if (file_out == NULL) {
-    return BR_VM_MAP_FILE_ERROR_INVALID_ARGUMENT;
-  }
-  if ((flags & BR_VM_MAP_FILE_WRITE) != 0u) {
-    open_flags = O_RDWR;
-  }
-
-  fd = open(path, open_flags);
-  if (fd < 0) {
-    return BR_VM_MAP_FILE_ERROR_OPEN_FAILURE;
-  }
-
-  *file_out = (br__vm_native_file)fd;
-  return BR_VM_MAP_FILE_ERROR_NONE;
-}
-
-static br_vm_map_file_error br__vm_query_file_size(br__vm_native_file file, i64 *size_out) {
-  struct stat st;
-  int fd = (int)file;
-
-  if (size_out == NULL) {
-    return BR_VM_MAP_FILE_ERROR_INVALID_ARGUMENT;
-  }
-  if (fstat(fd, &st) != 0) {
-    return BR_VM_MAP_FILE_ERROR_STAT_FAILURE;
-  }
-  if (st.st_size < 0) {
-    return BR_VM_MAP_FILE_ERROR_NEGATIVE_SIZE;
-  }
-
-  *size_out = (i64)st.st_size;
-  return BR_VM_MAP_FILE_ERROR_NONE;
-}
-
-static void br__vm_close_file(br__vm_native_file file) {
-  int fd = (int)file;
-
-  if (fd >= 0) {
-    (void)close(fd);
-  }
-}
-
-#else
-
-static br_vm_map_file_error
-br__vm_open_file_path(const char *path, br_vm_map_file_flags flags, br__vm_native_file *file_out) {
-  BR_UNUSED(path);
-  BR_UNUSED(flags);
-  BR_UNUSED(file_out);
-  return BR_VM_MAP_FILE_ERROR_MAP_FAILURE;
-}
-
-static br_vm_map_file_error br__vm_query_file_size(br__vm_native_file file, i64 *size_out) {
-  BR_UNUSED(file);
-  BR_UNUSED(size_out);
-  return BR_VM_MAP_FILE_ERROR_MAP_FAILURE;
-}
-
-static void br__vm_close_file(br__vm_native_file file) {
-  BR_UNUSED(file);
-}
-
-#endif
-
-br_vm_mapped_file_result br_vm_map_file(const char *path, br_vm_map_file_flags flags) {
-  br__vm_native_file file = (br__vm_native_file)0;
-  br_vm_map_file_error error;
-  br_vm_mapped_file_result result;
-  i64 size;
-
-  if (path == NULL || (flags & (BR_VM_MAP_FILE_READ | BR_VM_MAP_FILE_WRITE)) == 0u) {
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_INVALID_ARGUMENT);
-  }
-
-  /*
-  Bedrock still exposes only the path-based public API until an `os/file`
-  layer exists, but this file now owns the high-level open/stat/map flow like
-  Odin's `virtual/file.odin` instead of pushing it all into per-platform files.
-  */
-  error = br__vm_open_file_path(path, flags, &file);
-  if (error != BR_VM_MAP_FILE_ERROR_NONE) {
-    return br__vm_mapped_file_result(NULL, 0u, error);
-  }
-
-  error = br__vm_query_file_size(file, &size);
-  if (error != BR_VM_MAP_FILE_ERROR_NONE) {
-    br__vm_close_file(file);
-    return br__vm_mapped_file_result(NULL, 0u, error);
-  }
-  if ((u64)size > (u64)SIZE_MAX) {
-    br__vm_close_file(file);
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_TOO_LARGE_SIZE);
-  }
-  if (size == 0) {
-    br__vm_close_file(file);
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_NONE);
-  }
-
-  result = br__vm_platform_map_open_file(file, (usize)size, flags);
-  br__vm_close_file(file);
-  return result;
-}
-
-void br_vm_unmap_file(br_vm_mapped_file mapping) {
-  if (mapping.data == NULL || mapping.size == 0u) {
-    return;
-  }
-
-  br__vm_platform_unmap_file(mapping);
 }
 
 /* ==== src/mem/virtual/virtual.c ==== */
@@ -12423,33 +12194,6 @@ bool br__vm_platform_protect(void *ptr, usize size, br_vm_protect_flags flags) {
   return mprotect(ptr, size, protect) == 0;
 }
 
-br_vm_mapped_file_result
-br__vm_platform_map_open_file(br__vm_native_file file, usize size, br_vm_map_file_flags flags) {
-  int prot = 0;
-  void *view;
-
-  if ((flags & BR_VM_MAP_FILE_WRITE) != 0u) {
-    prot |= PROT_WRITE;
-  }
-  if ((flags & BR_VM_MAP_FILE_READ) != 0u || (flags & BR_VM_MAP_FILE_WRITE) == 0u) {
-    prot |= PROT_READ;
-  }
-
-  view = mmap(NULL, size, prot, MAP_SHARED, (int)file, 0);
-  if (view == MAP_FAILED || view == NULL) {
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
-  }
-
-  return br__vm_mapped_file_result((u8 *)view, size, BR_VM_MAP_FILE_ERROR_NONE);
-}
-
-void br__vm_platform_unmap_file(br_vm_mapped_file mapping) {
-#if defined(MS_SYNC)
-  (void)msync(mapping.data, mapping.size, MS_SYNC);
-#endif
-  (void)munmap(mapping.data, mapping.size);
-}
-
 #endif
 
 /* ==== src/mem/virtual/virtual_netbsd.c ==== */
@@ -12583,18 +12327,6 @@ bool br__vm_platform_protect(void *ptr, usize size, br_vm_protect_flags flags) {
   return false;
 }
 
-br_vm_mapped_file_result
-br__vm_platform_map_open_file(br__vm_native_file file, usize size, br_vm_map_file_flags flags) {
-  BR_UNUSED(file);
-  BR_UNUSED(size);
-  BR_UNUSED(flags);
-  return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
-}
-
-void br__vm_platform_unmap_file(br_vm_mapped_file mapping) {
-  BR_UNUSED(mapping);
-}
-
 #endif
 
 /* ==== src/mem/virtual/virtual_platform.c ==== */
@@ -12722,33 +12454,6 @@ bool br__vm_platform_protect(void *ptr, usize size, br_vm_protect_flags flags) {
   return mprotect(ptr, size, protect) == 0;
 }
 
-br_vm_mapped_file_result
-br__vm_platform_map_open_file(br__vm_native_file file, usize size, br_vm_map_file_flags flags) {
-  int prot = 0;
-  void *view;
-
-  if ((flags & BR_VM_MAP_FILE_WRITE) != 0u) {
-    prot |= PROT_WRITE;
-  }
-  if ((flags & BR_VM_MAP_FILE_READ) != 0u || (flags & BR_VM_MAP_FILE_WRITE) == 0u) {
-    prot |= PROT_READ;
-  }
-
-  view = mmap(NULL, size, prot, MAP_SHARED, (int)file, 0);
-  if (view == MAP_FAILED || view == NULL) {
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
-  }
-
-  return br__vm_mapped_file_result((u8 *)view, size, BR_VM_MAP_FILE_ERROR_NONE);
-}
-
-void br__vm_platform_unmap_file(br_vm_mapped_file mapping) {
-#if defined(MS_SYNC)
-  (void)msync(mapping.data, mapping.size, MS_SYNC);
-#endif
-  (void)munmap(mapping.data, mapping.size);
-}
-
 #endif
 
 /* ==== src/mem/virtual/virtual_windows.c ==== */
@@ -12822,37 +12527,6 @@ bool br__vm_platform_protect(void *ptr, usize size, br_vm_protect_flags flags) {
   }
 
   return VirtualProtect(ptr, size, protect, &old_protect) != 0;
-}
-
-br_vm_mapped_file_result
-br__vm_platform_map_open_file(br__vm_native_file file, usize size, br_vm_map_file_flags flags) {
-  DWORD protect = PAGE_READONLY;
-  DWORD map_access = FILE_MAP_READ;
-  HANDLE mapping = NULL;
-  void *view = NULL;
-
-  if ((flags & BR_VM_MAP_FILE_WRITE) != 0u) {
-    protect = PAGE_READWRITE;
-    map_access = FILE_MAP_READ | FILE_MAP_WRITE;
-  }
-
-  mapping = CreateFileMappingA((HANDLE)(iptr)file, NULL, protect, 0u, 0u, NULL);
-  if (mapping == NULL) {
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
-  }
-
-  view = MapViewOfFile(mapping, map_access, 0u, 0u, size);
-  CloseHandle(mapping);
-  if (view == NULL) {
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
-  }
-
-  return br__vm_mapped_file_result((u8 *)view, size, BR_VM_MAP_FILE_ERROR_NONE);
-}
-
-void br__vm_platform_unmap_file(br_vm_mapped_file mapping) {
-  (void)FlushViewOfFile(mapping.data, mapping.size);
-  (void)UnmapViewOfFile(mapping.data);
 }
 
 #endif
