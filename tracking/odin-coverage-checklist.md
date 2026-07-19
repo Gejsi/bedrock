@@ -348,7 +348,7 @@ Current Bedrock files:
 | `Sema` | `adapted` | `sync/primitives.h`, `src/sync/primitives_internal.c`, `tests/test_sync.c` | Public semaphore landed as a zero-value-ready wrapper over `br_atomic_sema`, with an optional C reset/init helper for non-zero initial counts and timeout wait. |
 | `sync_util` guard/lock aliases | `adapted` | `sync/sync_util.h` | Generic `lock`/`unlock`/`try_lock` style macros landed. Odin's function-style `guard` becomes a scoped block macro because C has no `defer`. |
 | `Wait_Group` | `adapted` | `sync/extended.h`, `src/sync/extended.c`, `tests/test_sync.c` | Core add/done/wait and timeout wait landed. Bedrock tracks remaining duration across condition wait iterations so spurious wakeups do not restart the public timeout window. |
-| `Barrier` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Core init/wait landed. |
+| `Barrier` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Core init/wait landed. Built on Bedrock's own mutex+cond rather than `pthread_barrier`, which is optional POSIX and absent on macOS (verified July 19, 2026) — portable by construction. |
 | `Once` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Landed with a generic `void *` callback plus a no-data helper instead of Odin's overloaded proc family. |
 | `Auto_Reset_Event` | `adapted` | `sync/extended.h`, `src/sync/extended.c`, `tests/test_sync.c` | Landed with Odin's signed status counter plus `Sema` storage, using `br_atomic_i32` for C data-race safety. |
 | `Parker` | `adapted` | `sync/extended.h`, `src/sync/extended.c`, `tests/test_sync.c` | Landed with Odin's futex state machine. Bedrock's timeout variant returns `bool` and restores state on timeout so C callers can tell whether a token was consumed. |
@@ -368,9 +368,13 @@ Summary:
 - The public API is close enough to integrate.
 - Public primitives now use the atomic/futex internals and are zero-value-ready
   instead of storing pthread/Windows native objects.
-- The main missing work is target-verifying non-Linux futex backends, adding
-  the missing extended primitives, adding Haiku/WASM futex backends, and
-  completing the real Odin-style OS primitive split.
+- The extended-primitive surface is COMPLETE (reconciled July 19, 2026):
+  all nine of Odin's extended primitives are landed (7) or deliberately
+  excluded (benaphores ×2, per the cut list — no modern ecosystem ships one;
+  `br_atomic_mutex` is the futex-era superset of what a benaphore optimizes).
+- The remaining sync work is target-verifying the non-Linux futex backends and
+  adding Haiku/WASM futex backends on demand. The per-OS primitive split was
+  struck as a goal (cut list). No primitives are missing.
 
 ## `core/thread`
 
