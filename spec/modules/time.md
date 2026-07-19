@@ -32,7 +32,8 @@ typedef struct br_date {
 typedef struct br_time_of_day {
   int8_t  hour;    /* 0..23 */
   int8_t  minute;  /* 0..59 */
-  int8_t  second;  /* 0..60 (60 only via the leap-second parse path) */
+  int8_t  second;  /* 0..59 (a parsed :60 leap second is smeared before any
+                      datetime is built, so no br_time_of_day ever carries 60) */
   int32_t nano;    /* 0..999_999_999 */
 } br_time_of_day;
 
