@@ -6044,7 +6044,7 @@ static bool br__hex_digit(u8 c, u8 *out) {
   return false;
 }
 
-static br_bytes_result br__bytes_result(void *data, usize len, br_status status) {
+static br_bytes_result br__hex_bytes_result(void *data, usize len, br_status status) {
   br_bytes_result result;
 
   result.value = br_bytes_make(data, len);
@@ -6052,7 +6052,8 @@ static br_bytes_result br__bytes_result(void *data, usize len, br_status status)
   return result;
 }
 
-static br_decode_result br__decode_result(br_bytes value, usize error_offset, br_status status) {
+static br_decode_result
+br__hex_decode_result(br_bytes value, usize error_offset, br_status status) {
   br_decode_result result;
 
   result.value = value;
@@ -6062,7 +6063,7 @@ static br_decode_result br__decode_result(br_bytes value, usize error_offset, br
 }
 
 static br_decode_into_result
-br__decode_into_result(usize count, usize error_offset, br_status status) {
+br__hex_decode_into_result(usize count, usize error_offset, br_status status) {
   br_decode_into_result result;
 
   result.count = count;
@@ -6078,18 +6079,18 @@ br_bytes_result br_hex_encode(br_bytes_view src, br_hex_case letter_case, br_all
   usize out_len;
 
   if (src.len == 0u) {
-    return br__bytes_result(NULL, 0u, BR_STATUS_OK);
+    return br__hex_bytes_result(NULL, 0u, BR_STATUS_OK);
   }
 
   /* out_len = src.len * 2; guard the (practically unreachable) overflow. */
   if (src.len > SIZE_MAX / 2u) {
-    return br__bytes_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+    return br__hex_bytes_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
   }
   out_len = src.len * 2u;
 
   alloc = br_allocator_alloc_uninit(allocator, out_len, 1u);
   if (alloc.status != BR_STATUS_OK) {
-    return br__bytes_result(NULL, 0u, alloc.status);
+    return br__hex_bytes_result(NULL, 0u, alloc.status);
   }
 
   dst = (u8 *)alloc.ptr;
@@ -6100,7 +6101,7 @@ br_bytes_result br_hex_encode(br_bytes_view src, br_hex_case letter_case, br_all
     dst[j + 1u] = table[v & 0x0fu];
   }
 
-  return br__bytes_result(dst, out_len, BR_STATUS_OK);
+  return br__hex_bytes_result(dst, out_len, BR_STATUS_OK);
 }
 
 br_io_result
@@ -6175,17 +6176,17 @@ br_decode_result br_hex_decode(br_bytes_view src, br_allocator allocator) {
   /* Length parity is a structural property, so it is checked before allocating.
      This also keeps the odd-length path off the allocate-then-fail branch. */
   if ((src.len & 1u) != 0u) {
-    return br__decode_result(br_bytes_make(NULL, 0u), src.len - 1u, BR_STATUS_INVALID_ENCODING);
+    return br__hex_decode_result(br_bytes_make(NULL, 0u), src.len - 1u, BR_STATUS_INVALID_ENCODING);
   }
 
   out_len = src.len / 2u;
   if (out_len == 0u) {
-    return br__decode_result(br_bytes_make(NULL, 0u), 0u, BR_STATUS_OK);
+    return br__hex_decode_result(br_bytes_make(NULL, 0u), 0u, BR_STATUS_OK);
   }
 
   alloc = br_allocator_alloc_uninit(allocator, out_len, 1u);
   if (alloc.status != BR_STATUS_OK) {
-    return br__decode_result(br_bytes_make(NULL, 0u), 0u, alloc.status);
+    return br__hex_decode_result(br_bytes_make(NULL, 0u), 0u, alloc.status);
   }
   dst = (u8 *)alloc.ptr;
 
@@ -6197,17 +6198,17 @@ br_decode_result br_hex_decode(br_bytes_view src, br_allocator allocator) {
        the destination buffer is abandoned on an invalid byte. */
     if (!br__hex_digit(src.data[j], &hi)) {
       br_allocator_free(allocator, dst, out_len);
-      return br__decode_result(br_bytes_make(NULL, 0u), j, BR_STATUS_INVALID_ENCODING);
+      return br__hex_decode_result(br_bytes_make(NULL, 0u), j, BR_STATUS_INVALID_ENCODING);
     }
     if (!br__hex_digit(src.data[j + 1u], &lo)) {
       br_allocator_free(allocator, dst, out_len);
-      return br__decode_result(br_bytes_make(NULL, 0u), j + 1u, BR_STATUS_INVALID_ENCODING);
+      return br__hex_decode_result(br_bytes_make(NULL, 0u), j + 1u, BR_STATUS_INVALID_ENCODING);
     }
 
     dst[i] = (u8)((hi << 4) | lo);
   }
 
-  return br__decode_result(br_bytes_make(dst, out_len), 0u, BR_STATUS_OK);
+  return br__hex_decode_result(br_bytes_make(dst, out_len), 0u, BR_STATUS_OK);
 }
 
 br_decode_into_result br_hex_decode_into(br_bytes_view src, u8 *dst, usize dst_cap) {
@@ -6216,16 +6217,16 @@ br_decode_into_result br_hex_decode_into(br_bytes_view src, u8 *dst, usize dst_c
   /* Parity is checked first so odd-length input classifies as INVALID_ENCODING
      identically to br_hex_decode, independent of the caller's buffer state. */
   if ((src.len & 1u) != 0u) {
-    return br__decode_into_result(0u, src.len - 1u, BR_STATUS_INVALID_ENCODING);
+    return br__hex_decode_into_result(0u, src.len - 1u, BR_STATUS_INVALID_ENCODING);
   }
 
   out_len = src.len / 2u;
 
   if (out_len > 0u && dst == NULL) {
-    return br__decode_into_result(0u, 0u, BR_STATUS_INVALID_ARGUMENT);
+    return br__hex_decode_into_result(0u, 0u, BR_STATUS_INVALID_ARGUMENT);
   }
   if (dst_cap < out_len) {
-    return br__decode_into_result(0u, 0u, BR_STATUS_SHORT_BUFFER);
+    return br__hex_decode_into_result(0u, 0u, BR_STATUS_SHORT_BUFFER);
   }
 
   for (usize i = 0u, j = 0u; j < src.len; i += 1u, j += 2u) {
@@ -6236,16 +6237,16 @@ br_decode_into_result br_hex_decode_into(br_bytes_view src, u8 *dst, usize dst_c
        count reports 0: no valid output was produced (mirrors the allocating
        decode returning an empty value). error_offset locates the fault. */
     if (!br__hex_digit(src.data[j], &hi)) {
-      return br__decode_into_result(0u, j, BR_STATUS_INVALID_ENCODING);
+      return br__hex_decode_into_result(0u, j, BR_STATUS_INVALID_ENCODING);
     }
     if (!br__hex_digit(src.data[j + 1u], &lo)) {
-      return br__decode_into_result(0u, j + 1u, BR_STATUS_INVALID_ENCODING);
+      return br__hex_decode_into_result(0u, j + 1u, BR_STATUS_INVALID_ENCODING);
     }
 
     dst[i] = (u8)((hi << 4) | lo);
   }
 
-  return br__decode_into_result(out_len, 0u, BR_STATUS_OK);
+  return br__hex_decode_into_result(out_len, 0u, BR_STATUS_OK);
 }
 
 br_io_byte_result br_hex_decode_sequence(br_bytes_view seq) {
