@@ -29,7 +29,7 @@ Current label: `partial v1`
 
 Why this label:
 - Bedrock now has the allocator contract, the first fixed, scratch, stack,
-  small-stack, and dynamic arenas/allocators, and the first cross-platform
+  and dynamic arenas/allocators, and the first cross-platform
   virtual-memory-backed arena implementation.
 - Odin `core/mem` is still much broader and includes specialized allocators,
   synchronized wrappers, and TLSF work that Bedrock has not ported yet.
@@ -43,7 +43,6 @@ Current Bedrock files:
 - `include/bedrock/mem/mutex_allocator.h`
 - `include/bedrock/mem/rollback_stack.h`
 - `include/bedrock/mem/scratch.h`
-- `include/bedrock/mem/small_stack.h`
 - `include/bedrock/mem/stack.h`
 - `include/bedrock/mem/tracking_allocator.h`
 - `include/bedrock/mem/virtual.h`
@@ -57,7 +56,6 @@ Current Bedrock files:
 - `src/mem/mutex_allocator.c`
 - `src/mem/rollback_stack.c`
 - `src/mem/scratch.c`
-- `src/mem/small_stack.c`
 - `src/mem/stack.c`
 - `src/mem/tracking_allocator.c`
 - `src/mem/virtual/common.c`
@@ -84,7 +82,7 @@ Current Bedrock files:
 | arena mark / rewind | `done` | `arena.h`, `arena.c` | Implemented. |
 | scratch allocator | `adapted` | `scratch.h`, `scratch.c` | Landed with lazy default initialization, backup allocations, and last-allocation free/resize behavior close to Odin; Bedrock omits Odin's context logger warning path and uses explicit status returns. |
 | stack allocator | `adapted` | `stack.h`, `stack.c` | Landed with Odin-style buffered stack allocation, last-allocation free/resize, and double-free tolerance; Bedrock returns statuses instead of panics and documents the in-place resize check that differs from Odin's current source. |
-| small stack allocator | `adapted` | `small_stack.h`, `small_stack.c` | Landed with Odin-style tiny headers, out-of-order free semantics, and overwrite-on-reuse behavior; Bedrock returns statuses instead of panics and still enforces Bedrock's power-of-two alignment contract after Odin-style clamping. The clamp matches Odin's 32 on 64-bit targets; a hypothetical ILP32 target would clamp at 16 where Odin stays at 32. |
+| small stack allocator | `cut` | none | Cut July 19, 2026 (cut-list decisions log): redundant with `stack`, the canonical LIFO allocator; the tiny-header size delta was an Odin micro-optimization, not a use case. No external consumers at removal. |
 | dynamic arena allocator | `adapted` | `dynamic_arena.h`, `dynamic_arena.c` | Landed with Odin-style block cycling, separate block/array allocators, out-band allocations, reset/free-all split, reallocate-on-resize behavior, and per-request alignment (`max(minimum_alignment, request)`, floored on the out-band path too); Bedrock keeps the generic allocator adapter on alloc/free/resize/reset only, so there are no query-feature/query-info modes yet. |
 | buddy allocator | `adapted` | `buddy_allocator.h`, `buddy_allocator.c` | Landed with Odin-style in-place buddy block splitting/coalescing, fixed power-of-two backing storage, and fixed-alignment allocations; Bedrock reports init/pointer misuse as statuses and the generic adapter keeps Bedrock's alloc/free/resize/reset ABI instead of Odin's query modes. |
 | compat allocator | `adapted` | `compat_allocator.h`, `compat_allocator.c` | Landed as a header-prefixed wrapper that tracks allocation size/alignment and hides parent old-size requirements from Bedrock callers. Bedrock defaults unset parents to heap, has no generic query-feature/query-info surface yet, and explicitly shifts the payload if the wrapped header prefix grows during an in-place parent resize. |
