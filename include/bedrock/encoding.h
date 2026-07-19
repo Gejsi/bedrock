@@ -2,5 +2,6 @@
 #define BEDROCK_ENCODING_H
 
 #include <bedrock/encoding/encoding.h>
+#include <bedrock/encoding/hex.h>
 
 #endif
