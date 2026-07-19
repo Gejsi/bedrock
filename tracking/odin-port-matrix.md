@@ -28,7 +28,7 @@ parser wave (csv/ini/scanner) are queued behind core completion.
 | `core/time` | partial v1 | Minimal duration/time/tick/sleep foundation landed to unblock sync timeouts. After the July 19, 2026 pre-port scrutiny: only the minimal datetime slice rfc3339 needs remains in scope; stopwatch is deferred on demand; timezone, iso8601, and TSC/perf are struck (see `tracking/cut-list.md`). |
 | `core/time/rfc3339` | v1 | Useful focused formatter/parser; ports with only the minimal datetime slice it transitively needs (fixed-offset timestamps, no timezone database). |
 | `core/math/bits` | v1 | Mostly portability shims and bit helpers. |
-| `core/container/*` | redesign | Keep the ideas; implement as generated typed containers. |
+| `core/container/*` | redesign | Keep the ideas; implement as generated typed containers. Demand-ranked coverage for the redesign (from the July 19, 2026 evidence survey): dynamic array, queue, priority_queue, small_array, bit_array are the common set; pick ONE balanced tree (Odin ships both avl and rbtree); lru/pool/handle_map opt-in; topological_sort/xar/intrusive specialist. |
 | `core/sort` | redesign | Use erased generic algorithms plus optional typed sugar. |
 | `core/thread` | defer | Later module; no direct v1 port. |
 | `core/sync` | partial v1 | Core blocking primitives, public `Sema`, a useful first extended slice, `sync/atomic`, native thread IDs, Linux/Windows/Darwin/FreeBSD/NetBSD/OpenBSD futex wait/timeout/wake, `Atomic_Mutex`, `Atomic_RW_Mutex`, `Atomic_Recursive_Mutex`, `Atomic_Cond`, `Atomic_Sema`, public timeout waits, `Auto_Reset_Event`, `Parker`, and `One_Shot_Event` landed. Public primitives now delegate to the atomic/futex layer and are zero-value-ready; Haiku/WASM futex backends, missing extended primitives, and Odin's real per-OS primitive tree still remain. |
@@ -57,9 +57,9 @@ lines at `2c25fb9`.
 | --- | --- | --- |
 | `core/strconv` | 3180 | Number/string parse and format. The coverage checklist already depends on it (builder write_int/write_float), and it is the most-reached-for stdlib facility C under-serves (strtol/snprintf are clumsy and locale-tainted). Highest-value un-ported package. |
 | `core/encoding/base32` | 231 | Tiny table-driven sibling of the ported base64. |
-| `core/encoding/uuid` | 1058 | Parse/format/generate — common, small, self-contained. Needs a rand source. |
-| `core/hash` | 3629 | Non-cryptographic hashes (crc32, fnv, xxhash) — daily-driver for checksums and hash tables, not covered by libc, no security surface (crypto stays excluded). |
-| `core/math/rand` | subtree | Seedable PRNG — a genuine C gap (rand() is bad and global). Generator first; distributions on demand. |
+| `core/encoding/uuid` | 1058 | Parse/format/generate — common and small. Scoped per evidence: v4 + v7 only (they need just rand + time); v3/v5 require MD5/SHA1 and stay out with the excluded crypto surface. |
+| `core/hash` | 3629 | Non-cryptographic hashes — daily-driver for checksums and hash tables, not covered by libc, no security surface (crypto stays excluded). Scoped per evidence: crc32/crc64 plus xxhash; the copy-paste tier (fnv, djb2, murmur, jenkins, sdbm, adler) skipped. |
+| `core/math/rand` | 2235 | Seedable PRNG — a genuine C gap (rand() is bad and global). Focused core: generator + int/float/range/shuffle; distributions on demand. |
 
 ### DEFER (gate on a concrete consumer)
 
