@@ -56,10 +56,15 @@ enforce is provided by `br_wtf8_concat` instead — see below).
 `br_utf8_*` is UNCHANGED and stays strict-Unicode-scalar-only — its presented
 contract admits no surrogates, and utf8.h makes no mention of WTF-8. WTF-8 is a
 SEPARATE public surface (`include/bedrock/unicode/wtf8.h`,
-`src/unicode/wtf8.c`) that reuses the strict codec's internal byte-layout
-arithmetic but relaxes exactly one rule: the surrogate ban. There is no mode
-flag on the strict hot path; the strict and permissive behaviors are simply
-which surface you call. The proof obligation is that the existing utf8 test
+`src/unicode/wtf8.c`) that MIRRORS the strict codec's byte-layout arithmetic in
+a small WTF-8-local copy (~15 lines of lead-byte classification and masks, with
+one deliberate difference: the `0xED` continuation cap is raised so lone
+surrogates decode) rather than sharing code with utf8.c — the strict file is
+untouched, so the regression guard holds by construction, and the duplicated
+arithmetic is frozen by the UTF-8 specification itself, carrying no drift risk.
+A differential test pins the copy: strictly-valid UTF-8 decodes identically
+through both surfaces. There is no mode flag on the strict hot path; the strict
+and permissive behaviors are simply which surface you call. The proof obligation is that the existing utf8 test
 suite passes untouched — the WTF-8 addition must not alter strict decode/encode
 behavior in any way (a prominent regression guard in the testing section).
 
