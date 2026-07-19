@@ -73,18 +73,22 @@ external demand, judged per item.
 - **Why cut:** shipping both `stack` and `small_stack` is the clearest
   redundancy in the library. Keep `stack` as the one canonical LIFO allocator.
 
-### compat_allocator (277 lines, 163 test)
+### compat_allocator (277 lines, 163 test) — RESOLVED: KEEP
 
 - **What:** wraps a parent allocator and records each allocation's size so
   callers can free/resize WITHOUT passing `old_size`.
-- **Realistic user:** only code bridging to a malloc/free-style sizeless-free
-  world. Bedrock's ABI deliberately carries `old_size` everywhere, so inside
-  Bedrock's own philosophy this solves a problem the library chose not to have.
-- **Cost:** 277 lines + a semantically subtle header-shifting resize path.
-- **Why cut:** it's an escape hatch *against* foundation.md's explicit-size
-  design. KEEP only if the project wants an official malloc/free facade;
-  otherwise it cuts cleanly. This is the one call that hinges on a philosophy
-  decision, not a usage one.
+- **Original cut case:** inside Bedrock's own philosophy it solves a problem
+  the library chose not to have (the ABI deliberately carries `old_size`).
+- **Why it stays (July 19, 2026 boundary audit):** the sizeless-free caller is
+  not Bedrock code — it is the FOREIGN C-library callback class. zlib, sqlite,
+  stb, curl, and FreeType all take allocator callbacks whose free is
+  `void (*)(void *)` with NO size; a raw Bedrock allocator cannot satisfy that
+  contract, and compat's header-prefix is exactly the adapter that can. In a
+  vendored-static world where Bedrock sits next to third-party C libraries,
+  that is a first-class interop use, not an internal escape hatch. (Lua's
+  `lua_Alloc` passes `osize` and can use a Bedrock allocator directly — the
+  size-passing minority.)
+- **Follow-up:** re-document header + checklist row with the interop framing.
 
 ## CUT — medium confidence
 
@@ -315,6 +319,7 @@ boundary.
 | demand audit (allocators + sync) | COMPLETE | 2026-07-19 | steelman-first evidence table recorded above: allocator side 3 CUT + 1 DEMOTE + lookahead CUT; sync side 5 KEEP + 2 DEMOTE-class. Execution rulings still pending. |
 | small_stack, rollback_stack, lookahead_reader | CUT (RULED) | 2026-07-19 | the three clean cuts approved for execution — zero consumers, superseding alternative each; one removal commit per candidate |
 | compat_allocator | PENDING | 2026-07-19 | awaits the malloc/free-facade philosophy ruling |
+| compat_allocator | KEEP (interop reframe) | 2026-07-19 | the boundary audit resolved the pending condition: compat is the FFI adapter that lets a Bedrock allocator serve the sizeless-free callback ABI of the dominant C-library class (zlib, sqlite, stb, curl, FreeType); Lua's size-passing lua_Alloc is the minority that needs no adapter. Re-document with interop framing (adapter for foreign callbacks, not an internal convenience). |
 | small_stack | | | |
 | compat_allocator | | | |
 | rollback_stack | | | |
