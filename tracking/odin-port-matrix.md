@@ -38,7 +38,7 @@ parser wave (csv/ini/scanner) are queued behind core completion.
 | `core/encoding/xml` | exclude v1 | Large parser surface; not first-wave material. |
 | `core/flags` | exclude v1 | Struct-tag and RTTI heavy. |
 | `core/reflect` | exclude v1 | Language/runtime feature, not a library fit. |
-| `core/os`, `core/sys`, `core/net` | exclude v1 | Too platform-heavy for initial scope. |
+| `core/os`, `core/sys`, `core/net` | exclude v1 | Too platform-heavy for initial scope. Note (July 19, 2026): at pin `2c25fb9`, `core/os` IS the promoted former `os2` (uniform cross-platform API, ~86 files) with the legacy v1 preserved under `core/os/old` — any future os wave designs against the promoted package, never `old`. The struck file-mapping API's decision log already names "a future os module" as the only legitimate home for file APIs. |
 | `core/crypto/*` | exclude v1 | Large and security-sensitive. |
 | `core/compress/*` | exclude v1 | Valuable, but not core bootstrap material. |
 | `core/image/*` | exclude v1 | Large and specialized. |
