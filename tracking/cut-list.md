@@ -288,6 +288,9 @@ boundary.
 | math core float functions | SKIP | 2026-07-19 | libm is the answer; struck outright |
 | text/regex | SKIP | 2026-07-19 | PCRE2 is the answer, as cJSON is for json |
 | time/stopwatch | DEFER | 2026-07-19 | on concrete demand |
+| niche-allocator cut executions | ON HOLD | 2026-07-19 | landed allocators stay for now; a use-case audit (steelman-the-keep-first) runs before any cut ruling — "they are already there, we can keep them for now" |
+| containers + sort redesign chapter | ORDERED LAST | 2026-07-19 | containers are the hardest C surface ("so many caveats and usage problems") — the chapter closes the port; nothing jumps it into an earlier slot |
+| sync extended primitives | AUDIT ORDERED | 2026-07-19 | per-primitive living-idiom-vs-relic audit (ticket mutex, auto-reset event, one-shot event, public parker, barrier) before any trim ruling |
 | small_stack | | | |
 | compat_allocator | | | |
 | rollback_stack | | | |
