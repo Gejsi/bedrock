@@ -12,5 +12,6 @@
 #include <bedrock/sync.h>
 #include <bedrock/time.h>
 #include <bedrock/encoding.h>
+#include <bedrock/path.h>
 
 #endif
