@@ -5,6 +5,13 @@ Concise notes for issues found while porting Odin code to Bedrock.
 All issues below were verified present in upstream Odin at `2c25fb9`
 (July 19, 2026).
 
+Footnote (dormant, not a numbered bug): Odin's `Memory_Block_Flag.Overflow_Protection`
+path would VirtualProtect an uncommitted page on Windows
+(`virtual.odin:90-108`), the same defect Bedrock fixed in its own guard-page
+feature — but in Odin the flag is passed by no call site and the `protect`
+return is ignored, so it can never manifest. Bedrock's overflow protection is
+the reachable, error-checked completion of that dormant path.
+
 ## `core/unicode/utf8` encode of out-of-range runes
 
 - File: `core/unicode/utf8/utf8.odin`
