@@ -4,7 +4,7 @@
 #include <bedrock/base.h>
 #include <bedrock/sync/primitives_atomic.h>
 #include <bedrock/sync/thread.h>
-#include <bedrock/time.h>
+#include <bedrock/time/time.h>
 
 BR_EXTERN_C_BEGIN
 

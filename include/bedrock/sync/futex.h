@@ -2,7 +2,7 @@
 #define BEDROCK_SYNC_FUTEX_H
 
 #include <bedrock/sync/atomic.h>
-#include <bedrock/time.h>
+#include <bedrock/time/time.h>
 
 BR_EXTERN_C_BEGIN
 
