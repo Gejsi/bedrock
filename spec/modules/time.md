@@ -47,10 +47,17 @@ typedef struct br_datetime {
 
 typedef struct br_delta { int64_t days; int64_t seconds; int64_t nanos; } br_delta;
 
-#define BR_DATETIME_MIN_YEAR (-25252734927766552ll)
-#define BR_DATETIME_MAX_YEAR ( 25252734927766552ll)
-#define BR_ORDINAL_MIN ((br_ordinal)-9223372036854775234ll)
-#define BR_ORDINAL_MAX ((br_ordinal) 9223372036854774869ll)
+/* The widest OVERFLOW-FREE pure-int64 ordinal range: every intermediate of the
+   400-year-cycle ordinal computation stays in int64 with wide margin
+   (~9.2e16 ordinals of headroom at these bounds vs ~2e5 at the i64-saturating
+   maximum). Deliberately a hair inside Odin's saturating constants: the
+   trimmed sliver is unreachable by br_time (civil years ~1677..2262) and any
+   real calendar, and the trim keeps the calendrical core a single portable
+   int64 path — no __int128, no per-compiler split. */
+#define BR_DATETIME_MIN_YEAR (-25000000000000000ll)
+#define BR_DATETIME_MAX_YEAR ( 25000000000000000ll)
+#define BR_ORDINAL_MIN ((br_ordinal)-9131062500000000365ll)
+#define BR_ORDINAL_MAX ((br_ordinal) 9131062500000000000ll)
 ```
 
 ### Calendrical core
