@@ -232,6 +232,35 @@ levenshtein), sync benaphores, and the per-OS-split-as-a-goal. The rfc3339
 "port the timestamp piece + minimal datetime slice" recommendation is the one
 judgment call needing the maintainer's explicit eye.
 
+## Pre-port scrutiny — supporting evidence (verified)
+
+### Two flavors of SKIP
+
+- **SKIP — no in-library demand:** justify, expand_tabs, scrub, levenshtein,
+  TSC/perf, iso8601, timezone-DB. None of the ubiquitous batteries-included C
+  libs (stb, klib, sds) ship these; sds — the de-facto C string library — does
+  split/join/trim/cat/tolower and stops. Strong signal C devs don't reach to a
+  stdlib for these at all.
+- **SKIP — real demand, owned by a named dedicated lib:** json (cJSON / jsmn /
+  yyjson dominate). csv and ini have the same shape (libcsv, inih), but stay
+  PORT per the maintainer's accepted decision: small, dependency-free, and the
+  "don't make me fetch a parser" story fits a stdlib replacement. If the
+  maintainer ever cuts deeper, "SKIP and point at inih/libcsv" is an
+  evidence-backed fallback, not a gut call.
+
+### rfc3339 minimal datetime closure (the concrete porter scope)
+
+Traced at source level: rfc3339 always leaves `DateTime.tz` nil (fixed ±HH:MM
+offsets are a plain integer; no tz database touched). The irreducible port is
+the calendrical core only: Date/Time/DateTime/Delta/Ordinal/Error types +
+bounds; date<->ordinal (Reingold-Dershowitz proleptic Gregorian) +
+normalize_delta + divmod helpers; components_to_{date,time,datetime};
+add_delta_to_datetime; subtract_datetimes; the validate family; is_leap_year.
+DEFER: ordinal_to_datetime, day_of_week/day_number, last_day_of_month,
+year_range, add_days_to_date, the gcd/lcm/interval_mod toolkit. SKIP: all of
+timezone/ and every TZ_* type. This closure IS the wave-3 rfc3339 porter task
+boundary.
+
 ## Decisions log (maintainer fills in at end of port)
 
 | Candidate | Decision | Date | Note |
