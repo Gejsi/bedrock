@@ -163,7 +163,7 @@ verb space).
 
 ```c
 typedef enum br_byte_order { BR_BYTE_ORDER_LITTLE = 0, BR_BYTE_ORDER_BIG } br_byte_order;
-static inline br_byte_order br_byte_order_native(void);
+static inline br_byte_order br_byte_order_native(void); /* memcpy probe; no compiler extensions */
 
 /* Bounds-checked over a view; return false if too few bytes. */
 bool br_endian_get_u16(br_bytes_view b, br_byte_order order, uint16_t *out);

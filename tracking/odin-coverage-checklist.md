@@ -372,6 +372,24 @@ Summary:
   the missing extended primitives, adding Haiku/WASM futex backends, and
   completing the real Odin-style OS primitive split.
 
+## `core/encoding`
+
+Current label: `partial v1` (pilot wave in progress)
+
+Current Bedrock files:
+- `include/bedrock/encoding.h` (module umbrella)
+- `include/bedrock/encoding/encoding.h` (shared decode-result types)
+- `include/bedrock/encoding/hex.h`, `src/encoding/hex.c`
+- `include/bedrock/encoding/endian.h` (header-only)
+- `tests/test_hex.c`, `tests/test_endian.c`
+
+| Odin area | Status | Bedrock coverage | Notes |
+| --- | --- | --- | --- |
+| `encoding/hex` | `adapted` | `encoding/hex.h`, `src/encoding/hex.c` | Encode (lower/upper, allocating/into-buffer/writer), decode (allocating/into-buffer), decode_sequence. Deviations per spec: frees on error (fixes Odin's leak wart), byte `error_offset` reporting, `BR_STATUS_INVALID_ENCODING` for malformed input. |
+| `encoding/endian` | `adapted` | `encoding/endian.h` | All 8 widths checked get/put over views plus unchecked raw-pointer forms. Deviations per spec: `br_endian_` prefix, shift-based host-agnostic assembly, memcpy float bit-casts, memcpy byte-order probe (no compiler extensions), no f16. Upstream has zero tests; Bedrock's suite is the first. |
+| `encoding/base64` | `planned` | none | Next in pilot (task queue). |
+| `encoding/varint` | `planned` | none | u64/i64 LEB128 per spec deviation. |
+
 ## `core/time`
 
 Current Bedrock files:
