@@ -56,8 +56,6 @@ lines at `2c25fb9`.
 | Package | Size | Rationale |
 | --- | --- | --- |
 | `core/strconv` | 3180 | Number/string parse and format. The coverage checklist already depends on it (builder write_int/write_float), and it is the most-reached-for stdlib facility C under-serves (strtol/snprintf are clumsy and locale-tainted). Highest-value un-ported package. |
-| `core/encoding/base32` | 231 | Tiny table-driven sibling of the ported base64. |
-| `core/encoding/uuid` | 1058 | Parse/format/generate — common and small. Scoped per evidence: v4 + v7 only (they need just rand + time); v3/v5 require MD5/SHA1 and stay out with the excluded crypto surface. |
 | `core/math/rand` | 2235 | Seedable PRNG — a genuine C gap (rand() is bad and global). Focused core: generator + int/float/range/shuffle; distributions on demand. |
 
 ### DEFER (gate on a concrete consumer)
@@ -70,6 +68,8 @@ lines at `2c25fb9`.
 | `core/path/filepath` | subtree | OS-aware paths; needs the excluded os layer. `br_path_` stays reserved. |
 | `core/unicode` tables | large | The property/case-fold tables several shipped deviations explicitly wait on. A dedicated future wave, not excluded. |
 | `core/encoding/cbor` | 3806 | Real but niche binary serialization; below json in demand. |
+| `core/encoding/uuid` | 1058 | Deferred July 19, 2026 (walked back from same-day PORT). Strongest deferred candidate: no canonical portable C answer (libuuid is a fragmented system dependency) and demand proven by Go/Rust, where uuid lives outside std yet tops import charts. Scoped v4 + v7 needs only rand + time; v4 randomness sourcing (PRNG vs OS entropy per RFC 9562) is the open design question when a concrete consumer revives it. |
+| `core/encoding/base32` | 231 | Deferred July 19, 2026 (walked back from same-day PORT). Demand is a fraction of base64's (TOTP secrets, DNS-safe names); viable only as a near-free rider on base64's table-driven skeleton, so it is decided with base64, never standalone. |
 | `core/unicode/utf16` | subtree | Windows/JS interop transcode; add when a consumer hits it. |
 
 ### SKIP (ruled July 19, 2026)

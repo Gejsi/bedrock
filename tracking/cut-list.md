@@ -283,6 +283,7 @@ boundary.
 | rfc3339 + minimal datetime slice | PORT | 2026-07-19 | slice being mapped; datetime remainder DEFER |
 | strconv, math/rand, uuid, base32 | PORT | 2026-07-19 | full-enumeration additions; strconv is the priority (checklist already depends on it) |
 | core/hash | SKIP | 2026-07-19 | reversed same-day PORT: zlib crc32 / xxHash are already C; Odin's reimplementation motive (avoid foreign linking) is moot in a C library; hashmap needs are internal |
+| encoding/uuid, encoding/base32 | DEFER | 2026-07-19 | walked back from same-day PORT: uuid waits on a concrete consumer (strongest deferred candidate — fragmented C ecosystem answer, proven Go/Rust demand); base32 at most rides base64, never standalone |
 | core/thread | PORT (promoted from defer) | 2026-07-19 | threading prioritized; scoped per spec/modules/threading.md |
 | math core float functions | SKIP | 2026-07-19 | libm is the answer; struck outright |
 | text/regex | SKIP | 2026-07-19 | PCRE2 is the answer, as cJSON is for json |
