@@ -153,6 +153,15 @@ $(BIN_DIR)/%: $(TEST_DIR)/%.c $(LIB_TARGET)
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(TEST_CFLAGS) $(DEPFLAGS) -MF $@.d -MT $@ $< $(LIB_TARGET) $(LDFLAGS) -o $@
 
+# The no-short-types smoke test must build with the short aliases disabled so it
+# proves the public ABI is spelled entirely in standard C types. The define is
+# hardcoded in this dedicated recipe rather than set as a target-specific
+# variable: target-specific variables propagate to prerequisites, which would
+# leak -DBEDROCK_NO_SHORT_TYPES into the library objects built for this target.
+$(BIN_DIR)/test_no_short_types: $(TEST_DIR)/test_no_short_types.c $(LIB_TARGET)
+	@mkdir -p $(dir $@)
+	$(CC) -DBEDROCK_NO_SHORT_TYPES $(CPPFLAGS) $(TEST_CFLAGS) $(DEPFLAGS) -MF $@.d -MT $@ $< $(LIB_TARGET) $(LDFLAGS) -o $@
+
 test: $(TEST_BINS)
 	@set -e; \
 	for test_bin in $(TEST_BINS); do \
