@@ -1,0 +1,7 @@
+# The strconv test vectors are byte-exact fixtures: their formatted-output
+# fields are compared verbatim against formatter output, so a CRLF rewrite on
+# checkout (e.g. Windows autocrlf) would append phantom '\r' bytes and break the
+# comparisons. Pin them so line endings are preserved exactly as committed.
+tests/data/testfp.txt -text
+tests/data/atof1k.txt -text
+tests/data/ftoa1k.txt -text

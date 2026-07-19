@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <inttypes.h>
 #include <locale.h>
 #include <math.h>
 #include <stdio.h>
@@ -325,13 +326,18 @@ static void test_testfp_exponent(void) {
     char verb[16];
     char input[128];
     char expected[128];
-    long mant;
+    int64_t mant;
     int bexp;
     int prec;
     uint8_t buf[64];
     br_io_result fr;
+    size_t len = strlen(line);
 
-    if (line[0] == '#' || line[0] == '\n') {
+    /* Strip trailing CR/LF so a CRLF checkout never leaves a phantom byte. */
+    while (len > 0u && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+      line[--len] = '\0';
+    }
+    if (line[0] == '#' || line[0] == '\0') {
       continue;
     }
     if (sscanf(line, "%15s %15s %127s %127s", type, verb, input, expected) != 4) {
@@ -345,8 +351,12 @@ static void test_testfp_exponent(void) {
     if (sscanf(verb, "%%.%de", &prec) != 1) {
       continue;
     }
-    /* input is "<mant>p<exp>". */
-    if (sscanf(input, "%ldp%d", &mant, &bexp) != 2) {
+    /*
+    input is "<mant>p<exp>". The mantissa is a full 53-bit significand (up to 16
+    decimal digits), so it must be read into a 64-bit integer -- a platform
+    `long` is only 32-bit on Windows (LLP64) and would truncate it.
+    */
+    if (sscanf(input, "%" SCNd64 "p%d", &mant, &bexp) != 2) {
       continue;
     }
 
