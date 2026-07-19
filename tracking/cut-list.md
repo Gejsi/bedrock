@@ -265,6 +265,7 @@ boundary.
 
 | Candidate | Decision | Date | Note |
 | --- | --- | --- | --- |
+| mem virtual file mapping API | CUT | 2026-07-19 | maintainer: file APIs do not belong in the memory module; returns with a future os module if ever |
 | time/timezone | SKIP | 2026-07-19 | pre-port strike; tz databases out of scope |
 | time/iso8601 | SKIP | 2026-07-19 | rfc3339 is the one timestamp format |
 | time/TSC-perf | SKIP | 2026-07-19 | br_tick suffices for ordinary timing |
