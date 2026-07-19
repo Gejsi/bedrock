@@ -65,7 +65,7 @@ lines at `2c25fb9`.
 | Package | Size | Rationale |
 | --- | --- | --- |
 | `core/slice` | 2167 | Generic slice algorithms; folds into the planned container/sort redesign rather than a standalone port. |
-| `core/log` | 1130 | Useful; couples to output policy; add on demand. |
+| `core/log` | 1130 | Useful; couples to output policy; add on demand. Demand materialized July 19, 2026; research brief complete (explicit `br_logger` per the no-globals rule — Go slog's Handler split is the design teacher; structured-KV + builder formatting over the landed strconv/builder substrate, no fmt reopening; compile-time level stripping designed in; rfc3339 timestamps as the dogfood). Awaits the go/no-go and the formatting-style ruling. |
 | `core/text/scanner` | 667 | Overlaps the planned bufio scanner; decide one home when the parser family lands. |
 | `core/path/filepath` | subtree | OS-aware paths; needs the excluded os layer. `br_path_` stays reserved. |
 | `core/unicode` tables | large | The property/case-fold tables several shipped deviations explicitly wait on. A dedicated future wave, not excluded. |
