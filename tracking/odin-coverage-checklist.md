@@ -460,6 +460,40 @@ Current Bedrock files:
 | --- | --- | --- | --- |
 | `math/bits` | `adapted` | `math/bits.h`, `src/math/bits.c` | Full fixed-width surface (counts/scans/bit_width/rotate/reverse/byteswap/power-of-two/add-sub-mul-div/bitfields) on the three-tier scheme (C23 stdbit.h, compiler builtins, portable fallback) with a force-fallback differential harness. Deviations per spec/modules/math.md: total zero-input contracts (clz/ctz(0) = width), no standalone log2, bool carries, div returns a status and never panics, no u128/word-size variants, byte-order conversion lives in encoding/endian. The differential harness caught a signed-overflow UB in the portable ctz on its first run (fixed; recorded in the spec). |
 
+## `core/math/rand`
+
+Current label: `v1`
+
+Landed as the standalone `rand` module (Odin groups it under `core/math`; Bedrock
+gives it its own `bedrock/rand.h`).
+
+Current Bedrock files:
+- `include/bedrock/rand.h` (module umbrella)
+- `include/bedrock/rand/rand.h`
+- `src/rand/rand.c`
+- `src/rand/entropy_linux.c`, `src/rand/entropy_darwin.c`,
+  `src/rand/entropy_windows.c`, `src/rand/entropy_other.c`
+- `tests/test_rand.c`
+
+| Odin area | Status | Bedrock coverage | Notes |
+| --- | --- | --- | --- |
+| generator + seeding | `adapted` | `rand/rand.h`, `src/rand/rand.c` | PCG64 DXSM ported byte-for-byte from Go v2's `pcg.go`; two-word `br_rand_seed` (Go `NewPCG`) plus `br_rand_seed_entropy`. Zero-value-ready: a zeroed `br_rand` equals `seed(0,0)`. |
+| raw + bounded draws | `adapted` | `rand/rand.h`, `src/rand/rand.c` | `u64`/`u32` status-free; `u64_below` uses Lemire multiply-shift-reject with the guarded modulo and a power-of-two mask path; `i64_between` computed in unsigned to avoid signed-overflow UB at the extremes. |
+| floats + shuffle | `adapted` | `rand/rand.h`, `src/rand/rand.c` | `f64`/`f32` in `[0,1)` by scaling top mantissa bits; Fisher-Yates `shuffle` over a caller swap callback (no element size, no alloc). |
+| OS entropy | `adapted` | `src/rand/entropy_*.c` | `getrandom`/`getentropy`/`BCryptGenRandom` (runtime-resolved, no import lib), `NOT_SUPPORTED` elsewhere; whole-buffer-or-error, never a weak fallback seed. Mirrors the sync futex per-OS split. |
+
+Deviations from Odin (per spec/modules/rand.md):
+- PCG64 DXSM (not XSL-RR) ported from Go v2 — a machine-checkable reference
+  stream — where Odin ships pcg + xoshiro256.
+- Fixed increment, no settable streams (differential-locked to the reference).
+- No single-u64 seed convenience; the two-word seed is the whole seeding API.
+- No global generator / no ambient context (deviation from C `rand()` and Odin's
+  context generator) — explicit `br_rand *` everywhere.
+- Bounded draws return a defined value on an empty range (`u64_below(0)` = 0,
+  `i64_between(lo>=hi)` = lo) where Go panics; the no-panic rule.
+- Non-cryptographic by contract; the CSPRNG need is served by
+  `br_rand_entropy_fill`, not the PRNG stream.
+
 ## `core/time`
 
 Current Bedrock files:

@@ -57,7 +57,7 @@ lines at `2c25fb9`.
 | Package | Size | Rationale |
 | --- | --- | --- |
 | `core/strconv` | 3180 | Number/string parse and format — the most-reached-for stdlib facility C under-serves (strtol/snprintf are clumsy and locale-tainted). Was the highest-value un-ported package; LANDED July 19, 2026 (see the v1 row above). |
-| `core/math/rand` | 2235 | Seedable PRNG — a genuine C gap (rand() is bad and global). Focused core: generator + int/float/range/shuffle; distributions on demand. |
+| `core/math/rand` | v1 | Seedable PRNG — a genuine C gap (rand() is bad and global). Landed as the `rand` module per spec/modules/rand.md: PCG64 DXSM ported byte-for-byte from Go v2 (differential-locked to its reference stream), explicit `br_rand *` state (no global), int/float/range/shuffle, OS entropy for seeding. Distributions on demand. |
 
 ### DEFER (gate on a concrete consumer)
 
