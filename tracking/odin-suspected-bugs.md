@@ -2,8 +2,30 @@
 
 Concise notes for issues found while porting Odin code to Bedrock.
 
-All four issues below were verified still present in upstream Odin at
-`2c25fb9` (July 19, 2026).
+All issues below were verified present in upstream Odin at `2c25fb9`
+(July 19, 2026).
+
+## `core/encoding/hex` decode leak on invalid input
+
+- File: `core/encoding/hex/hex.odin`
+- Area: `decode`
+- Issue: `dst` is allocated before the parse loop; on an invalid character the
+  proc returns `(dst, false)` without freeing it.
+- Expected: free `dst` before returning failure, as base64's `decode` does.
+- Effect: every failed decode leaks the allocation unless the caller frees a
+  buffer it was just told is invalid.
+- Bedrock: pilot port frees on error and offers caller-buffer decoding.
+
+## `core/encoding/base64` dead decode parameter
+
+- File: `core/encoding/base64/base64.odin`
+- Area: `decode`
+- Issue: the `dst: []byte = nil` parameter is never referenced in the body;
+  `decode` always allocates.
+- Expected: honor the caller buffer or remove the parameter.
+- Effect: callers passing a scratch buffer silently get a fresh allocation.
+- Bedrock: drops the parameter; caller buffers go through the explicit
+  into-buffer variant.
 
 ## `core/mem` stack allocator resize
 
