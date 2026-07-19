@@ -43,3 +43,49 @@ parser wave (csv/ini/scanner) are queued behind core completion.
 | `core/image/*` | exclude v1 | Large and specialized. |
 | `base/runtime`, `base/builtin`, `base/intrinsics` | exclude | Compiler/runtime substrate, not library surface. |
 | `core/c/libc` | reference only | Useful as compatibility/reference material, not the main target. |
+
+## Complete core/ enumeration (July 19, 2026)
+
+The rows above were a selection; the rows below complete the enumeration so
+every Odin `core/` package has an explicit decision. Recommendations pending
+the maintainer's ruling use the cut-list methodology; sizes are Odin source
+lines at `2c25fb9`.
+
+### Recommended PORT
+
+| Package | Size | Rationale |
+| --- | --- | --- |
+| `core/strconv` | 3180 | Number/string parse and format. The coverage checklist already depends on it (builder write_int/write_float), and it is the most-reached-for stdlib facility C under-serves (strtol/snprintf are clumsy and locale-tainted). Highest-value un-ported package. |
+| `core/encoding/base32` | 231 | Tiny table-driven sibling of the ported base64. |
+| `core/encoding/uuid` | 1058 | Parse/format/generate — common, small, self-contained. Needs a rand source. |
+| `core/hash` | 3629 | Non-cryptographic hashes (crc32, fnv, xxhash) — daily-driver for checksums and hash tables, not covered by libc, no security surface (crypto stays excluded). |
+| `core/math/rand` | subtree | Seedable PRNG — a genuine C gap (rand() is bad and global). Generator first; distributions on demand. |
+
+### Recommended DEFER (gate on a concrete consumer)
+
+| Package | Size | Rationale |
+| --- | --- | --- |
+| `core/slice` | 2167 | Generic slice algorithms; folds into the planned container/sort redesign rather than a standalone port. |
+| `core/math` (float functions) | 4471 | libm already ships all of it, universally linked; a replacement adds value only for freestanding/no-libm or bit-exact goals, neither a v1 aim. Do not reimplement libm on spec. |
+| `core/text/regex` | 4068 | Real demand (C has no stdlib regex) but a correctness-and-fuzz wave of its own. |
+| `core/log` | 1130 | Useful; couples to output policy; add on demand. |
+| `core/text/scanner` | 667 | Overlaps the planned bufio scanner; decide one home when the parser family lands. |
+| `core/path/filepath` | subtree | OS-aware paths; needs the excluded os layer. `br_path_` stays reserved. |
+| `core/unicode` tables | large | The property/case-fold tables several shipped deviations explicitly wait on. A dedicated future wave, not excluded. |
+| `core/encoding/cbor` | 3806 | Real but niche binary serialization; below json in demand. |
+| `core/unicode/utf16` | subtree | Windows/JS interop transcode; add when a consumer hits it. |
+
+### Recommended SKIP
+
+| Package | Rationale |
+| --- | --- |
+| `core/text/i18n`, `text/match`, `text/edit`, `text/table` | Application/presentation concerns, not stdlib primitives. |
+| `core/encoding/asn1`, `encoding/pem` | Crypto/PKI-adjacent; belong with the excluded crypto surface. |
+| `core/encoding/entity`, `encoding/hxa` | Generated HTML-entity data (xml is excluded) and a niche 3D asset format. |
+| `core/math/big`, `math/cmplx`, `math/linalg`, `math/noise`, `math/ease`, `math/fixed` | Specialist math (bignum, complex, graphics, animation, fixed-point). |
+| `core/rexcode` | 186k lines of generated regex/Unicode data; not hand-portable surface. |
+| `core/simd` | Compiler/architecture substrate, not portable C11 surface. |
+| `core/nbio`, `core/dynlib`, `core/terminal` | Platform-heavy (event loops, dlopen, ANSI control) — same tier as excluded os/net. |
+| `core/testing`, `core/prof`, `core/debug` | Tooling, not consumer-facing library surface. |
+| `core/odin` | Odin's own AST/parser — meaningless in a C library. |
+| `core/relative` | Odin-runtime pointer idiom with no C fit. |
