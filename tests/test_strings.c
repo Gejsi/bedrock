@@ -277,6 +277,29 @@ static void test_strings_trim(void) {
   }
 }
 
+static void test_strings_fields(void) {
+  br_string_view_list_result r;
+
+  r = br_string_fields(BR_STR_LIT("  the quick\tbrown \n fox "), br_allocator_heap());
+  assert(r.status == BR_STATUS_OK);
+  assert(r.value.len == 4u);
+  assert(br_string_equal(r.value.data[0], BR_STR_LIT("the")));
+  assert(br_string_equal(r.value.data[1], BR_STR_LIT("quick")));
+  assert(br_string_equal(r.value.data[2], BR_STR_LIT("brown")));
+  assert(br_string_equal(r.value.data[3], BR_STR_LIT("fox")));
+  assert(br_string_view_list_free(r.value, br_allocator_heap()) == BR_STATUS_OK);
+
+  r = br_string_fields(BR_STR_LIT("   "), br_allocator_heap());
+  assert(r.status == BR_STATUS_OK);
+  assert(r.value.len == 0u);
+
+  r = br_string_fields(BR_STR_LIT("single"), br_allocator_heap());
+  assert(r.status == BR_STATUS_OK);
+  assert(r.value.len == 1u);
+  assert(br_string_equal(r.value.data[0], BR_STR_LIT("single")));
+  assert(br_string_view_list_free(r.value, br_allocator_heap()) == BR_STATUS_OK);
+}
+
 int main(void) {
   test_strings_compare_and_search();
   test_strings_views();
@@ -287,5 +310,6 @@ int main(void) {
   test_strings_replace_helpers();
   test_strings_case_conversion();
   test_strings_trim();
+  test_strings_fields();
   return 0;
 }

@@ -424,6 +424,60 @@ br_bytes_view br_bytes_trim_null(br_bytes_view s) {
   return br_bytes_trim_right_null(br_bytes_trim_left_null(s));
 }
 
+static bool br__byte_is_ascii_space(u8 c) {
+  return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
+}
+
+br_bytes_view_list_result br_bytes_fields(br_bytes_view s, br_allocator allocator) {
+  br_alloc_result alloc;
+  br_bytes_view *parts;
+  usize field_count = 0u;
+  usize i = 0u;
+  usize part_index = 0u;
+  bool in_field = false;
+
+  /* First pass: count fields so the output list is sized exactly. */
+  for (usize k = 0u; k < s.len; k += 1u) {
+    if (br__byte_is_ascii_space(s.data[k])) {
+      in_field = false;
+    } else if (!in_field) {
+      in_field = true;
+      field_count += 1u;
+    }
+  }
+
+  if (field_count == 0u) {
+    return br__bytes_view_list_result(NULL, 0u, BR_STATUS_OK);
+  }
+
+  alloc = br_allocator_alloc_uninit(
+    allocator, field_count * sizeof(br_bytes_view), _Alignof(br_bytes_view));
+  if (alloc.status != BR_STATUS_OK) {
+    return br__bytes_view_list_result(NULL, 0u, alloc.status);
+  }
+  parts = alloc.ptr;
+
+  /* Second pass: record each field as a sub-view of the input. */
+  while (i < s.len) {
+    usize start;
+
+    while (i < s.len && br__byte_is_ascii_space(s.data[i])) {
+      i += 1u;
+    }
+    if (i >= s.len) {
+      break;
+    }
+    start = i;
+    while (i < s.len && !br__byte_is_ascii_space(s.data[i])) {
+      i += 1u;
+    }
+    parts[part_index] = br_bytes_view_make(s.data + start, i - start);
+    part_index += 1u;
+  }
+
+  return br__bytes_view_list_result(parts, part_index, BR_STATUS_OK);
+}
+
 br_bytes_result br_bytes_join(const br_bytes_view *parts,
                               usize part_count,
                               br_bytes_view sep,

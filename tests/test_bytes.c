@@ -311,6 +311,54 @@ static void test_bytes_trim(void) {
   }
 }
 
+static void test_bytes_fields(void) {
+  br_bytes_view_list_result r;
+  const br_bytes_view expect_four[] = {
+    BR_BYTES_LIT("1"),
+    BR_BYTES_LIT("2"),
+    BR_BYTES_LIT("3"),
+    BR_BYTES_LIT("4"),
+  };
+
+  /* Leading/trailing/collapsed ASCII whitespace, adapted from Go fieldstests. */
+  r = br_bytes_fields(BR_BYTES_LIT("  abc  "), br_allocator_heap());
+  assert(r.status == BR_STATUS_OK);
+  assert(r.value.len == 1u);
+  assert(br_bytes_equal(r.value.data[0], BR_BYTES_LIT("abc")));
+  assert(br_bytes_view_list_free(r.value, br_allocator_heap()) == BR_STATUS_OK);
+
+  r = br_bytes_fields(BR_BYTES_LIT("1\t\t2 3\n4"), br_allocator_heap());
+  assert(r.status == BR_STATUS_OK);
+  assert_bytes_view_list_eq(r.value, expect_four, BR_ARRAY_COUNT(expect_four));
+  assert(br_bytes_view_list_free(r.value, br_allocator_heap()) == BR_STATUS_OK);
+
+  /* All whitespace and empty input yield zero fields (NULL list, OK). */
+  r = br_bytes_fields(BR_BYTES_LIT(" \t\n "), br_allocator_heap());
+  assert(r.status == BR_STATUS_OK);
+  assert(r.value.len == 0u);
+  assert(r.value.data == NULL);
+
+  r = br_bytes_fields(br_bytes_view_make(NULL, 0u), br_allocator_heap());
+  assert(r.status == BR_STATUS_OK);
+  assert(r.value.len == 0u);
+
+  /* A multibyte UTF-8 rune (U+00E9) is field content, not a separator. */
+  {
+    static const u8 input[] = {' ', 0xc3u, 0xa9u, 'x', ' ', 'y'};
+    static const u8 field0[] = {0xc3u, 0xa9u, 'x'};
+    r = br_bytes_fields(br_bytes_view_make(input, sizeof(input)), br_allocator_heap());
+    assert(r.status == BR_STATUS_OK);
+    assert(r.value.len == 2u);
+    assert(br_bytes_equal(r.value.data[0], br_bytes_view_make(field0, sizeof(field0))));
+    assert(br_bytes_equal(r.value.data[1], BR_BYTES_LIT("y")));
+    assert(br_bytes_view_list_free(r.value, br_allocator_heap()) == BR_STATUS_OK);
+  }
+
+  /* Allocator failure surfaces as OUT_OF_MEMORY. */
+  r = br_bytes_fields(BR_BYTES_LIT("a b"), br_allocator_fail());
+  assert(r.status == BR_STATUS_OUT_OF_MEMORY);
+}
+
 int main(void) {
   test_bytes_compare_and_search();
   test_bytes_views();
@@ -319,5 +367,6 @@ int main(void) {
   test_bytes_replace_helpers();
   test_bytes_case_conversion();
   test_bytes_trim();
+  test_bytes_fields();
   return 0;
 }

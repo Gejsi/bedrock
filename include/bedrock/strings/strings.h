@@ -162,6 +162,16 @@ br_string_concat(const br_string_view *parts, size_t part_count, br_allocator al
 br_string_result br_string_repeat(br_string_view s, size_t count, br_allocator allocator);
 
 /*
+Split `s` around runs of ASCII whitespace, returning the non-empty fields.
+
+Leading/trailing whitespace yield no empty fields and consecutive whitespace
+collapses. Only ASCII whitespace separates; bytes at or above `0x80` are field
+content, so multibyte UTF-8 runes stay within a field. ASCII-only, unlike
+Odin's Unicode `is_space` fallback (deferred until the space tables land).
+*/
+br_string_view_list_result br_string_fields(br_string_view s, br_allocator allocator);
+
+/*
 Split `s` around separator `sep`.
 
 Unlike the current byte-oriented `bytes` layer, an empty separator follows

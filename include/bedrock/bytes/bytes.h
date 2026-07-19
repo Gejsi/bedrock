@@ -126,6 +126,18 @@ br_bytes_view br_bytes_trim_left_null(br_bytes_view s);
 br_bytes_view br_bytes_trim_right_null(br_bytes_view s);
 br_bytes_view br_bytes_trim_null(br_bytes_view s);
 
+/*
+Split `s` around runs of ASCII whitespace, returning the non-empty fields.
+
+Leading and trailing whitespace produce no empty fields, and consecutive
+whitespace bytes collapse into a single split point. Only ASCII whitespace
+(` `, `\t`, `\n`, `\v`, `\f`, `\r`) separates; bytes at or above `0x80` are
+field content, so multibyte UTF-8 runes stay within a field. This is
+ASCII-only, unlike Odin's `fields`, which falls back to Unicode `is_space`;
+that fallback is deferred until the space tables land.
+*/
+br_bytes_view_list_result br_bytes_fields(br_bytes_view s, br_allocator allocator);
+
 br_bytes_result br_bytes_join(const br_bytes_view *parts,
                               size_t part_count,
                               br_bytes_view sep,
