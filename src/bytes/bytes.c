@@ -90,6 +90,45 @@ br_bytes_result br_bytes_clone(br_bytes_view src, br_allocator allocator) {
   return br__bytes_result(alloc.ptr, src.len, BR_STATUS_OK);
 }
 
+/* Clone `src` into a fresh buffer, flipping ASCII letters toward `to_upper`.
+   Bytes >= 0x80 are copied verbatim, so UTF-8 sequences are preserved. */
+static br_bytes_result
+br__bytes_map_case(br_bytes_view src, bool to_upper, br_allocator allocator) {
+  br_alloc_result alloc;
+  u8 *dst;
+
+  if (src.len == 0u) {
+    return br__bytes_result(NULL, 0u, BR_STATUS_OK);
+  }
+
+  alloc = br_allocator_alloc_uninit(allocator, src.len, 1u);
+  if (alloc.status != BR_STATUS_OK) {
+    return br__bytes_result(NULL, 0u, alloc.status);
+  }
+
+  dst = (u8 *)alloc.ptr;
+  for (usize i = 0u; i < src.len; i += 1u) {
+    u8 c = src.data[i];
+
+    if (to_upper && c >= (u8)'a' && c <= (u8)'z') {
+      c = (u8)(c - 32u);
+    } else if (!to_upper && c >= (u8)'A' && c <= (u8)'Z') {
+      c = (u8)(c + 32u);
+    }
+    dst[i] = c;
+  }
+
+  return br__bytes_result(dst, src.len, BR_STATUS_OK);
+}
+
+br_bytes_result br_bytes_to_lower_ascii(br_bytes_view src, br_allocator allocator) {
+  return br__bytes_map_case(src, false, allocator);
+}
+
+br_bytes_result br_bytes_to_upper_ascii(br_bytes_view src, br_allocator allocator) {
+  return br__bytes_map_case(src, true, allocator);
+}
+
 i32 br_bytes_compare(br_bytes_view lhs, br_bytes_view rhs) {
   usize common_len = br_min_size(lhs.len, rhs.len);
   i32 cmp;

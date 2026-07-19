@@ -236,11 +236,47 @@ static void test_bytes_replace_helpers(void) {
   assert(br_bytes_rewrite_free(empty_old, br_allocator_heap()) == BR_STATUS_OK);
 }
 
+static void test_bytes_case_conversion(void) {
+  /* Mixed letters, digits, and a UTF-8 rune (U+00E9 = 0xC3 0xA9) that must pass
+     through untouched: only ASCII A-Z / a-z flip. */
+  static const u8 mixed[] = {'H', 'i', '3', '!', 0xc3u, 0xa9u, 'Z'};
+  br_bytes_view src = br_bytes_view_make(mixed, BR_ARRAY_COUNT(mixed));
+  static const u8 lowered[] = {'h', 'i', '3', '!', 0xc3u, 0xa9u, 'z'};
+  static const u8 uppered[] = {'H', 'I', '3', '!', 0xc3u, 0xa9u, 'Z'};
+  br_bytes_result lower;
+  br_bytes_result upper;
+  br_bytes_result empty;
+  br_bytes_result failed;
+
+  lower = br_bytes_to_lower_ascii(src, br_allocator_heap());
+  assert(lower.status == BR_STATUS_OK);
+  assert(br_bytes_equal(br_bytes_view_from_bytes(lower.value),
+                        br_bytes_view_make(lowered, BR_ARRAY_COUNT(lowered))));
+  assert(br_bytes_free(lower.value, br_allocator_heap()) == BR_STATUS_OK);
+
+  upper = br_bytes_to_upper_ascii(src, br_allocator_heap());
+  assert(upper.status == BR_STATUS_OK);
+  assert(br_bytes_equal(br_bytes_view_from_bytes(upper.value),
+                        br_bytes_view_make(uppered, BR_ARRAY_COUNT(uppered))));
+  assert(br_bytes_free(upper.value, br_allocator_heap()) == BR_STATUS_OK);
+
+  empty = br_bytes_to_lower_ascii(br_bytes_view_make(NULL, 0u), br_allocator_heap());
+  assert(empty.status == BR_STATUS_OK);
+  assert(empty.value.len == 0u);
+  assert(empty.value.data == NULL);
+  assert(br_bytes_free(empty.value, br_allocator_heap()) == BR_STATUS_OK);
+
+  failed = br_bytes_to_upper_ascii(BR_BYTES_LIT("abc"), br_allocator_fail());
+  assert(failed.status == BR_STATUS_OUT_OF_MEMORY);
+  assert(failed.value.data == NULL);
+}
+
 int main(void) {
   test_bytes_compare_and_search();
   test_bytes_views();
   test_bytes_allocating_helpers();
   test_bytes_split_helpers();
   test_bytes_replace_helpers();
+  test_bytes_case_conversion();
   return 0;
 }

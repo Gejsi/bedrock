@@ -137,6 +137,7 @@ Current Bedrock files:
 | `bytes.Buffer` core | `adapted` | `byte_buffer.h`, `byte_buffer.c` | Init, reset, reserve, truncate, write, next, read, read_byte, unread_byte are implemented. |
 | `bytes.Reader` core | `adapted` | `byte_reader.h`, `byte_reader.c` | Init, read, read_at, read_byte, unread_byte, seek are implemented. |
 | rune_count / truncate_to_rune / contains_rune / index_rune | `planned` | none | Not implemented yet. |
+| case conversion (`to_lower_ascii`, `to_upper_ascii`) | `adapted` | `bytes.h`, `bytes.c` | ASCII-only case mapping; bytes >= 0x80 pass through so UTF-8 stays valid. Odin `core/bytes` has no case-conversion procs, so this is a Bedrock addition, not a 1:1 port. Unicode-aware conversion is deferred (case tables), hence the `_ascii` suffix. |
 | equal_fold | `planned` | none | Depends on higher Unicode case-folding support. |
 | last_index_any | `planned` | none | Missing. |
 | `bytes.Buffer` rune operations | `planned` | none | `read_rune`, `unread_rune`, `write_rune` not landed. |
@@ -196,7 +197,7 @@ Current Bedrock files:
 | equal_fold | `planned` | none | Depends on higher Unicode case-folding support. |
 | trim cutset / trim_space / trim_null | `planned` | none | Not landed. |
 | fields / fields_proc | `planned` | none | Not landed. |
-| conversion module (`to_lower`, `to_upper`, case conversion) | `planned` | none | Not landed. |
+| conversion module (`to_lower`, `to_upper`, case conversion) | `adapted` | `strings.h`, `strings.c` | ASCII-only `to_lower_ascii`/`to_upper_ascii` landed (delegate to the bytes forms); non-ASCII bytes pass through untouched. Named with the `_ascii` suffix because Unicode-aware case conversion is deferred until the case tables land, which will take the unqualified names. |
 | intern table | `planned` | none | Not landed. |
 | ascii set helper | `planned` | none | Not landed. |
 | partition | `planned` | none | Not landed. |

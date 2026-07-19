@@ -223,6 +223,34 @@ static void test_strings_replace_helpers(void) {
   assert(br_string_rewrite_free(empty_old, br_allocator_heap()) == BR_STATUS_OK);
 }
 
+static void test_strings_case_conversion(void) {
+  /* "Héllo9" with é = U+00E9 (0xC3 0xA9): ASCII letters flip, the rune and the
+     digit are preserved. */
+  static const u8 mixed[] = {'H', 0xc3u, 0xa9u, 'l', 'l', 'o', '9'};
+  br_string_view src = br_string_view_make(mixed, BR_ARRAY_COUNT(mixed));
+  static const u8 lowered[] = {'h', 0xc3u, 0xa9u, 'l', 'l', 'o', '9'};
+  static const u8 uppered[] = {'H', 0xc3u, 0xa9u, 'L', 'L', 'O', '9'};
+  br_string_result lower;
+  br_string_result upper;
+  br_string_result failed;
+
+  lower = br_string_to_lower_ascii(src, br_allocator_heap());
+  assert(lower.status == BR_STATUS_OK);
+  assert(br_string_equal(br_string_view_from_string(lower.value),
+                         br_string_view_make(lowered, BR_ARRAY_COUNT(lowered))));
+  assert(br_string_free(lower.value, br_allocator_heap()) == BR_STATUS_OK);
+
+  upper = br_string_to_upper_ascii(src, br_allocator_heap());
+  assert(upper.status == BR_STATUS_OK);
+  assert(br_string_equal(br_string_view_from_string(upper.value),
+                         br_string_view_make(uppered, BR_ARRAY_COUNT(uppered))));
+  assert(br_string_free(upper.value, br_allocator_heap()) == BR_STATUS_OK);
+
+  failed = br_string_to_lower_ascii(BR_STR_LIT("ABC"), br_allocator_fail());
+  assert(failed.status == BR_STATUS_OUT_OF_MEMORY);
+  assert(failed.value.data == NULL);
+}
+
 int main(void) {
   test_strings_compare_and_search();
   test_strings_views();
@@ -231,5 +259,6 @@ int main(void) {
   test_strings_allocating_helpers();
   test_strings_split_helpers();
   test_strings_replace_helpers();
+  test_strings_case_conversion();
   return 0;
 }

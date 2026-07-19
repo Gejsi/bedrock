@@ -83,6 +83,16 @@ instead of using an implicit context allocator.
 br_string_result br_string_clone(br_string_view s, br_allocator allocator);
 
 /*
+Clone `s` into an owned string with ASCII letters mapped to a single case.
+
+Only `A`-`Z` (or `a`-`z`) are remapped; all other bytes, including the bytes of
+multibyte UTF-8 runes, are copied unchanged. Unicode-aware case conversion is
+deferred until the case tables land, so these are the ASCII-only forms.
+*/
+br_string_result br_string_to_lower_ascii(br_string_view s, br_allocator allocator);
+br_string_result br_string_to_upper_ascii(br_string_view s, br_allocator allocator);
+
+/*
 Compare two strings lexicographically.
 */
 int32_t br_string_compare(br_string_view lhs, br_string_view rhs);

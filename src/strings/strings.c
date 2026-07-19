@@ -70,6 +70,18 @@ br_string_result br_string_clone(br_string_view s, br_allocator allocator) {
   return br__string_result(result.value.data, result.value.len, result.status);
 }
 
+br_string_result br_string_to_lower_ascii(br_string_view s, br_allocator allocator) {
+  br_bytes_result result = br_bytes_to_lower_ascii(br_string_view_as_bytes(s), allocator);
+
+  return br__string_result(result.value.data, result.value.len, result.status);
+}
+
+br_string_result br_string_to_upper_ascii(br_string_view s, br_allocator allocator) {
+  br_bytes_result result = br_bytes_to_upper_ascii(br_string_view_as_bytes(s), allocator);
+
+  return br__string_result(result.value.data, result.value.len, result.status);
+}
+
 i32 br_string_compare(br_string_view lhs, br_string_view rhs) {
   return br_bytes_compare(br_string_view_as_bytes(lhs), br_string_view_as_bytes(rhs));
 }

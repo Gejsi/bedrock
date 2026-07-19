@@ -68,6 +68,17 @@ br_status br_bytes_view_list_free(br_bytes_view_list list, br_allocator allocato
 br_status br_bytes_rewrite_free(br_bytes_rewrite_result result, br_allocator allocator);
 br_bytes_result br_bytes_clone(br_bytes_view src, br_allocator allocator);
 
+/*
+Clone `src` into an owned buffer with ASCII letters mapped to a single case.
+
+Only bytes `A`-`Z` (or `a`-`z`) are remapped; every other byte, including UTF-8
+continuation and lead bytes at or above `0x80`, is copied unchanged, so valid
+UTF-8 stays valid. Unicode-aware case conversion is deferred until the case
+tables land; these are the ASCII-only forms, hence the `_ascii` suffix.
+*/
+br_bytes_result br_bytes_to_lower_ascii(br_bytes_view src, br_allocator allocator);
+br_bytes_result br_bytes_to_upper_ascii(br_bytes_view src, br_allocator allocator);
+
 int32_t br_bytes_compare(br_bytes_view lhs, br_bytes_view rhs);
 bool br_bytes_equal(br_bytes_view lhs, br_bytes_view rhs);
 bool br_bytes_has_prefix(br_bytes_view s, br_bytes_view prefix);
