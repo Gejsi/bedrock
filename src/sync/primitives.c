@@ -12,6 +12,8 @@
 #elif defined(__linux__)
 #include <sys/syscall.h>
 #include <unistd.h>
+#elif defined(__APPLE__) && defined(__MACH__)
+#include <pthread.h>
 #elif defined(__FreeBSD__)
 #include <pthread_np.h>
 #elif defined(__NetBSD__)
