@@ -224,6 +224,33 @@ Trim `suffix` from the end of `s` when present.
 */
 br_string_view br_string_trim_suffix(br_string_view s, br_string_view suffix);
 
+/*
+Trim runes belonging to `cutset` from one or both ends of `s`.
+
+`cutset` is a set of Unicode code points (decoded as UTF-8), matching Odin and
+Go. Returns a sub-view of `s`.
+*/
+br_string_view br_string_trim_left(br_string_view s, br_string_view cutset);
+br_string_view br_string_trim_right(br_string_view s, br_string_view cutset);
+br_string_view br_string_trim(br_string_view s, br_string_view cutset);
+
+/*
+Trim ASCII whitespace (` `, `\t`, `\n`, `\v`, `\f`, `\r`) from one or both ends.
+
+ASCII-only: Odin's `trim_space` uses the Unicode `is_space` classifier, which
+Bedrock defers until the case/space tables land. Documented deviation.
+*/
+br_string_view br_string_trim_left_space(br_string_view s);
+br_string_view br_string_trim_right_space(br_string_view s);
+br_string_view br_string_trim_space(br_string_view s);
+
+/*
+Trim NUL (`0x00`) runes from one or both ends of `s`.
+*/
+br_string_view br_string_trim_left_null(br_string_view s);
+br_string_view br_string_trim_right_null(br_string_view s);
+br_string_view br_string_trim_null(br_string_view s);
+
 BR_EXTERN_C_END
 
 #endif

@@ -271,6 +271,46 @@ static void test_bytes_case_conversion(void) {
   assert(failed.value.data == NULL);
 }
 
+static void test_bytes_trim(void) {
+  /* ASCII cutset rows adapted from Go's strings TrimTests. */
+  assert(
+    br_bytes_equal(br_bytes_trim(BR_BYTES_LIT("abba"), BR_BYTES_LIT("a")), BR_BYTES_LIT("bb")));
+  assert(br_bytes_equal(br_bytes_trim(BR_BYTES_LIT("abba"), BR_BYTES_LIT("ab")), BR_BYTES_LIT("")));
+  assert(br_bytes_equal(br_bytes_trim_left(BR_BYTES_LIT("abba"), BR_BYTES_LIT("a")),
+                        BR_BYTES_LIT("bba")));
+  assert(br_bytes_equal(br_bytes_trim_right(BR_BYTES_LIT("abba"), BR_BYTES_LIT("a")),
+                        BR_BYTES_LIT("abb")));
+  assert(
+    br_bytes_equal(br_bytes_trim(BR_BYTES_LIT("<tag>"), BR_BYTES_LIT("<>")), BR_BYTES_LIT("tag")));
+  /* Empty cutset and empty input leave the input unchanged. */
+  assert(
+    br_bytes_equal(br_bytes_trim(BR_BYTES_LIT("abba"), BR_BYTES_LIT("")), BR_BYTES_LIT("abba")));
+  assert(br_bytes_equal(br_bytes_trim(BR_BYTES_LIT(""), BR_BYTES_LIT("123")), BR_BYTES_LIT("")));
+
+  /* Rune-aware cutset: U+00E9 (0xC3 0xA9) is a single cutset rune, and the
+     0xA9 byte alone must NOT match a stray continuation byte. */
+  {
+    static const u8 input[] = {0xc3u, 0xa9u, 'x', 'y', 0xc3u, 0xa9u};
+    static const u8 cutset[] = {0xc3u, 0xa9u};
+    br_bytes_view got = br_bytes_trim(br_bytes_view_make(input, sizeof(input)),
+                                      br_bytes_view_make(cutset, sizeof(cutset)));
+    assert(br_bytes_equal(got, BR_BYTES_LIT("xy")));
+  }
+
+  /* ASCII whitespace trim. */
+  assert(br_bytes_equal(br_bytes_trim_space(BR_BYTES_LIT("  \t hi \n")), BR_BYTES_LIT("hi")));
+  assert(br_bytes_equal(br_bytes_trim_left_space(BR_BYTES_LIT(" \tab")), BR_BYTES_LIT("ab")));
+  assert(br_bytes_equal(br_bytes_trim_right_space(BR_BYTES_LIT("ab\r\n")), BR_BYTES_LIT("ab")));
+  assert(br_bytes_equal(br_bytes_trim_space(BR_BYTES_LIT("   ")), BR_BYTES_LIT("")));
+
+  /* NUL trim. */
+  {
+    static const u8 padded[] = {0x00u, 0x00u, 'h', 'i', 0x00u};
+    br_bytes_view got = br_bytes_trim_null(br_bytes_view_make(padded, sizeof(padded)));
+    assert(br_bytes_equal(got, BR_BYTES_LIT("hi")));
+  }
+}
+
 int main(void) {
   test_bytes_compare_and_search();
   test_bytes_views();
@@ -278,5 +318,6 @@ int main(void) {
   test_bytes_split_helpers();
   test_bytes_replace_helpers();
   test_bytes_case_conversion();
+  test_bytes_trim();
   return 0;
 }

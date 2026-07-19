@@ -322,6 +322,108 @@ br_bytes_view br_bytes_trim_suffix(br_bytes_view s, br_bytes_view suffix) {
   return s;
 }
 
+typedef bool (*br__rune_predicate)(br_rune r, br_bytes_view context);
+
+/* True if rune `r` appears in the `cutset` view, decoded as UTF-8. */
+static bool br__rune_in_cutset(br_rune r, br_bytes_view cutset) {
+  usize i = 0u;
+
+  while (i < cutset.len) {
+    br_utf8_decode_result d = br_utf8_decode(br_bytes_view_make(cutset.data + i, cutset.len - i));
+
+    if (d.value == r) {
+      return true;
+    }
+    i += d.width > 0u ? d.width : 1u;
+  }
+
+  return false;
+}
+
+static bool br__rune_is_ascii_space(br_rune r, br_bytes_view context) {
+  BR_UNUSED(context);
+  return r == ' ' || r == '\t' || r == '\n' || r == '\v' || r == '\f' || r == '\r';
+}
+
+static bool br__rune_is_null(br_rune r, br_bytes_view context) {
+  BR_UNUSED(context);
+  return r == 0;
+}
+
+/* Drop leading runes while `pred` holds; returns the remaining sub-view. */
+static br_bytes_view
+br__bytes_trim_left_pred(br_bytes_view s, br__rune_predicate pred, br_bytes_view context) {
+  usize i = 0u;
+
+  while (i < s.len) {
+    br_utf8_decode_result d = br_utf8_decode(br_bytes_view_make(s.data + i, s.len - i));
+    usize width = d.width > 0u ? d.width : 1u;
+
+    if (!pred(d.value, context)) {
+      break;
+    }
+    i += width;
+  }
+
+  return br_bytes_view_make(s.data + i, s.len - i);
+}
+
+/* Drop trailing runes while `pred` holds; returns the remaining sub-view. */
+static br_bytes_view
+br__bytes_trim_right_pred(br_bytes_view s, br__rune_predicate pred, br_bytes_view context) {
+  usize end = s.len;
+
+  while (end > 0u) {
+    br_utf8_decode_result d = br_utf8_decode_last(br_bytes_view_make(s.data, end));
+    usize width = d.width > 0u ? d.width : 1u;
+
+    if (!pred(d.value, context)) {
+      break;
+    }
+    end -= width;
+  }
+
+  return br_bytes_view_make(s.data, end);
+}
+
+br_bytes_view br_bytes_trim_left(br_bytes_view s, br_bytes_view cutset) {
+  return br__bytes_trim_left_pred(s, br__rune_in_cutset, cutset);
+}
+
+br_bytes_view br_bytes_trim_right(br_bytes_view s, br_bytes_view cutset) {
+  return br__bytes_trim_right_pred(s, br__rune_in_cutset, cutset);
+}
+
+br_bytes_view br_bytes_trim(br_bytes_view s, br_bytes_view cutset) {
+  return br_bytes_trim_right(br_bytes_trim_left(s, cutset), cutset);
+}
+
+static const br_bytes_view br__bytes_empty_context = {NULL, 0u};
+
+br_bytes_view br_bytes_trim_left_space(br_bytes_view s) {
+  return br__bytes_trim_left_pred(s, br__rune_is_ascii_space, br__bytes_empty_context);
+}
+
+br_bytes_view br_bytes_trim_right_space(br_bytes_view s) {
+  return br__bytes_trim_right_pred(s, br__rune_is_ascii_space, br__bytes_empty_context);
+}
+
+br_bytes_view br_bytes_trim_space(br_bytes_view s) {
+  return br_bytes_trim_right_space(br_bytes_trim_left_space(s));
+}
+
+br_bytes_view br_bytes_trim_left_null(br_bytes_view s) {
+  return br__bytes_trim_left_pred(s, br__rune_is_null, br__bytes_empty_context);
+}
+
+br_bytes_view br_bytes_trim_right_null(br_bytes_view s) {
+  return br__bytes_trim_right_pred(s, br__rune_is_null, br__bytes_empty_context);
+}
+
+br_bytes_view br_bytes_trim_null(br_bytes_view s) {
+  return br_bytes_trim_right_null(br_bytes_trim_left_null(s));
+}
+
 br_bytes_result br_bytes_join(const br_bytes_view *parts,
                               usize part_count,
                               br_bytes_view sep,

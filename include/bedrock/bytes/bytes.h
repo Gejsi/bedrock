@@ -97,6 +97,35 @@ br_bytes_view br_bytes_truncate_to_byte(br_bytes_view s, uint8_t byte_value);
 br_bytes_view br_bytes_trim_prefix(br_bytes_view s, br_bytes_view prefix);
 br_bytes_view br_bytes_trim_suffix(br_bytes_view s, br_bytes_view suffix);
 
+/*
+Trim runes belonging to `cutset` from one or both ends of `s`.
+
+`cutset` is treated as a set of Unicode code points, matching Odin and Go: the
+cutset is decoded as UTF-8 and each edge rune of `s` is removed while it is a
+member. Returns a sub-view of `s` (no allocation).
+*/
+br_bytes_view br_bytes_trim_left(br_bytes_view s, br_bytes_view cutset);
+br_bytes_view br_bytes_trim_right(br_bytes_view s, br_bytes_view cutset);
+br_bytes_view br_bytes_trim(br_bytes_view s, br_bytes_view cutset);
+
+/*
+Trim ASCII whitespace (` `, `\t`, `\n`, `\v`, `\f`, `\r`) from one or both ends.
+
+This is ASCII-only: unlike Odin's `trim_space`, which uses the Unicode
+`is_space` classifier, Bedrock defers Unicode space classification until the
+tables land. Documented deviation in the coverage checklist.
+*/
+br_bytes_view br_bytes_trim_left_space(br_bytes_view s);
+br_bytes_view br_bytes_trim_right_space(br_bytes_view s);
+br_bytes_view br_bytes_trim_space(br_bytes_view s);
+
+/*
+Trim NUL (`0x00`) bytes from one or both ends.
+*/
+br_bytes_view br_bytes_trim_left_null(br_bytes_view s);
+br_bytes_view br_bytes_trim_right_null(br_bytes_view s);
+br_bytes_view br_bytes_trim_null(br_bytes_view s);
+
 br_bytes_result br_bytes_join(const br_bytes_view *parts,
                               size_t part_count,
                               br_bytes_view sep,

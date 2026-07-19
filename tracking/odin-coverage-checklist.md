@@ -195,7 +195,7 @@ Current Bedrock files:
 | line split / iterators | `planned` | none | Not landed. |
 | cut / substring helpers | `planned` | none | Not landed. |
 | equal_fold | `planned` | none | Depends on higher Unicode case-folding support. |
-| trim cutset / trim_space / trim_null | `planned` | none | Not landed. |
+| trim cutset / trim_space / trim_null | `adapted` | `strings.h`, `strings.c` | Landed (delegate to the bytes trim family). Cutset trimming is rune-aware (decodes the cutset as UTF-8 and matches runes at each edge, matching Odin and Go). `trim_space` is ASCII-whitespace-only — a documented deviation from Odin's Unicode `is_space`, deferred until the space tables land. |
 | fields / fields_proc | `planned` | none | Not landed. |
 | conversion module (`to_lower`, `to_upper`, case conversion) | `adapted` | `strings.h`, `strings.c` | ASCII-only `to_lower_ascii`/`to_upper_ascii` landed (delegate to the bytes forms); non-ASCII bytes pass through untouched. Named with the `_ascii` suffix because Unicode-aware case conversion is deferred until the case tables land, which will take the unqualified names. |
 | intern table | `planned` | none | Not landed. |

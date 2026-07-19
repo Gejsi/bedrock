@@ -251,6 +251,32 @@ static void test_strings_case_conversion(void) {
   assert(failed.value.data == NULL);
 }
 
+static void test_strings_trim(void) {
+  assert(br_string_equal(br_string_trim(BR_STR_LIT("xxhixx"), BR_STR_LIT("x")), BR_STR_LIT("hi")));
+  assert(
+    br_string_equal(br_string_trim_left(BR_STR_LIT("xxhi"), BR_STR_LIT("x")), BR_STR_LIT("hi")));
+  assert(
+    br_string_equal(br_string_trim_right(BR_STR_LIT("hixx"), BR_STR_LIT("x")), BR_STR_LIT("hi")));
+  assert(br_string_equal(br_string_trim_space(BR_STR_LIT("\t hello \n")), BR_STR_LIT("hello")));
+  assert(br_string_equal(br_string_trim_space(BR_STR_LIT("   ")), BR_STR_LIT("")));
+
+  /* Rune-aware cutset: strip a multibyte rune (U+00E9) from both ends. */
+  {
+    static const u8 input[] = {0xc3u, 0xa9u, 'o', 'k', 0xc3u, 0xa9u};
+    static const u8 cutset[] = {0xc3u, 0xa9u};
+    br_string_view got = br_string_trim(br_string_view_make(input, sizeof(input)),
+                                        br_string_view_make(cutset, sizeof(cutset)));
+    assert(br_string_equal(got, BR_STR_LIT("ok")));
+  }
+
+  /* NUL trim. */
+  {
+    static const u8 padded[] = {0x00u, 't', 'x', 't', 0x00u, 0x00u};
+    br_string_view got = br_string_trim_null(br_string_view_make(padded, sizeof(padded)));
+    assert(br_string_equal(got, BR_STR_LIT("txt")));
+  }
+}
+
 int main(void) {
   test_strings_compare_and_search();
   test_strings_views();
@@ -260,5 +286,6 @@ int main(void) {
   test_strings_split_helpers();
   test_strings_replace_helpers();
   test_strings_case_conversion();
+  test_strings_trim();
   return 0;
 }

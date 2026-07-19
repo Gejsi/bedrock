@@ -492,3 +492,60 @@ br_string_view br_string_trim_suffix(br_string_view s, br_string_view suffix) {
   trimmed = br_bytes_trim_suffix(br_string_view_as_bytes(s), br_string_view_as_bytes(suffix));
   return br_string_view_make(trimmed.data, trimmed.len);
 }
+
+br_string_view br_string_trim_left(br_string_view s, br_string_view cutset) {
+  br_bytes_view trimmed =
+    br_bytes_trim_left(br_string_view_as_bytes(s), br_string_view_as_bytes(cutset));
+
+  return br_string_view_make(trimmed.data, trimmed.len);
+}
+
+br_string_view br_string_trim_right(br_string_view s, br_string_view cutset) {
+  br_bytes_view trimmed =
+    br_bytes_trim_right(br_string_view_as_bytes(s), br_string_view_as_bytes(cutset));
+
+  return br_string_view_make(trimmed.data, trimmed.len);
+}
+
+br_string_view br_string_trim(br_string_view s, br_string_view cutset) {
+  br_bytes_view trimmed =
+    br_bytes_trim(br_string_view_as_bytes(s), br_string_view_as_bytes(cutset));
+
+  return br_string_view_make(trimmed.data, trimmed.len);
+}
+
+br_string_view br_string_trim_left_space(br_string_view s) {
+  br_bytes_view trimmed = br_bytes_trim_left_space(br_string_view_as_bytes(s));
+
+  return br_string_view_make(trimmed.data, trimmed.len);
+}
+
+br_string_view br_string_trim_right_space(br_string_view s) {
+  br_bytes_view trimmed = br_bytes_trim_right_space(br_string_view_as_bytes(s));
+
+  return br_string_view_make(trimmed.data, trimmed.len);
+}
+
+br_string_view br_string_trim_space(br_string_view s) {
+  br_bytes_view trimmed = br_bytes_trim_space(br_string_view_as_bytes(s));
+
+  return br_string_view_make(trimmed.data, trimmed.len);
+}
+
+br_string_view br_string_trim_left_null(br_string_view s) {
+  br_bytes_view trimmed = br_bytes_trim_left_null(br_string_view_as_bytes(s));
+
+  return br_string_view_make(trimmed.data, trimmed.len);
+}
+
+br_string_view br_string_trim_right_null(br_string_view s) {
+  br_bytes_view trimmed = br_bytes_trim_right_null(br_string_view_as_bytes(s));
+
+  return br_string_view_make(trimmed.data, trimmed.len);
+}
+
+br_string_view br_string_trim_null(br_string_view s) {
+  br_bytes_view trimmed = br_bytes_trim_null(br_string_view_as_bytes(s));
+
+  return br_string_view_make(trimmed.data, trimmed.len);
+}
