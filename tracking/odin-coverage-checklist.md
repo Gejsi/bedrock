@@ -4,7 +4,10 @@ This file makes the status of the current Odin-inspired work explicit instead of
 describing it with vague labels.
 
 The comparison target is the Odin checkout currently pinned in
-`upstream/odin/` on April 13, 2026.
+`upstream/odin/` on July 19, 2026 (`2c25fb9`).
+
+Note: the statuses below were last audited against the April 13, 2026 pin
+(`ecbb204`). A delta review against the current pin is pending.
 
 ## Status Legend
 
