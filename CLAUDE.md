@@ -32,6 +32,17 @@ API contract stays Odin's.
 ## Conventions
 
 - C11; public headers must not require compiler extensions
+- Type spelling is two-layered BY DESIGN: public headers under `include/` are
+  spelled in standard C types (`size_t`, `uint32_t`, ...) — that is the ABI
+  rule; implementation and test code (`src/`, `tests/`) PREFERS the short
+  aliases (`usize`, `u32`, ...) — that is the maintainer's style
+- Public header comments PRESENT the API to consumers: describe behavior and
+  contracts only. Never reference Odin, Go, Rust, or porting provenance in
+  them — a consumer does not care where the design came from. Provenance and
+  deviation notes live in `spec/` and `tracking/`
+- Public API naming favors what C developers already know over source-language
+  naming when the two conflict (`br_mem_copy`/`br_mem_move` mirror
+  memcpy/memmove, not Odin's copy/copy_non_overlapping)
 - Prefixes: `br_` public ABI, `BR_` macros, `br__` internal symbols
 - Errors are explicit `br_status` returns; library code never panics or aborts
 - Allocation is explicit: pass `br_allocator` at API boundaries; no globals,
