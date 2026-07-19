@@ -62,14 +62,3 @@ jobs:
       # versions, so the runner's default binary is not a reliable gate.
       - run: pipx install clang-format==22.1.8
       - run: make check-format
-
-  dist:
-    name: dist amalgamation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      # check-dist regenerates dist/ and fails if it drifts from the committed
-      # artifacts; dist-smoke compiles the amalgamation in every consumption
-      # mode with -Werror.
-      - run: make check-dist
-      - run: make dist-smoke

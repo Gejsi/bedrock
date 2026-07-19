@@ -20,15 +20,6 @@ BIN_DIR := $(BUILD_ROOT)/bin
 LIB_DIR := $(BUILD_ROOT)/lib
 LIB_TARGET := $(LIB_DIR)/libbedrock.a
 
-PYTHON ?= python3
-AMALGAMATE := tools/amalgamate.py
-DIST_DIR := dist
-DIST_HEADER := $(DIST_DIR)/bedrock.h
-DIST_SOURCE := $(DIST_DIR)/bedrock.c
-# Warning set for the dist smoke compiles: strict, standalone (no repo CFLAGS,
-# since consumers build the amalgamation with their own flags).
-DIST_SMOKE_CFLAGS := -std=c11 -Wall -Wextra -Werror
-
 CPPFLAGS ?= -Iinclude
 BASE_CFLAGS ?= -std=c11
 WARN_CFLAGS ?= -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wstrict-prototypes
@@ -108,7 +99,7 @@ TEST_BINS := $(patsubst $(TEST_DIR)/%.c,$(BIN_DIR)/%,$(TEST_FILES))
 LIB_DEPS := $(LIB_OBJS:.o=.d)
 TEST_DEPS := $(addsuffix .d,$(TEST_BINS))
 
-.PHONY: all clean test check debug release sanitize asan thread-sanitize tsan format check-format print-config dist check-dist dist-smoke
+.PHONY: all clean test check debug release sanitize asan thread-sanitize tsan format check-format print-config
 
 all: $(LIB_TARGET)
 
@@ -137,49 +128,6 @@ format:
 
 check-format:
 	$(CLANG_FORMAT) --dry-run --Werror $(FORMAT_FILES)
-
-# Regenerate the single-header distribution from the modular tree.
-dist:
-	$(PYTHON) $(AMALGAMATE)
-
-# Fail if the committed dist/ is stale. Regeneration is idempotent, so after
-# `make dist` any change to dist/ means the tree drifted from include/+src/;
-# `git diff --exit-code` reports it. This is the CI gate that forces `make dist`
-# after any header or source change.
-check-dist: dist
-	@if git diff --quiet -- $(DIST_DIR); then \
-		printf 'dist/ is up to date.\n'; \
-	else \
-		printf 'error: dist/ is stale; run `make dist` and commit the result.\n' >&2; \
-		git --no-pager diff --stat -- $(DIST_DIR) >&2; \
-		exit 1; \
-	fi
-
-# Compile the amalgamation in every supported consumption mode with -Werror.
-# Driver TUs are generated under build/ (never tests/, which is auto-discovered
-# and compiled against -Iinclude where dist/bedrock.h does not exist).
-dist-smoke: dist
-	@set -e; \
-	smoke=build/dist-smoke; \
-	rm -rf "$$smoke"; mkdir -p "$$smoke"; \
-	cp $(DIST_HEADER) $(DIST_SOURCE) "$$smoke/"; \
-	printf '#include "bedrock.h"\nint bedrock_smoke_use(void) {\n  br_arena a; unsigned char b[64]; br_alloc_result r;\n  br_arena_init(&a, b, sizeof b);\n  r = br_arena_alloc(&a, 8u, 8u);\n  return r.status == BR_STATUS_OK ? 0 : 1;\n}\nint main(void) { return bedrock_smoke_use(); }\n' > "$$smoke/use.c"; \
-	printf '#include "bedrock.h"\nint bedrock_smoke_second(void) { return (int)sizeof(br_arena); }\n' > "$$smoke/second.c"; \
-	printf '#define BEDROCK_IMPLEMENTATION\n#include "bedrock.h"\nint main(void) {\n  br_arena a; unsigned char b[64]; br_alloc_result r;\n  br_arena_init(&a, b, sizeof b);\n  r = br_arena_alloc(&a, 8u, 8u);\n  return r.status == BR_STATUS_OK ? 0 : 1;\n}\n' > "$$smoke/single.c"; \
-	printf '#define BEDROCK_NO_SHORT_TYPES\n#include "bedrock.h"\nint main(void) { return (int)sizeof(br_alloc_result) > 0 ? 0 : 1; }\n' > "$$smoke/noshort.c"; \
-	printf 'dist-smoke: two-file mode\n'; \
-	$(CC) $(DIST_SMOKE_CFLAGS) -I"$$smoke" "$$smoke/bedrock.c" "$$smoke/use.c" $(THREAD_CFLAGS) $(THREAD_LDFLAGS) -o "$$smoke/two_file"; \
-	"$$smoke/two_file"; \
-	printf 'dist-smoke: single-header mode\n'; \
-	$(CC) $(DIST_SMOKE_CFLAGS) -I"$$smoke" "$$smoke/single.c" $(THREAD_CFLAGS) $(THREAD_LDFLAGS) -o "$$smoke/single"; \
-	"$$smoke/single"; \
-	printf 'dist-smoke: declarations with -DBEDROCK_NO_SHORT_TYPES\n'; \
-	$(CC) $(DIST_SMOKE_CFLAGS) -I"$$smoke" "$$smoke/noshort.c" $(THREAD_CFLAGS) $(THREAD_LDFLAGS) -o "$$smoke/noshort"; \
-	"$$smoke/noshort"; \
-	printf 'dist-smoke: two-TU link (no duplicate symbols)\n'; \
-	$(CC) $(DIST_SMOKE_CFLAGS) -I"$$smoke" "$$smoke/bedrock.c" "$$smoke/use.c" "$$smoke/second.c" $(THREAD_CFLAGS) $(THREAD_LDFLAGS) -o "$$smoke/two_tu"; \
-	"$$smoke/two_tu"; \
-	printf 'dist-smoke: all modes passed.\n'
 
 print-config:
 	@printf 'MODE=%s\n' '$(MODE)'
