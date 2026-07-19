@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# The upstream/ submodules are reference material only; the build never reads
+# them, so all jobs check out without submodules.
+
+jobs:
+  test-linux:
+    name: linux (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [debug, release, sanitize, thread-sanitize]
+    steps:
+      - uses: actions/checkout@v4
+      # Recent Ubuntu kernels ship ASLR entropy that breaks ASan/TSan mappings.
+      - name: Lower ASLR entropy for sanitizers
+        if: matrix.mode == 'sanitize' || matrix.mode == 'thread-sanitize'
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - run: make MODE=${{ matrix.mode }} test
+
+  test-macos:
+    name: macos (${{ matrix.mode }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [debug, release, sanitize, thread-sanitize]
+    steps:
+      - uses: actions/checkout@v4
+      - run: make MODE=${{ matrix.mode }} test
+
+  # First real Windows exercise of the codebase; non-blocking until proven
+  # green, then this job should lose continue-on-error.
+  test-windows:
+    name: windows (debug, informational)
+    runs-on: windows-latest
+    continue-on-error: true
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          update: false
+          install: make
+          pacboy: clang:p
+      - run: make MODE=debug test
+
+  format:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make check-format
