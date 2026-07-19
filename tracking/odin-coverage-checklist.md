@@ -390,6 +390,20 @@ Current Bedrock files:
 | `encoding/base64` | `planned` | none | Next in pilot (task queue). |
 | `encoding/varint` | `planned` | none | u64/i64 LEB128 per spec deviation. |
 
+## `core/path`
+
+Current label: `slashpath v1`
+
+Current Bedrock files:
+- `include/bedrock/path.h` (module umbrella)
+- `include/bedrock/path/slashpath.h`, `src/path/slashpath.c`
+- `tests/test_slashpath.c`
+
+| Odin area | Status | Bedrock coverage | Notes |
+| --- | --- | --- | --- |
+| `path/slashpath` | `adapted` | `path/slashpath.h`, `src/path/slashpath.c` | Full surface (clean/dir/base/ext/name/split/split_elements/join/match). Deviations per spec/modules/path.md: rewrite-result aliasing (no clone when already clean, improving on Odin's Lazy_Buffer), match follows Go's malformed-pattern validation that Odin's port dropped (suspected upstream bug, verification pending), match errors are BR_STATUS_INVALID_ARGUMENT. Test suite ports Go's path vectors including all 56 match tests; upstream Odin has none. |
+| `path/filepath` | `excluded` | none | Not requested; `br_path_` stays reserved. |
+
 ## `core/time`
 
 Current Bedrock files:
