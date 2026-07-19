@@ -13,7 +13,8 @@ Updated as modules land. Analysis by the consumer-advocate seat.
 - **CUT** — remove; nothing a C dev reaches for is lost, or it fights Bedrock's
   own design.
 - **DEMOTE** — keep in the tree but out of the "include and don't think" core:
-  exclude from the default `dist/` amalgamation, available opt-in.
+  documented as opt-in/non-default (and excluded from any future bundled
+  distribution, should one return).
 - **KEEP** — earns its place in the batteries-included core.
 - **Confidence** — how sure the advocate is, independent of how the maintainer
   will weigh it.

@@ -41,9 +41,9 @@ API contract stays Odin's.
   commit as the code
 - Suspected upstream Odin bugs go in `tracking/odin-suspected-bugs.md`
 - File-local `static` helpers carry THEIR OWN module prefix (`br__hex_result`
-  in hex.c, never a borrowed `br__bytes_result`): the dist amalgamation folds
-  every source into one translation unit, so identical static names across
-  files are redefinition errors there even though separate TUs accept them
+  in hex.c, never a borrowed `br__bytes_result`): any unity or amalgamated
+  build folds sources into one translation unit, where identical static names
+  across files become redefinition errors — keep every file's statics unique
 - Keep docs small and focused; never grow a single giant planning file
 
 ## Team workflow (agent teammates)
