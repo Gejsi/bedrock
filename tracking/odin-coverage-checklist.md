@@ -182,7 +182,7 @@ Current Bedrock files:
 | trim_prefix / trim_suffix | `done` | `strings.h`, `strings.c` | Implemented. |
 | `strings.Builder` core | `adapted` | `string_builder.h`, `string_builder.c` | Heap-backed and fixed-backing builder landed with write/pop operations. |
 | `strings.Reader` core | `adapted` | `string_reader.h`, `string_reader.c` | Byte and rune read/unread plus seek are implemented. |
-| ptr / cstring conversion helpers | `planned` | none | `string_from_ptr`, `clone_to_cstring`, etc. are not landed. |
+| ptr / cstring conversion helpers | `partial` | `strings.h`, `strings.c` | `br_string_clone_to_cstr` landed (allocates len+1, NUL-terminated; caller frees with size len+1 via the same allocator; interior NULs preserved, C-read stops at the first) as the FFI-interop outbound helper. The inbound direction already existed as `br_string_view_from_cstr`. `string_from_ptr` and other ptr helpers remain planned. |
 | contains_any / index_any / last_index / last_index_any / index_byte / last_index_byte | `done` | `strings.h`, `strings.c` | Implemented. |
 | prefix_length / common_prefix | `planned` | none | Not landed. |
 | join / concatenate / count / repeat | `adapted` | `strings.h`, `strings.c` | Implemented as explicit allocating helpers plus substring counting. |

@@ -82,6 +82,32 @@ Allocation is explicit rather than relying on an implicit context allocator.
 br_string_result br_string_clone(br_string_view s, br_allocator allocator);
 
 /*
+Result of cloning a view into an owned, NUL-terminated C string. `ptr` is owned
+by the caller on success and NULL on failure.
+*/
+typedef struct br_cstring_result {
+  char *ptr;
+  br_status status;
+} br_cstring_result;
+
+/*
+Clone `s` into a freshly allocated, NUL-terminated C string.
+
+Allocates exactly `s.len + 1` bytes: the view's bytes followed by a terminating
+NUL. The caller owns `ptr` and must free it through the SAME allocator with size
+`s.len + 1` (the original view length plus one, NOT `strlen(ptr) + 1` -- those
+differ when the view contains interior NULs). An empty view yields a valid
+one-byte `""`. Allocation failure yields `{NULL, BR_STATUS_OUT_OF_MEMORY}`.
+
+The view is length-delimited, so any interior NUL bytes are copied verbatim; a C
+consumer that reads `ptr` as a C string will stop at the first such NUL, while
+the full `s.len` bytes remain present up to the terminator.
+
+The inbound direction is `br_string_view_from_cstr`.
+*/
+br_cstring_result br_string_clone_to_cstr(br_string_view s, br_allocator allocator);
+
+/*
 Clone `s` into an owned string with ASCII letters mapped to a single case.
 
 Only `A`-`Z` (or `a`-`z`) are remapped; all other bytes, including the bytes of

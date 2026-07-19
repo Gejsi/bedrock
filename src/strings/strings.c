@@ -70,6 +70,28 @@ br_string_result br_string_clone(br_string_view s, br_allocator allocator) {
   return br__string_result(result.value.data, result.value.len, result.status);
 }
 
+br_cstring_result br_string_clone_to_cstr(br_string_view s, br_allocator allocator) {
+  br_cstring_result result;
+  br_alloc_result alloc;
+
+  /* len + 1 for the terminator; len == 0 still allocates the 1-byte "". */
+  alloc = br_allocator_alloc_uninit(allocator, s.len + 1u, 1u);
+  if (alloc.status != BR_STATUS_OK) {
+    result.ptr = NULL;
+    result.status = alloc.status;
+    return result;
+  }
+
+  if (s.len != 0u) {
+    memcpy(alloc.ptr, s.data, s.len);
+  }
+  ((char *)alloc.ptr)[s.len] = '\0';
+
+  result.ptr = (char *)alloc.ptr;
+  result.status = BR_STATUS_OK;
+  return result;
+}
+
 br_string_result br_string_to_lower_ascii(br_string_view s, br_allocator allocator) {
   br_bytes_result result = br_bytes_to_lower_ascii(br_string_view_as_bytes(s), allocator);
 

@@ -75,6 +75,38 @@ static void test_strings_clone(void) {
   assert(br_string_free(clone.value, br_allocator_heap()) == BR_STATUS_OK);
 }
 
+static void test_strings_clone_to_cstr(void) {
+  br_cstring_result r;
+
+  /* Round-trip: view -> cstr -> back to a view via the inbound helper. */
+  r = br_string_clone_to_cstr(BR_STR_LIT("hello"), br_allocator_heap());
+  assert(r.status == BR_STATUS_OK && r.ptr != NULL);
+  assert(r.ptr[5] == '\0');
+  assert(br_string_equal(br_string_view_from_cstr(r.ptr), BR_STR_LIT("hello")));
+  /* Free with the documented size: original view length + 1. */
+  assert(br_allocator_free(br_allocator_heap(), r.ptr, 5u + 1u) == BR_STATUS_OK);
+
+  /* Empty view -> a valid one-byte "". */
+  r = br_string_clone_to_cstr(br_string_view_make(NULL, 0u), br_allocator_heap());
+  assert(r.status == BR_STATUS_OK && r.ptr != NULL && r.ptr[0] == '\0');
+  assert(br_allocator_free(br_allocator_heap(), r.ptr, 0u + 1u) == BR_STATUS_OK);
+
+  /* Interior NUL: all bytes copied; C string reads to the first NUL. */
+  {
+    br_string_view v = br_string_view_make("a\0b", 3u);
+    r = br_string_clone_to_cstr(v, br_allocator_heap());
+    assert(r.status == BR_STATUS_OK && r.ptr != NULL);
+    assert(strlen(r.ptr) == 1u);                                    /* stops at the interior NUL */
+    assert(r.ptr[0] == 'a' && r.ptr[1] == '\0' && r.ptr[2] == 'b'); /* full 3 bytes intact */
+    assert(r.ptr[3] == '\0');                                       /* terminator at index len */
+    assert(br_allocator_free(br_allocator_heap(), r.ptr, 3u + 1u) == BR_STATUS_OK);
+  }
+
+  /* Allocator failure -> {NULL, OUT_OF_MEMORY}, no leak. */
+  r = br_string_clone_to_cstr(BR_STR_LIT("x"), br_allocator_fail());
+  assert(r.status == BR_STATUS_OUT_OF_MEMORY && r.ptr == NULL);
+}
+
 static void test_strings_allocating_helpers(void) {
   br_string_result joined;
   br_string_result concatenated;
@@ -425,6 +457,7 @@ int main(void) {
   test_strings_views();
   test_strings_utf8_helpers();
   test_strings_clone();
+  test_strings_clone_to_cstr();
   test_strings_allocating_helpers();
   test_strings_split_helpers();
   test_strings_replace_helpers();
