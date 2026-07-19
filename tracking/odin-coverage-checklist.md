@@ -130,7 +130,7 @@ Current Bedrock files:
 | clone / free owned bytes | `adapted` | `bytes.h`, `bytes.c` | Implemented as explicit owned vs view types. |
 | compare / equal / prefix / suffix | `done` | `bytes.h`, `bytes.c` | Implemented. |
 | contains / contains_any | `done` | `bytes.h`, `bytes.c` | Implemented. |
-| index / last_index / index_byte / last_index_byte / index_any / count | `done` | `bytes.h`, `bytes.c` | Implemented. |
+| index / last_index / index_byte / last_index_byte / index_any / count | `done` | `bytes.h`, `bytes.c` | Implemented. Uses a first-byte + memcmp scan rather than Odin's Rabin-Karp; semantically identical, performance-only difference. |
 | truncate_to_byte / trim_prefix / trim_suffix | `done` | `bytes.h`, `bytes.c` | Implemented. |
 | join / concatenate / repeat | `adapted` | `bytes.h`, `bytes.c` | Implemented as explicit allocating helpers. |
 | split / split_n / split_after / split_after_n | `adapted` | `bytes.h`, `bytes.c` | Implemented; empty-separator behavior now follows Odin's rune-aware semantics. |

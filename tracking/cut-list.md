@@ -121,6 +121,13 @@ external demand, judged per item.
   bufio.Reader.peek (then cut lookahead) or on the standalone (then narrow
   bufio's peek). Two ways to peek erodes "don't think." Revisit at first
   parser.
+- **Update (July 19, 2026): the deferred test has now run, three times.** The
+  wave-3 parser research traced all three parsers at the source level: csv
+  builds on bufio.Reader read_slice/read_rune, the scanner does its own
+  buffering over a raw reader, and ini iterates a string — NONE consumes
+  lookahead_reader. Recommendation upgraded DEMOTE -> **CUT** (bufio.Reader
+  peek + the future scanner cover every peek story). Maintainer decision
+  pending in the log below.
 
 ## KEEP — narrower than peers
 
