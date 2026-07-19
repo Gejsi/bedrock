@@ -67,6 +67,19 @@ Important distinction:
 That split keeps the implementation safe while still allowing a "this is my
 stdlib" experience for application code.
 
+### Scalar Types In The Public ABI
+
+The public ABI is spelled entirely in standard C types: `size_t`, `ptrdiff_t`,
+`uintptr_t`, `intptr_t`, the `uint8_t`/`int8_t` family, `float`, and `double`.
+The short aliases (`usize`, `isize`, `uptr`, `iptr`, `u8`..`u64`, `i8`..`i64`,
+`f32`, `f64`) are optional sugar defined in `include/bedrock/types.h` and enabled
+by default. They are genuinely optional: because no public header depends on
+them, defining `BEDROCK_NO_SHORT_TYPES` before including Bedrock disables the
+aliases and the headers still compile. Implementation sources under `src/` may
+keep using the aliases internally. This is enforced by
+`tests/test_no_short_types.c`, which compiles `<bedrock.h>` with the aliases
+disabled and runs in CI on every platform and mode.
+
 ## Context And Allocation Policy
 
 Odin's implicit `context` does not translate well to C. Bedrock should use the

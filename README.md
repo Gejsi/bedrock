@@ -67,5 +67,10 @@ make sanitize
 The `Makefile` discovers `src/**/*.c` and `tests/**/*.c` automatically, so new
 modules and tests do not need to be hardcoded into the build.
 
-If a consumer does not want the short aliases like `u32` and `usize`, they can
-define `BEDROCK_NO_SHORT_TYPES` before including Bedrock headers.
+The public ABI is spelled entirely in standard C types (`size_t`, `uint32_t`,
+`int64_t`, `double`, ...). The short aliases like `u32` and `usize` are optional
+sugar layered on top in `include/bedrock/types.h`. A consumer that does not want
+them can define `BEDROCK_NO_SHORT_TYPES` before including Bedrock headers; the
+headers still compile because they never depend on the aliases. This is
+supported and CI-tested by `tests/test_no_short_types.c`, which builds against
+`<bedrock.h>` with the aliases disabled.
