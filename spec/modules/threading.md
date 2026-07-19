@@ -17,8 +17,9 @@ value the caller places on the stack or embeds in their own struct.
 typedef int (*br_thread_fn)(void *arg);
 
 typedef struct br_thread {
-  /* opaque to consumers: native handle (pthread_t / HANDLE) + atomic
-     lifecycle state. The handle carries NO user data and NO exit code. */
+  /* opaque to consumers. Carries ONLY: the native handle (pthread_t / HANDLE),
+     the native thread id (for the self-join guard), and an atomic lifecycle
+     state. It carries NO user data and NO exit code. */
   ...
 } br_thread;
 
@@ -40,19 +41,24 @@ This module reuses it.
 
 ## The core invariant: the spawned thread never touches the handle
 
-After `br_thread_create` returns, the spawned thread holds NO reference to the
-`br_thread`. This is what makes caller-allocated handles safe under detach: a
-detached caller may let its handle go out of scope while the thread still runs,
-so the thread must never read or write it. Two consequences follow.
+After the startup latch (below), the spawned thread holds NO reference to the
+`br_thread` — it never reads or writes the handle for its name, its exit code,
+its id, or its state. This is what makes a caller-allocated handle safe under
+detach: a detached caller may let its handle leave scope while the thread still
+runs, so any thread-side access to the handle would be a use-after-free into a
+dead frame — at startup (name read), at termination (exit-code write), or
+anytime (state/id). The invariant forbids all of them. Three consequences:
 
-1. **Exit codes ride the substrate, never the handle.** The user `fn` returns an
-   `int`; the backend transports it through the OS join mechanism — pthread
-   smuggles it through the thread return value (`(void *)(intptr_t)` round-trip,
-   retrieved by `pthread_join`'s `retval`), Windows returns it from the
-   `_beginthreadex` proc and retrieves it with `GetExitCodeThread` after
-   `WaitForSingleObject`. `br_thread_join` reads it from the substrate and writes
-   it to the caller's `*exit_code`. A detached thread's exit code is
-   unretrievable by design — consistent, since nobody can join it.
+1. **Exit codes ride the substrate's native join channel, never the handle.**
+   The user `fn` returns an `int`; the backend transports it through the OS join
+   mechanism. POSIX: the trampoline returns `(void *)(intptr_t)code` and
+   `br_thread_join` recovers it from `pthread_join`'s `retval` and casts back
+   (`int`→`intptr_t`→`int` is exact). Windows: the `_beginthreadex` proc returns
+   `(unsigned)code` and join recovers it via `GetExitCodeThread` after
+   `WaitForSingleObject` (exact for all `int`). The handle never carries the
+   code. A detached thread's exit code is unretrievable by design — consistent,
+   since nobody can join it. (This is the sign/width-safe answer to storing an
+   int through a `void*`: the cast round-trip, not a handle field.)
 
 2. **Startup data uses a creator-stack control block + a create-side
    handshake.** The trampoline needs `{fn, arg, name}`. That block lives on the
@@ -67,6 +73,13 @@ so the thread must never read or write it. Two consequences follow.
    memory safety. libc's own `pthread_create` solves it the same way — it copies
    its arguments into the new thread's setup before returning.
 
+3. **Identity for the self-join guard is written CREATOR-side, never
+   thread-side.** The handle's native id is filled by the creator from the spawn
+   call's out-param (`pthread_create`'s `pthread_t*`; `_beginthreadex`'s
+   `thrdaddr`), so the guard never needs the thread to write its own id into the
+   handle (which on POSIX it would have to, since `gettid` is self-only —
+   another side-door use-after-free, avoided).
+
 ## Lifecycle state machine
 
 A handle is FRESH (joinable) after a successful create, and moves to a terminal
@@ -79,18 +92,14 @@ so concurrent misuse is race-safe and never undefined:
 | detach | detaches → DETACHED, OK | INVALID_STATE | INVALID_STATE | INVALID_STATE |
 | join on SELF | INVALID_ARGUMENT (deadlock avoidance) | — | — | — |
 
-Self-join (a thread joining its own handle) is rejected up front, before any
-state transition or OS call: raw `pthread_join` on self is `EDEADLK` or a hang,
-so Bedrock returns `BR_STATUS_INVALID_ARGUMENT` instead. The identity check
-uses substrate comparison against creator-written state only — POSIX
-`pthread_equal(pthread_self(), <native handle>)`; Windows `GetCurrentThreadId()`
-against the thread id `_beginthreadex` hands the creator — because the spawned
-thread writing its own identity into the handle would violate the core
-invariant, and POSIX offers no portable way for a creator to learn another
-thread's numeric id from a `pthread_t`. Double-join, join-after-detach, and
-double-detach — all undefined in raw pthread/Win32 — return
-`BR_STATUS_INVALID_STATE`. This uniform guarding is the module's core value
-over the raw substrates.
+Self-join (a thread joining its own handle) is rejected up front:
+`pthread_equal(pthread_self(), thread->native)` on POSIX, `GetCurrentThreadId()
+== thread->id` on Windows — both reading only creator-written fields (see
+consequence 3 above), no OS join call made. Raw `pthread_join` on self is
+`EDEADLK` or a hang, so Bedrock returns `BR_STATUS_INVALID_ARGUMENT`.
+Double-join, join-after-detach, and double-detach — all undefined in raw
+pthread/Win32 — return `BR_STATUS_INVALID_STATE`. This uniform guarding is the
+module's core value over the raw substrates.
 
 ## Create-failure contract
 
@@ -179,8 +188,9 @@ name}` from the creator-stack control block into thread locals, (2) posts the
 handshake semaphore, (3) applies the name to self, (4) calls `fn(arg)`, (5)
 returns the int through the substrate. The trampoline touches the control block
 only in step 1 (before the post) and NEVER touches the `br_thread` handle. The
-self-join check runs before the join state transition, so a rejected self-join
-leaves the handle FRESH and joinable by another thread. Acceptance: the 24
+creator writes the native id/handle into `*thread` from the spawn out-param.
+The self-join check runs before the join state transition, so a rejected
+self-join leaves the handle FRESH and joinable by another thread. Acceptance: the 24
 raw-pthread sites (test_sync 12, test_sync_futex 9, test_virtual_mem/
 test_mutex_allocator/test_tracking_allocator 1 each, all currently
 `#if !defined(_WIN32)`) convert — thread fns become
