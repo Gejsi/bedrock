@@ -14,12 +14,11 @@ typedef struct br_buddy_allocator {
 } br_buddy_allocator;
 
 /*
-Bedrock keeps Odin's buddy allocator behavior close, with these intentional
-C-side adaptations:
-- explicit `buffer` + `capacity` instead of Odin's `[]byte` backing slice
-- initialization reports statuses instead of Odin's assertion-heavy diagnostics
-- the generic allocator adapter targets Bedrock's current alloc/free/resize/reset
-  ABI, not Odin's richer query-features/query-info modes
+Bedrock's buddy allocator, with these design choices:
+- takes an explicit `buffer` + `capacity` pair
+- initialization reports statuses rather than aborting
+- the generic allocator adapter supports alloc/free/resize/reset only (no
+  feature/info queries)
 - all allocations use the allocator's fixed initialization alignment, so the
   generic allocator adapter ignores per-request alignments
 */

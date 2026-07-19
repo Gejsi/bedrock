@@ -24,8 +24,8 @@ The zero value for an Atomic_Mutex is an unlocked mutex.
 
 An Atomic_Mutex must not be copied after first use.
 
-Odin's lower atomic primitives are zero-value-ready. Bedrock keeps that property
-inside this layer and uses it as the storage for public primitives.
+These lower atomic primitives are zero-value-ready, and this layer uses them as
+the storage for public primitives.
 */
 typedef struct br_atomic_mutex {
   br_futex state;
@@ -54,9 +54,8 @@ The zero value for an Atomic_Recursive_Mutex is an unlocked mutex.
 
 An Atomic_Recursive_Mutex must not be copied after first use.
 
-Odin stores a public Mutex here. Bedrock keeps the lower br_atomic_mutex inside
-the atomic layer so this type remains independent from the public primitive
-backend split.
+This type stores the lower br_atomic_mutex inside the atomic layer so it remains
+independent from the public primitive backend split.
 */
 typedef struct br_atomic_recursive_mutex {
   br_atomic_u64 owner;

@@ -9,8 +9,8 @@
 BR_EXTERN_C_BEGIN
 
 /*
-Bedrock keeps Odin's zero-value-ready sync model: the public primitives store
-small atomic/futex-backed words instead of native objects that require hidden
+Bedrock's sync model is zero-value-ready: the public primitives store small
+atomic/futex-backed words instead of native objects that require hidden
 construction. The init/destroy functions are compatibility reset/no-op helpers.
 */
 

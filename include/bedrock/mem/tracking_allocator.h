@@ -56,10 +56,10 @@ typedef struct br_tracking_allocator {
 } br_tracking_allocator;
 
 /*
-Bedrock's tracking allocator is intentionally smaller than Odin's current one:
-- private pointer index instead of exposing Odin's allocation_map directly
+Bedrock's tracking allocator, with these design choices:
+- a private pointer index rather than a publicly exposed allocation map
 - `clear_on_reset` is configured explicitly because Bedrock's allocator ABI
-  does not yet expose Odin-style feature queries
+  does not yet expose feature queries
 - bad frees are recorded by default instead of trapping
 - no source-location tracking yet
 */

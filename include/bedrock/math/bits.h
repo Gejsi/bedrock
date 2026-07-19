@@ -6,14 +6,13 @@
 BR_EXTERN_C_BEGIN
 
 /*
-Fixed-width bit operations ported from Odin `core/math/bits` (modeled on Go's
-`math/bits`). See spec/modules/math.md.
+Fixed-width bit operations. See spec/modules/math.md.
 
 Count/scan operations are TOTAL: they are defined at 0 (unlike the raw
 `__builtin_*`, whose zero input is undefined). `clz`/`ctz` return the bit width
 for 0; `bit_width` returns 0 for 0. There is no standalone `log2` — it is a
-footgun at 0 (Odin returns a silent `max(T)`); use `bit_width`, where
-`floor(log2 x) == bit_width(x) - 1` for `x > 0`.
+footgun at 0; use `bit_width`, where `floor(log2 x) == bit_width(x) - 1` for
+`x > 0`.
 
 Byte-order helpers (from_be/to_le) are NOT here; see the encoding/endian module.
 This module only provides the endianness-agnostic `byteswap`.
@@ -106,8 +105,7 @@ typedef struct br_bits_sub_u64_result {
 br_bits_sub_u32_result br_bits_sub_u32(uint32_t x, uint32_t y, bool borrow_in);
 br_bits_sub_u64_result br_bits_sub_u64(uint64_t x, uint64_t y, bool borrow_in);
 
-/* Full-width multiply: the (hi, lo) halves of x*y, following Odin and Go's
-   `bits.Mul` order (note: Rust's `widening_mul` returns (lo, hi) instead). */
+/* Full-width multiply: returns the (hi, lo) halves of x*y (high half first). */
 typedef struct br_bits_mul_u32_result {
   uint32_t hi;
   uint32_t lo;

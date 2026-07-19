@@ -29,10 +29,9 @@ typedef struct br_dynamic_arena {
 } br_dynamic_arena;
 
 /*
-Bedrock keeps Odin's dynamic arena behavior close, with these intentional
-C-side adaptations:
+Bedrock's dynamic arena, with these design choices:
 - explicit `block_allocator` and `array_allocator` default to heap allocators
-  when passed unset, instead of using Odin's ambient context allocator
+  when passed unset, instead of relying on an ambient allocator
 - the direct allocation entry points (`br_dynamic_arena_alloc` and friends)
   allocate at the arena's `minimum_alignment`; per-request alignment is honored
   through the generic allocator adapter, where the effective alignment is

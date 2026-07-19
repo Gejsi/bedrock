@@ -58,19 +58,19 @@ typedef struct br_virtual_arena_temp_result {
 #endif
 
 /*
-Bedrock v1 only exposes Odin's virtual growing/static variants here. Buffer
+Bedrock v1 only exposes the growing and static virtual variants here. Buffer
 arenas already exist separately as `br_arena`, so this layer stays focused on
-virtual-memory-backed arenas. Like Odin's current implementation, the virtual
-arena embeds a mutex and serializes public arena mutation operations. Overflow
-protection is available as a trailing guard page via `flags`; Bedrock does not
-currently expose Odin's broader memory-block flag surface directly.
+virtual-memory-backed arenas. The virtual arena embeds a mutex and serializes
+public arena mutation operations. Overflow protection is available as a trailing
+guard page via `flags`; Bedrock does not currently expose a broader memory-block
+flag surface directly.
 */
 
 void br_virtual_arena_init(br_virtual_arena *arena);
 
 /*
 Callers may prefill `default_commit_size` and `minimum_block_size` on a zeroed
-arena before initialization, matching Odin's growth-policy style.
+arena before initialization to override the default growth policy.
 */
 br_status br_virtual_arena_init_growing(br_virtual_arena *arena, size_t reserved);
 br_status
@@ -83,9 +83,9 @@ br_virtual_arena_mark br_virtual_arena_mark_save(br_virtual_arena *arena);
 br_status br_virtual_arena_rewind(br_virtual_arena *arena, br_virtual_arena_mark mark);
 
 /*
-These helpers mirror Odin's Arena_Temp workflow, but Bedrock reports misuse
-through statuses instead of asserting because the C API should not abort by
-default on ownership mistakes.
+These helpers implement a scoped temporary-allocation (save/restore) workflow.
+Bedrock reports misuse through statuses instead of asserting because the C API
+should not abort by default on ownership mistakes.
 */
 br_virtual_arena_temp_result br_virtual_arena_temp_begin(br_virtual_arena *arena);
 br_status br_virtual_arena_temp_end(br_virtual_arena_temp temp);

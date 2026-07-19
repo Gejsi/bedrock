@@ -100,9 +100,9 @@ br_bytes_view br_bytes_trim_suffix(br_bytes_view s, br_bytes_view suffix);
 /*
 Trim runes belonging to `cutset` from one or both ends of `s`.
 
-`cutset` is treated as a set of Unicode code points, matching Odin and Go: the
-cutset is decoded as UTF-8 and each edge rune of `s` is removed while it is a
-member. Returns a sub-view of `s` (no allocation).
+`cutset` is treated as a set of Unicode code points (decoded as UTF-8): each
+edge rune of `s` is removed while it is a member. Returns a sub-view of `s` (no
+allocation).
 */
 br_bytes_view br_bytes_trim_left(br_bytes_view s, br_bytes_view cutset);
 br_bytes_view br_bytes_trim_right(br_bytes_view s, br_bytes_view cutset);
@@ -111,9 +111,8 @@ br_bytes_view br_bytes_trim(br_bytes_view s, br_bytes_view cutset);
 /*
 Trim ASCII whitespace (` `, `\t`, `\n`, `\v`, `\f`, `\r`) from one or both ends.
 
-This is ASCII-only: unlike Odin's `trim_space`, which uses the Unicode
-`is_space` classifier, Bedrock defers Unicode space classification until the
-tables land. Documented deviation in the coverage checklist.
+This is ASCII-only (the Unicode whitespace classifier is deferred until the
+space tables land).
 */
 br_bytes_view br_bytes_trim_left_space(br_bytes_view s);
 br_bytes_view br_bytes_trim_right_space(br_bytes_view s);
@@ -133,8 +132,8 @@ Leading and trailing whitespace produce no empty fields, and consecutive
 whitespace bytes collapse into a single split point. Only ASCII whitespace
 (` `, `\t`, `\n`, `\v`, `\f`, `\r`) separates; bytes at or above `0x80` are
 field content, so multibyte UTF-8 runes stay within a field. This is
-ASCII-only, unlike Odin's `fields`, which falls back to Unicode `is_space`;
-that fallback is deferred until the space tables land.
+ASCII-only; the Unicode `is_space` fallback is deferred until the space tables
+land.
 */
 br_bytes_view_list_result br_bytes_fields(br_bytes_view s, br_allocator allocator);
 
@@ -149,8 +148,7 @@ br_bytes_result br_bytes_repeat(br_bytes_view s, size_t count, br_allocator allo
 /*
 Split `s` around separator `sep`.
 
-Like Odin's `bytes.split` family, an empty separator splits on UTF-8 rune
-boundaries rather than being rejected.
+An empty separator splits on UTF-8 rune boundaries rather than being rejected.
 */
 br_bytes_view_list_result
 br_bytes_split(br_bytes_view s, br_bytes_view sep, br_allocator allocator);
@@ -173,8 +171,7 @@ The iterator yields exactly the sequence `br_bytes_split` would produce for the
 same `(s, sep)`, element for element -- it is the allocation-free form of the
 split list. In particular it KEEPS the trailing empty field (`"a,"` split on
 `","` yields `"a"` then `""`) and iterating an empty input against a non-empty
-separator yields one empty field. This deviates from Odin's `split_iterator`,
-which drops the trailing empty; callers wanting empties skipped use
+separator yields one empty field. Callers wanting empties skipped use
 `br_bytes_fields`. An empty separator walks one UTF-8 rune per step.
 
 `br_bytes_split_after_iter_next` is the same iterator except each field keeps
@@ -205,8 +202,7 @@ If no rewrite is needed, `allocated` will be false and `value` will alias the
 original input. If a rewrite allocates, `allocated` will be true, `owned` will
 hold the allocation, and `value` will view that owned storage.
 
-When `old_bytes` is empty, replacements are inserted at UTF-8 rune boundaries,
-following Odin's `bytes.replace` semantics.
+When `old_bytes` is empty, replacements are inserted at UTF-8 rune boundaries.
 */
 br_bytes_rewrite_result br_bytes_replace(br_bytes_view s,
                                          br_bytes_view old_bytes,

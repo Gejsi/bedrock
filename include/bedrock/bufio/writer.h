@@ -54,8 +54,8 @@ br_status br_bufio_writer_flush(br_bufio_writer *writer);
 /*
 Write `src` into the buffered writer.
 
-Like Odin's `bufio.writer_write`, this may bypass the internal buffer when the
-buffer is empty and `src` is larger than the remaining buffer space.
+This may bypass the internal buffer when the buffer is empty and `src` is larger
+than the remaining buffer space.
 */
 br_bufio_writer_io_result
 br_bufio_writer_write(br_bufio_writer *writer, const void *src, size_t src_len);
@@ -66,8 +66,8 @@ br_bufio_writer_io_result br_bufio_writer_write_string(br_bufio_writer *writer, 
 /*
 Read from `source` into the buffered writer until EOF or error.
 
-Unlike Odin's fast path, Bedrock currently always stages through the buffer
-because generic streams do not expose a `READ_FROM` specialization mode yet.
+Bedrock currently always stages through the buffer because generic streams do
+not expose a `READ_FROM` specialization mode yet.
 */
 br_i64_result br_bufio_writer_read_from(br_bufio_writer *writer, br_stream source);
 

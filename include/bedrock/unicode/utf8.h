@@ -27,27 +27,24 @@ typedef struct br_utf8_encode_result {
 /*
 Encode `value` as UTF-8.
 
-This follows Odin's `encode_rune`: invalid values, including surrogate code
-points and values above the Unicode maximum, are encoded as the replacement
-rune.
+Invalid values, including surrogate code points and values above the Unicode
+maximum, are encoded as the replacement rune.
 */
 br_utf8_encode_result br_utf8_encode(br_rune value);
 
 /*
 Decode the first rune in `s`.
 
-This follows Odin's `decode_rune`: invalid encodings decode as the replacement
-rune with width 1, and an empty input decodes as the replacement rune with
-width 0.
+Invalid encodings decode as the replacement rune with width 1, and an empty
+input decodes as the replacement rune with width 0.
 */
 br_utf8_decode_result br_utf8_decode(br_bytes_view s);
 
 /*
 Decode the last rune in `s`.
 
-This follows Odin's `decode_last_rune`: invalid trailing encodings decode as
-the replacement rune with width 1, and an empty input decodes as the
-replacement rune with width 0.
+Invalid trailing encodings decode as the replacement rune with width 1, and an
+empty input decodes as the replacement rune with width 0.
 */
 br_utf8_decode_result br_utf8_decode_last(br_bytes_view s);
 
@@ -69,8 +66,8 @@ bool br_utf8_rune_start(uint8_t byte_value);
 /*
 Count runes in `s`.
 
-Like Odin's `rune_count`, invalid or truncated encodings count as width-1 error
-runes rather than being skipped.
+Invalid or truncated encodings count as width-1 error runes rather than being
+skipped.
 */
 size_t br_utf8_rune_count(br_bytes_view s);
 
@@ -83,8 +80,8 @@ int32_t br_utf8_rune_size(br_rune value);
 /*
 Report whether `s` begins with a complete UTF-8 encoding.
 
-Like Odin's `full_rune`, invalid encodings are considered complete because they
-decode as a width-1 replacement rune.
+Invalid encodings are considered complete because they decode as a width-1
+replacement rune.
 */
 bool br_utf8_full_rune(br_bytes_view s);
 

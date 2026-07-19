@@ -8,8 +8,8 @@ BR_EXTERN_C_BEGIN
 
 /*
 Mutex allocator serializes every request forwarded to the backing allocator.
-This mirrors Odin's `Mutex_Allocator`, with explicit backing selection instead
-of an ambient context allocator.
+Serializes a backing allocator behind a mutex, with explicit backing selection
+instead of an ambient allocator.
 */
 typedef struct br_mutex_allocator {
   br_allocator backing;

@@ -9,8 +9,7 @@ BR_EXTERN_C_BEGIN
 /*
 A dynamic byte buffer for building UTF-8 strings.
 
-This follows the broad role of Odin's `strings.Builder`, but the C version
-keeps allocation and ownership explicit. A builder is either heap-backed and
+Allocation and ownership are explicit. A builder is either heap-backed and
 growable, or backed by a caller-provided fixed buffer.
 */
 typedef struct br_string_builder {
@@ -49,8 +48,7 @@ br_status br_string_builder_init_with_capacity(br_string_builder *builder,
 /*
 Initialize a builder over caller-provided storage.
 
-This follows the intent of Odin's `builder_from_bytes`: the builder does not
-own the storage and cannot grow past `backing_len`.
+The builder does not own the storage and cannot grow past `backing_len`.
 */
 void br_string_builder_init_with_backing(br_string_builder *builder,
                                          void *backing,

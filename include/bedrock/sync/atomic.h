@@ -16,11 +16,11 @@
 BR_EXTERN_C_BEGIN
 
 /*
-Bedrock maps Odin's `core/sync/atomic` surface onto C11 atomics.
+Bedrock's atomic surface is built on C11 atomics.
 
-Most operations keep Odin's names and sequencing concepts, but compare-exchange
-follows C's expected-pointer contract instead of Odin's tuple return. That is
-the clean portable choice in C without introducing a large typed wrapper layer.
+Compare-exchange follows C's expected-pointer contract (not a tuple return).
+That is the clean portable choice in C without introducing a large typed wrapper
+layer.
 
 This header is an abstraction boundary, not a portability guarantee: the
 current backend requires a compiler/target with usable C11 atomics.

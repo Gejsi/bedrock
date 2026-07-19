@@ -61,9 +61,8 @@ size_t br_bufio_reader_buffered(const br_bufio_reader *reader);
 /*
 Return the next `n` bytes without advancing the reader.
 
-Like Odin's `bufio.reader_peek`, the returned view becomes invalid after the
-next buffered reader operation. If fewer than `n` bytes are returned, `status`
-explains why the result is short.
+The returned view becomes invalid after the next buffered reader operation. If
+fewer than `n` bytes are returned, `status` explains why the result is short.
 */
 br_bufio_reader_peek_result br_bufio_reader_peek(br_bufio_reader *reader, size_t n);
 
@@ -75,8 +74,8 @@ br_bufio_reader_io_result br_bufio_reader_discard(br_bufio_reader *reader, size_
 /*
 Read into `dst`.
 
-This follows Odin's `bufio.reader_read`: bytes come from at most one read of
-the underlying stream, so a successful short read is allowed.
+Bytes come from at most one read of the underlying stream, so a successful short
+read is allowed.
 */
 br_bufio_reader_io_result br_bufio_reader_read(br_bufio_reader *reader, void *dst, size_t dst_len);
 br_bufio_reader_byte_result br_bufio_reader_read_byte(br_bufio_reader *reader);
@@ -85,8 +84,7 @@ br_status br_bufio_reader_unread_byte(br_bufio_reader *reader);
 /*
 Read one UTF-8 rune from the buffered reader.
 
-Invalid encodings consume one byte and return `BR_RUNE_ERROR` with width 1,
-matching Odin's `bufio.reader_read_rune`.
+Invalid encodings consume one byte and return `BR_RUNE_ERROR` with width 1.
 */
 br_bufio_reader_rune_result br_bufio_reader_read_rune(br_bufio_reader *reader);
 br_status br_bufio_reader_unread_rune(br_bufio_reader *reader);
@@ -94,9 +92,9 @@ br_status br_bufio_reader_unread_rune(br_bufio_reader *reader);
 /*
 Read until `delim` is found and return a view into the internal buffer.
 
-Like Odin's `bufio.reader_read_slice`, the returned view is invalidated by the
-next buffered reader operation. `BR_STATUS_BUFFER_FULL` means the current
-buffer filled before the delimiter was found.
+The returned view is invalidated by the next buffered reader operation.
+`BR_STATUS_BUFFER_FULL` means the current buffer filled before the delimiter was
+found.
 */
 br_bufio_reader_slice_result br_bufio_reader_read_slice(br_bufio_reader *reader, uint8_t delim);
 

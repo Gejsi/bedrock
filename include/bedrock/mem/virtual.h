@@ -48,8 +48,8 @@ void br_vm_release(void *ptr, size_t size);
 
 /*
 Change page protection flags for an already reserved region. Bedrock currently
-exposes the raw primitive but not Odin's higher-level overflow-protected memory
-block flags yet.
+exposes the raw primitive but not higher-level overflow-protected memory block
+flags yet.
 */
 bool br_vm_protect(void *ptr, size_t size, br_vm_protect_flags flags);
 

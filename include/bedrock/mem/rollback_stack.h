@@ -6,9 +6,10 @@
 BR_EXTERN_C_BEGIN
 
 /*
-Reusable head blocks follow Odin's packed-header limit. Oversized singleton
-allocations may still exceed this internally because they never chain previous
-allocation offsets inside the same block.
+Reusable head blocks are bounded by the packed-header limit
+(`BR_ROLLBACK_STACK_MAX_HEAD_BLOCK_SIZE`). Oversized singleton allocations may
+still exceed this internally because they never chain previous allocation
+offsets inside the same block.
 */
 #define BR_ROLLBACK_STACK_DEFAULT_BLOCK_SIZE ((size_t)(4u * 1024u * 1024u))
 #define BR_ROLLBACK_STACK_MAX_HEAD_BLOCK_SIZE ((size_t)0x7fffffffu)
@@ -23,10 +24,9 @@ typedef struct br_rollback_stack {
 } br_rollback_stack;
 
 /*
-Bedrock follows Odin's rollback stack allocator shape closely, but a few C-side
-adaptations are intentional:
+Bedrock's rollback stack allocator, with these design choices:
 - initialization is split into explicit buffered and dynamic entry points
-- invalid usage returns statuses instead of Odin's assertion-heavy diagnostics
+- invalid usage returns statuses rather than aborting
 - non-last resize fallback copies `min(old_size, new_size)` bytes to avoid
   relying on runtime copy helpers with implicit size semantics
 */

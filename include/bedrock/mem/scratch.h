@@ -25,12 +25,11 @@ typedef struct br_scratch {
 } br_scratch;
 
 /*
-Bedrock keeps Odin's current scratch allocator behavior close, with these
-intentional C-side adaptations:
-- no ambient context allocator/logger; explicit `backup_allocator` defaults to
+Bedrock's scratch allocator, with these design choices:
+- no ambient allocator/logger; explicit `backup_allocator` defaults to
   `br_allocator_heap()` when unset
-- misuse reports statuses instead of Odin's assertion/panic-heavy diagnostics
-- Bedrock does not emit Odin's warning log when the backup allocator is used
+- misuse reports statuses rather than aborting
+- no warning log is emitted when the backup allocator is used
 - copy paths use explicit `min(old_size, new_size)` semantics
 */
 

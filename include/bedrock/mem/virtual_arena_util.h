@@ -12,10 +12,10 @@ typedef struct br_virtual_arena_make_result {
 } br_virtual_arena_make_result;
 
 /*
-This header is the C analogue of Odin's `virtual/arena_util.odin`: a typed
-convenience layer over virtual-arena allocation. Because C has no `typeid`
-overloads, Bedrock exposes raw helpers plus typed macros that assign directly
-into caller variables and return `br_status`.
+This header provides typed convenience helpers over the raw virtual-arena
+allocation API. Because C has no `typeid` overloads, Bedrock exposes raw helpers
+plus typed macros that assign directly into caller variables and return
+`br_status`.
 */
 
 br_alloc_result br_virtual_arena_new_raw(br_virtual_arena *arena, size_t size, size_t alignment);

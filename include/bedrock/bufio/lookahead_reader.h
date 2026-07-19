@@ -59,8 +59,8 @@ br_bytes_view br_bufio_lookahead_reader_buffer(const br_bufio_lookahead_reader *
 Return a view holding at most `n` bytes.
 
 If the underlying stream ends before `n` bytes are available, the returned
-status is `BR_STATUS_EOF`, matching Odin's lookahead reader semantics.
-`BR_STATUS_BUFFER_FULL` means `n` exceeds the fixed lookahead capacity.
+status is `BR_STATUS_EOF`. `BR_STATUS_BUFFER_FULL` means `n` exceeds the fixed
+lookahead capacity.
 */
 br_bufio_lookahead_reader_peek_result
 br_bufio_lookahead_reader_peek(br_bufio_lookahead_reader *reader, size_t n);

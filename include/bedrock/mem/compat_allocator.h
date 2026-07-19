@@ -10,10 +10,9 @@ typedef struct br_compat_allocator {
 } br_compat_allocator;
 
 /*
-Bedrock keeps Odin's compat allocator behavior close, with these intentional
-C-side adaptations:
-- explicit `parent` allocator defaults to heap when unset, instead of using
-  Odin's ambient context allocator
+Bedrock's compat allocator, with these design choices:
+- explicit `parent` allocator defaults to heap when unset, instead of relying on
+  an ambient allocator
 - the wrapper only targets Bedrock's current alloc/free/resize/reset ABI, so
   there is no public generic query-features/query-info surface yet
 - invalid pointers cannot be generically validated before reading the compat

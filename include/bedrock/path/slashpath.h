@@ -6,8 +6,7 @@
 BR_EXTERN_C_BEGIN
 
 /*
-Pure slash-separated path logic, ported from Odin `core/path/slashpath` (itself
-modeled on Go's `path`). This is lexical only: the separator is always '/',
+Pure slash-separated path logic: lexical only, the separator is always '/',
 there are no volume letters or backslashes, and nothing touches the filesystem.
 OS-specific paths are a future `filepath` module and own the `br_path_` name;
 this module is `br_slashpath_`.

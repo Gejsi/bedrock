@@ -63,8 +63,7 @@ The returned `value` is owned by the caller and must be freed with
 `BR_STATUS_INVALID_ENCODING` with `error_offset = src.len - 1`. Any byte outside
 `[0-9a-fA-F]` yields `BR_STATUS_INVALID_ENCODING` with `error_offset` at that
 byte's index. On any failure the scratch buffer is freed before returning, so
-`value` is always empty when `status` is not `BR_STATUS_OK` (this fixes Odin's
-decode-leak wart).
+`value` is always empty when `status` is not `BR_STATUS_OK`.
 */
 br_decode_result br_hex_decode(br_bytes_view src, br_allocator allocator);
 

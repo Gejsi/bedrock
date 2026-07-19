@@ -28,8 +28,8 @@
 #define br_try_shared_lock(lock_ptr) br_rw_mutex_try_shared_lock(lock_ptr)
 
 /*
-Odin's `guard` helpers rely on `defer`. Bedrock keeps the intent but exposes
-them as scoped block macros because C has no equivalent built-in construct.
+These `guard` helpers provide scoped locking; because C has no `defer`, Bedrock
+exposes them as scoped block macros.
 */
 #define br_guard(lock_ptr)                                                                         \
   for (bool BR_CONCAT(_br_guard_once_, __LINE__) = (br_lock((lock_ptr)), true);                    \

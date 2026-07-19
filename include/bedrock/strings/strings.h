@@ -77,8 +77,7 @@ br_status br_string_rewrite_free(br_string_rewrite_result result, br_allocator a
 /*
 Clone `s` into an owned string allocation.
 
-This follows the shape of Odin's `strings.clone`, but keeps allocation explicit
-instead of using an implicit context allocator.
+Allocation is explicit rather than relying on an implicit context allocator.
 */
 br_string_result br_string_clone(br_string_view s, br_allocator allocator);
 
@@ -121,8 +120,7 @@ bool br_string_contains_any(br_string_view s, br_string_view chars);
 /*
 Return whether Unicode scalar value `value` occurs within `s`.
 
-This follows Odin's `contains_rune` and walks the string as UTF-8 rather than
-scanning raw bytes.
+This walks the string as UTF-8 rather than scanning raw bytes.
 */
 bool br_string_contains_rune(br_string_view s, br_rune value);
 
@@ -166,16 +164,16 @@ Split `s` around runs of ASCII whitespace, returning the non-empty fields.
 
 Leading/trailing whitespace yield no empty fields and consecutive whitespace
 collapses. Only ASCII whitespace separates; bytes at or above `0x80` are field
-content, so multibyte UTF-8 runes stay within a field. ASCII-only, unlike
-Odin's Unicode `is_space` fallback (deferred until the space tables land).
+content, so multibyte UTF-8 runes stay within a field. ASCII-only, unlike the
+Unicode `is_space` fallback (deferred until the space tables land).
 */
 br_string_view_list_result br_string_fields(br_string_view s, br_allocator allocator);
 
 /*
 Split `s` around separator `sep`.
 
-Unlike the current byte-oriented `bytes` layer, an empty separator follows
-Odin's string behavior and splits on UTF-8 rune boundaries.
+Unlike the current byte-oriented `bytes` layer, an empty separator splits on
+UTF-8 rune boundaries.
 */
 br_string_view_list_result
 br_string_split(br_string_view s, br_string_view sep, br_allocator allocator);
@@ -197,8 +195,7 @@ callers must check the return before reading `out`.
 The iterator yields exactly the sequence `br_string_split` would produce for the
 same `(s, sep)`, element for element -- the allocation-free form of the split
 list. It KEEPS the trailing empty field and yields one empty field when
-iterating an empty input against a non-empty separator, deviating from Odin's
-`split_iterator` (which drops the trailing empty). Callers wanting empties
+iterating an empty input against a non-empty separator. Callers wanting empties
 skipped use `br_string_fields`. An empty separator walks one UTF-8 rune per step.
 
 `br_string_split_after_iter_next` keeps each field's trailing separator,
@@ -251,7 +248,7 @@ original input. If a rewrite allocates, `allocated` will be true, `owned` will
 hold the allocation, and `value` will view that owned storage.
 
 When `old_string` is empty, replacements are inserted at UTF-8 rune
-boundaries, following Odin's string semantics.
+boundaries.
 */
 br_string_rewrite_result br_string_replace(br_string_view s,
                                            br_string_view old_string,
@@ -286,7 +283,7 @@ Return the substring of `s` starting at rune index `rune_offset` spanning
 `rune_length` runes. A `rune_length` of 0 means "to the end of the string".
 
 `rune_offset` past the end yields an empty view; `rune_length` past the end is
-clamped to the end. Rune-indexed, following Odin's `cut`.
+clamped to the end. Rune-indexed.
 */
 br_string_view br_string_cut(br_string_view s, size_t rune_offset, size_t rune_length);
 
@@ -295,14 +292,13 @@ Return the rune subrange `[rune_start, rune_end)` of `s`.
 
 `ok` (when non-NULL) reports whether both indices were in bounds
 (`rune_start <= rune_end` and both no greater than the rune count). When the
-range is out of bounds, an empty view is returned and `*ok` is false. Follows
-Odin's `substring`.
+range is out of bounds, an empty view is returned and `*ok` is false.
 */
 br_string_view br_string_substring(br_string_view s, size_t rune_start, size_t rune_end, bool *ok);
 
 /*
 Return the length in bytes of the longest common prefix of `a` and `b`, not
-splitting a multibyte UTF-8 rune. Follows Odin's `prefix_length`.
+splitting a multibyte UTF-8 rune.
 */
 size_t br_string_prefix_length(br_string_view a, br_string_view b);
 
@@ -324,8 +320,8 @@ br_string_view br_string_trim_suffix(br_string_view s, br_string_view suffix);
 /*
 Trim runes belonging to `cutset` from one or both ends of `s`.
 
-`cutset` is a set of Unicode code points (decoded as UTF-8), matching Odin and
-Go. Returns a sub-view of `s`.
+`cutset` is a set of Unicode code points (decoded as UTF-8): returns a sub-view
+of `s`.
 */
 br_string_view br_string_trim_left(br_string_view s, br_string_view cutset);
 br_string_view br_string_trim_right(br_string_view s, br_string_view cutset);
@@ -334,8 +330,8 @@ br_string_view br_string_trim(br_string_view s, br_string_view cutset);
 /*
 Trim ASCII whitespace (` `, `\t`, `\n`, `\v`, `\f`, `\r`) from one or both ends.
 
-ASCII-only: Odin's `trim_space` uses the Unicode `is_space` classifier, which
-Bedrock defers until the case/space tables land. Documented deviation.
+This is ASCII-only (the Unicode whitespace classifier is deferred until the
+space tables land).
 */
 br_string_view br_string_trim_left_space(br_string_view s);
 br_string_view br_string_trim_right_space(br_string_view s);

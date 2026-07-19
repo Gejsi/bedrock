@@ -59,8 +59,8 @@ typedef enum br_seek_from {
 } br_seek_from;
 
 /*
-Stream operations follow Odin's single stream proc shape. Unsupported modes
-return `BR_STATUS_NOT_SUPPORTED`.
+Stream operations use a single stream-proc shape. Unsupported modes return
+`BR_STATUS_NOT_SUPPORTED`.
 */
 typedef enum br_io_mode {
   BR_IO_MODE_CLOSE = 0,

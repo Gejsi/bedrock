@@ -14,12 +14,11 @@ typedef struct br_stack {
 } br_stack;
 
 /*
-Bedrock keeps Odin's stack allocator behavior close, with these intentional
-C-side adaptations:
-- explicit `buffer` + `capacity` instead of Odin's `[]byte` backing slice
-- misuse reports statuses instead of Odin's panic-heavy diagnostics
-- the allocator adapter targets Bedrock's current alloc/free/resize/reset ABI,
-  not Odin's richer query-features/query-info modes
+Bedrock's stack allocator, with these design choices:
+- takes an explicit `buffer` + `capacity` pair
+- misuse reports statuses rather than aborting
+- the allocator adapter supports alloc/free/resize/reset only (no feature/info
+  queries)
 */
 
 void br_stack_init(br_stack *stack, void *buffer, size_t capacity);
