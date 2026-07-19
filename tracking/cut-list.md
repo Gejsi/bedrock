@@ -313,6 +313,8 @@ boundary.
 | containers + sort redesign chapter | ORDERED LAST | 2026-07-19 | containers are the hardest, highest-caveat C surface — the chapter closes the port; nothing jumps it into an earlier slot |
 | sync extended primitives | AUDIT ORDERED | 2026-07-19 | per-primitive living-idiom-vs-relic audit (ticket mutex, auto-reset event, one-shot event, public parker, barrier) before any trim ruling |
 | demand audit (allocators + sync) | COMPLETE | 2026-07-19 | steelman-first evidence table recorded above: allocator side 3 CUT + 1 DEMOTE + lookahead CUT; sync side 5 KEEP + 2 DEMOTE-class. Execution rulings still pending. |
+| small_stack, rollback_stack, lookahead_reader | CUT (RULED) | 2026-07-19 | the three clean cuts approved for execution — zero consumers, superseding alternative each; one removal commit per candidate |
+| compat_allocator | PENDING | 2026-07-19 | awaits the malloc/free-facade philosophy ruling |
 | small_stack | | | |
 | compat_allocator | | | |
 | rollback_stack | | | |
