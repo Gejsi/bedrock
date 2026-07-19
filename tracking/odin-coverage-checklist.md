@@ -41,7 +41,6 @@ Current Bedrock files:
 - `include/bedrock/mem/compat_allocator.h`
 - `include/bedrock/mem/dynamic_arena.h`
 - `include/bedrock/mem/mutex_allocator.h`
-- `include/bedrock/mem/rollback_stack.h`
 - `include/bedrock/mem/scratch.h`
 - `include/bedrock/mem/stack.h`
 - `include/bedrock/mem/tracking_allocator.h`
@@ -54,7 +53,6 @@ Current Bedrock files:
 - `src/mem/compat_allocator.c`
 - `src/mem/dynamic_arena.c`
 - `src/mem/mutex_allocator.c`
-- `src/mem/rollback_stack.c`
 - `src/mem/scratch.c`
 - `src/mem/stack.c`
 - `src/mem/tracking_allocator.c`
@@ -90,7 +88,7 @@ Current Bedrock files:
 | virtual growing/static arena core | `adapted` | `virtual_arena.h`, `src/mem/virtual/arena.c` | Growing and static arenas landed with allocator support, reset/destroy, mark/rewind, an embedded mutex matching Odin's `virtual.Arena`, and optional trailing guard-page overflow protection. Static arenas require explicit init; Bedrock intentionally does not adopt Odin's lazy static-init-on-first-alloc. |
 | tracking allocator | `adapted` | `tracking_allocator.h`, `tracking_allocator.c` | Landed with a dense live-entry list plus a private pointer index and an embedded mutex matching Odin's `Tracking_Allocator`; it still omits feature-query and source-location machinery. |
 | mutex / locked allocator | `adapted` | `mutex_allocator.h`, `mutex_allocator.c` | Landed as an Odin-style serialized allocator wrapper around a backing allocator. Bedrock defaults an unset backing allocator to heap instead of using Odin's ambient context allocator. |
-| rollback stack allocator | `adapted` | `rollback_stack.h`, `rollback_stack.c` | Landed with Odin-style rollback/free collapse and singleton oversized blocks; Bedrock splits init into explicit buffered/dynamic entry points and reports invalid usage via statuses. |
+| rollback stack allocator | `cut` | none | Cut July 19, 2026 (cut-list decisions log): highest cost-to-uniqueness of the niche allocators; its rollback capability overlaps arena mark/rewind. No external consumers at removal. |
 | selected low-level `mem.odin` helpers | `adapted` | `mem/mem.h` | Header-only static-inline `br_mem_set`/`zero`/`copy` (memcpy, non-overlapping)/`move` (memmove, overlap-safe)/`compare` (view pair)/`compare_ptrs` (n bytes)/`check_zero` landed as thin `<string.h>` wrappers with standard-C-typed signatures. Copy/move use C-familiar names (`br_mem_copy` = memcpy, `br_mem_move` = memmove) rather than an Odin-style `copy`/`copy_non_overlapping` split, so the public vocabulary matches what C programmers expect. `compare` normalizes to -1/0/+1 with bytewise-then-length ordering, matching `br_bytes_compare`. `check_zero` collapses Odin's `check_zero`/`check_zero_ptr` (no slice type) and uses an in-bounds byte walk that avoids the over-read in Odin's word-aligned prologue. Excluded: `zero_explicit` (secure-zero primitive, deferred pending an explicit ask), `zero_item`/`zero_slice`/`simple_equal` (generics), and `ptr_offset`/`ptr_sub`/slice-from-ptr (`raw.odin` runtime-layout surface). |
 | TLSF allocator | `deferred` | none | Odin has `tlsf/*`; Bedrock does not. |
 | virtual temp / watermark helpers | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Landed as explicit begin/end/ignore/check helpers that return statuses instead of Odin's assertion-based misuse handling. |

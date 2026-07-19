@@ -10,7 +10,6 @@
 #include <bedrock/mem/buddy_allocator.h>
 #include <bedrock/mem/scratch.h>
 #include <bedrock/mem/stack.h>
-#include <bedrock/mem/rollback_stack.h>
 #include <bedrock/mem/tracking_allocator.h>
 #include <bedrock/mem/virtual.h>
 #include <bedrock/mem/virtual_arena.h>
