@@ -1,8 +1,8 @@
 # Living Cut List
 
 Bedrock ports Odin's stdlib, but the project's end goal explicitly includes a
-post-port reckoning: "some of the stuff was just too much and i didn't really
-care." This file is the standing input to that decision. It is NOT a set of
+post-port reckoning: parts that prove unnecessary get cut. This file is the
+standing input to that decision. It is NOT a set of
 decisions — final CUT/KEEP/DEMOTE calls land in the decisions log at the end of the
 port. It exists so that decision is easy and evidence-based instead of vibes.
 
@@ -12,19 +12,19 @@ Updated as modules land. Analysis by the consumer-advocate seat.
 
 - **CUT** — remove; nothing a C dev reaches for is lost, or it fights Bedrock's
   own design.
-- **DEMOTE** — keep in the tree but out of the "include and don't think" core:
+- **DEMOTE** — keep in the tree but out of the include-and-don't-think core:
   documented as opt-in/non-default (and excluded from any future bundled
   distribution, should one return).
 - **KEEP** — earns its place in the batteries-included core.
 - **Confidence** — how sure the advocate is, independent of how the project
   will weigh it.
 
-Guiding tension: the project values "include and don't think," so a fatter
+Guiding tension: the project values include-and-don't-think ergonomics, so a fatter
 library is fine *if every piece is obviously useful*. The enemy is not size; it
 is choice-paralysis and museum pieces — code ported because it existed in Odin,
 not because a C dev wants it.
 
-Guiding philosophy (recorded July 19, 2026): **"code is a liability."**
+Guiding philosophy (recorded July 19, 2026): **code is a liability.**
 Cutting is good, and the same logic applies BEFORE porting — a package that
 isn't worth porting should not be ported at all. This list therefore covers
 both landed code (CUT/KEEP/DEMOTE) and, as a pre-port scrutiny section, the
@@ -120,7 +120,7 @@ external demand, judged per item.
   Bedrock has two peek stories.
 - **Why demote:** decide, when the first parser lands, whether it builds on
   bufio.Reader.peek (then cut lookahead) or on the standalone (then narrow
-  bufio's peek). Two ways to peek erodes "don't think." Revisit at first
+  bufio's peek). Two ways to peek erodes the don't-make-me-think goal. Revisit at first
   parser.
 - **Update (July 19, 2026): the deferred test has now run, three times.** The
   wave-3 parser research traced all three parsers at the source level: csv
@@ -168,7 +168,7 @@ external demand, judged per item.
 Cutting small_stack + compat + rollback removes ~1,267 impl+hdr lines and ~375
 test lines, dropping the allocator count 13 -> 10 with zero capability a C dev
 would miss. Demoting buddy + lookahead from the core dist trims another ~723
-lines from the "don't think" surface while keeping them opt-in. That is the
+lines from the default surface while keeping them opt-in. That is the
 biggest readability/dist win available, concentrated in the module that is
 half the codebase.
 
@@ -288,8 +288,8 @@ boundary.
 | math core float functions | SKIP | 2026-07-19 | libm is the answer; struck outright |
 | text/regex | SKIP | 2026-07-19 | PCRE2 is the answer, as cJSON is for json |
 | time/stopwatch | DEFER | 2026-07-19 | on concrete demand |
-| niche-allocator cut executions | ON HOLD | 2026-07-19 | landed allocators stay for now; a use-case audit (steelman-the-keep-first) runs before any cut ruling — "they are already there, we can keep them for now" |
-| containers + sort redesign chapter | ORDERED LAST | 2026-07-19 | containers are the hardest C surface ("so many caveats and usage problems") — the chapter closes the port; nothing jumps it into an earlier slot |
+| niche-allocator cut executions | ON HOLD | 2026-07-19 | landed allocators stay in the tree; a use-case audit (steelman-the-keep-first) runs before any cut ruling |
+| containers + sort redesign chapter | ORDERED LAST | 2026-07-19 | containers are the hardest, highest-caveat C surface — the chapter closes the port; nothing jumps it into an earlier slot |
 | sync extended primitives | AUDIT ORDERED | 2026-07-19 | per-primitive living-idiom-vs-relic audit (ticket mutex, auto-reset event, one-shot event, public parker, barrier) before any trim ruling |
 | small_stack | | | |
 | compat_allocator | | | |
