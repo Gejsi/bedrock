@@ -102,7 +102,8 @@ on (transitively). Verified direct dependencies:
 | `unicode` | `bytes` |
 | `bytes` | `unicode`, `mem`, `io` |
 | `io` | `unicode` |
-| `mem` | `sync` |
+| `mem` (arenas + core allocators) | (none beyond `base`) |
+| `mem` (`mutex_allocator`, `tracking_allocator`) | `sync` (which pulls `time`) |
 | `sync` | `time` |
 | `strings` | `unicode`, `io` |
 | `bufio` | `bytes`, `io`, `mem`, `strings` |
@@ -110,9 +111,11 @@ on (transitively). Verified direct dependencies:
 | `path` | `strings`, `unicode` |
 
 `bytes` and `unicode` are mutually dependent (a rune-aware `bytes` layer over a
-`bytes`-view UTF-8 decoder), so they always compile together. `mem` pulls in
-`sync` only for the mutex embedded in a few allocators, which in turn pulls in
-`time`. When in doubt, link the whole archive.
+`bytes`-view UTF-8 decoder), so they always compile together. Within `mem`,
+only `mutex_allocator` and `tracking_allocator` need `sync` (for their embedded
+mutex); the other nine allocators — including every arena — link against
+`base` alone, so "I just want an arena" costs nothing beyond `mem` itself.
+When in doubt, link the whole archive.
 
 The public ABI is spelled entirely in standard C types (`size_t`, `uint32_t`,
 `int64_t`, `double`, ...). The short aliases like `u32` and `usize` are optional
