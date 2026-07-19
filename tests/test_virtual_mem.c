@@ -200,14 +200,119 @@ static void test_virtual_arena_temp_invalid(void) {
     return;
   }
 
+  /*
+  temp_begin on a still-empty arena now succeeds (option A lazy init), so the
+  old INVALID_STATE case is gone; the positive lazy-init path is covered in
+  test_virtual_arena_lazy_temp. The remaining invalid case here is ending a
+  temp against a destroyed arena, which needs an explicitly initialized arena.
+  */
   br_virtual_arena_init(&arena);
-  assert(br_virtual_arena_temp_begin(&arena).status == BR_STATUS_INVALID_STATE);
-
   assert(br_virtual_arena_init_static(&arena, page_size * 2u, page_size) == BR_STATUS_OK);
   temp = br_virtual_arena_temp_begin(&arena);
   assert(temp.status == BR_STATUS_OK);
   br_virtual_arena_destroy(&arena);
   assert(br_virtual_arena_temp_end(temp.value) == BR_STATUS_INVALID_STATE);
+}
+
+static void test_virtual_arena_lazy_alloc(void) {
+  br_virtual_arena arena;
+  br_alloc_result first;
+
+  if (br_vm_page_size() == 0u) {
+    return;
+  }
+
+  /* A zeroed arena (no init call) is a ready-to-use empty growing arena. */
+  memset(&arena, 0, sizeof(arena));
+
+  first = br_virtual_arena_alloc(&arena, 128u, 16u);
+  assert(first.status == BR_STATUS_OK);
+  assert(first.ptr != NULL);
+  assert(((uptr)first.ptr % 16u) == 0u);
+
+  /* First use promoted it to a growing arena and filled in the defaults. */
+  assert(arena.kind == BR_VIRTUAL_ARENA_KIND_GROWING);
+  assert(arena.curr_block != NULL);
+  assert(arena.minimum_block_size != 0u);
+  assert(arena.default_commit_size != 0u);
+  assert(arena.total_used >= 128u);
+
+  br_virtual_arena_destroy(&arena);
+}
+
+static void test_virtual_arena_lazy_prefilled_flags(void) {
+  br_virtual_arena arena;
+  br_alloc_result first;
+
+  if (br_vm_page_size() == 0u) {
+    return;
+  }
+
+  /* Fields prefilled on the zeroed struct are honored on first use. */
+  memset(&arena, 0, sizeof(arena));
+  arena.flags = BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION;
+
+  first = br_virtual_arena_alloc(&arena, 64u, 16u);
+  assert(first.status == BR_STATUS_OK);
+  assert(first.ptr != NULL);
+  assert(arena.flags == BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION);
+
+  br_virtual_arena_destroy(&arena);
+}
+
+static void test_virtual_arena_lazy_mark_rewind(void) {
+  br_virtual_arena arena;
+  br_virtual_arena_mark mark;
+  br_alloc_result alloc;
+
+  if (br_vm_page_size() == 0u) {
+    return;
+  }
+
+  /* A mark captured before the first allocation rewinds back to empty. */
+  memset(&arena, 0, sizeof(arena));
+
+  mark = br_virtual_arena_mark_save(&arena);
+  assert(mark.block == NULL);
+  assert(mark.used == 0u);
+
+  alloc = br_virtual_arena_alloc(&arena, 256u, 16u);
+  assert(alloc.status == BR_STATUS_OK);
+  assert(arena.total_used >= 256u);
+
+  assert(br_virtual_arena_rewind(&arena, mark) == BR_STATUS_OK);
+  assert(arena.total_used == 0u);
+  assert(arena.curr_block == NULL);
+
+  br_virtual_arena_destroy(&arena);
+}
+
+static void test_virtual_arena_lazy_temp(void) {
+  br_virtual_arena arena;
+  br_virtual_arena_temp_result temp;
+  br_alloc_result alloc;
+
+  if (br_vm_page_size() == 0u) {
+    return;
+  }
+
+  /* A temp scope opened before the first allocation ends back to empty. */
+  memset(&arena, 0, sizeof(arena));
+
+  temp = br_virtual_arena_temp_begin(&arena);
+  assert(temp.status == BR_STATUS_OK);
+  assert(arena.kind == BR_VIRTUAL_ARENA_KIND_GROWING);
+
+  alloc = br_virtual_arena_alloc(&arena, 256u, 16u);
+  assert(alloc.status == BR_STATUS_OK);
+  assert(arena.total_used >= 256u);
+
+  assert(br_virtual_arena_temp_end(temp.value) == BR_STATUS_OK);
+  assert(arena.total_used == 0u);
+  assert(arena.curr_block == NULL);
+  assert(br_virtual_arena_check_temp(&arena) == BR_STATUS_OK);
+
+  br_virtual_arena_destroy(&arena);
 }
 
 static void test_virtual_arena_overflow_protection(void) {
@@ -336,6 +441,10 @@ int main(void) {
   test_virtual_arena_temp_end();
   test_virtual_arena_temp_ignore();
   test_virtual_arena_temp_invalid();
+  test_virtual_arena_lazy_alloc();
+  test_virtual_arena_lazy_prefilled_flags();
+  test_virtual_arena_lazy_mark_rewind();
+  test_virtual_arena_lazy_temp();
   test_virtual_arena_overflow_protection();
 #if !defined(_WIN32)
   test_virtual_arena_serializes_allocations();

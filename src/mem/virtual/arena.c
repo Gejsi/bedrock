@@ -330,6 +330,21 @@ static bool br__virtual_arena_has_block(const br_virtual_arena *arena,
   return false;
 }
 
+/*
+A zeroed `br_virtual_arena` is a ready-to-use empty growing arena. The first
+locked operation promotes `KIND_NONE` to `KIND_GROWING` while leaving all sizes
+at 0, so the existing growing path fills in the defaults and creates the first
+block on demand. Static arenas are never produced this way: they carry a
+caller-supplied reservation size and must be initialized explicitly. Callers
+that ran `br_virtual_arena_init_growing`/`_static` first are unaffected because
+their `kind` is already set. Must be called with the arena mutex held.
+*/
+static void br__vm_arena_ensure_growing(br_virtual_arena *arena) {
+  if (arena != NULL && arena->kind == BR_VIRTUAL_ARENA_KIND_NONE) {
+    arena->kind = BR_VIRTUAL_ARENA_KIND_GROWING;
+  }
+}
+
 static br_alloc_result br__virtual_arena_alloc_internal(br_virtual_arena *arena,
                                                         usize size,
                                                         usize alignment,
@@ -349,6 +364,8 @@ static br_alloc_result br__virtual_arena_alloc_internal(br_virtual_arena *arena,
   if (size == 0u) {
     return br__virtual_arena_result(NULL, 0u, BR_STATUS_OK);
   }
+
+  br__vm_arena_ensure_growing(arena);
 
   switch (arena->kind) {
     case BR_VIRTUAL_ARENA_KIND_GROWING:
@@ -698,6 +715,7 @@ br_virtual_arena_mark br_virtual_arena_mark_save(br_virtual_arena *arena) {
   }
 
   br_mutex_lock(&arena->mutex);
+  br__vm_arena_ensure_growing(arena);
   if (arena != NULL && arena->curr_block != NULL) {
     mark.block = arena->curr_block;
     mark.used = arena->curr_block->used;
@@ -717,8 +735,18 @@ static br_status br__virtual_arena_rewind_unlocked(br_virtual_arena *arena,
 
   switch (arena->kind) {
     case BR_VIRTUAL_ARENA_KIND_GROWING:
+      /*
+      A NULL mark block is the savepoint captured on an empty (zero-value or
+      freshly reset) arena. Rewinding to it frees every block allocated since,
+      returning the arena to empty. This pairs with the lazy-init promotion so
+      a mark taken before the first allocation is a valid "rewind to empty".
+      */
       if (mark.block == NULL) {
-        return BR_STATUS_INVALID_ARGUMENT;
+        while (arena->curr_block != NULL) {
+          br__virtual_arena_free_last_block(arena);
+        }
+        arena->total_used = 0u;
+        return BR_STATUS_OK;
       }
 
       for (block = arena->curr_block; block != NULL; block = block->prev) {
@@ -784,13 +812,22 @@ static br_virtual_arena_temp_result br__virtual_arena_temp_begin_unlocked(br_vir
   if (arena == NULL) {
     return br__virtual_arena_temp_result(NULL, NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
   }
-  if (arena->curr_block == NULL || arena->kind == BR_VIRTUAL_ARENA_KIND_NONE) {
+
+  /*
+  Promote a zero-value arena so a temp scope can start before the first
+  allocation. An empty arena captures a NULL-block savepoint whose `temp_end`
+  frees everything allocated within the scope, returning the arena to empty.
+  */
+  br__vm_arena_ensure_growing(arena);
+  if (arena->kind != BR_VIRTUAL_ARENA_KIND_GROWING && arena->kind != BR_VIRTUAL_ARENA_KIND_STATIC) {
     return br__virtual_arena_temp_result(arena, NULL, 0u, BR_STATUS_INVALID_STATE);
   }
 
   arena->temp_count += 1u;
-  return br__virtual_arena_temp_result(
-    arena, arena->curr_block, arena->curr_block->used, BR_STATUS_OK);
+  return br__virtual_arena_temp_result(arena,
+                                       arena->curr_block,
+                                       arena->curr_block != NULL ? arena->curr_block->used : 0u,
+                                       BR_STATUS_OK);
 }
 
 br_virtual_arena_temp_result br_virtual_arena_temp_begin(br_virtual_arena *arena) {
@@ -810,7 +847,7 @@ static br_status br__virtual_arena_temp_end_unlocked(br_virtual_arena_temp temp)
   br_virtual_arena *arena;
   usize old_used;
 
-  if (temp.arena == NULL || temp.block == NULL) {
+  if (temp.arena == NULL) {
     return BR_STATUS_INVALID_ARGUMENT;
   }
 
@@ -818,6 +855,20 @@ static br_status br__virtual_arena_temp_end_unlocked(br_virtual_arena_temp temp)
   if (arena->temp_count == 0u) {
     return BR_STATUS_INVALID_STATE;
   }
+
+  /*
+  A NULL temp block is the savepoint captured on an empty arena. Ending it
+  frees every block allocated within the scope, returning the arena to empty.
+  */
+  if (temp.block == NULL) {
+    while (arena->curr_block != NULL) {
+      br__virtual_arena_free_last_block(arena);
+    }
+    arena->total_used = 0u;
+    arena->temp_count -= 1u;
+    return BR_STATUS_OK;
+  }
+
   if (!br__virtual_arena_has_block(arena, temp.block)) {
     return BR_STATUS_INVALID_STATE;
   }
