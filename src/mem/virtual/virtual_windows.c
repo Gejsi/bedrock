@@ -74,35 +74,4 @@ bool br__vm_platform_protect(void *ptr, usize size, br_vm_protect_flags flags) {
   return VirtualProtect(ptr, size, protect, &old_protect) != 0;
 }
 
-br_vm_mapped_file_result
-br__vm_platform_map_open_file(br__vm_native_file file, usize size, br_vm_map_file_flags flags) {
-  DWORD protect = PAGE_READONLY;
-  DWORD map_access = FILE_MAP_READ;
-  HANDLE mapping = NULL;
-  void *view = NULL;
-
-  if ((flags & BR_VM_MAP_FILE_WRITE) != 0u) {
-    protect = PAGE_READWRITE;
-    map_access = FILE_MAP_READ | FILE_MAP_WRITE;
-  }
-
-  mapping = CreateFileMappingA((HANDLE)(iptr)file, NULL, protect, 0u, 0u, NULL);
-  if (mapping == NULL) {
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
-  }
-
-  view = MapViewOfFile(mapping, map_access, 0u, 0u, size);
-  CloseHandle(mapping);
-  if (view == NULL) {
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
-  }
-
-  return br__vm_mapped_file_result((u8 *)view, size, BR_VM_MAP_FILE_ERROR_NONE);
-}
-
-void br__vm_platform_unmap_file(br_vm_mapped_file mapping) {
-  (void)FlushViewOfFile(mapping.data, mapping.size);
-  (void)UnmapViewOfFile(mapping.data);
-}
-
 #endif

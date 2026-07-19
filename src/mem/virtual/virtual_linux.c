@@ -73,31 +73,4 @@ bool br__vm_platform_protect(void *ptr, usize size, br_vm_protect_flags flags) {
   return mprotect(ptr, size, protect) == 0;
 }
 
-br_vm_mapped_file_result
-br__vm_platform_map_open_file(br__vm_native_file file, usize size, br_vm_map_file_flags flags) {
-  int prot = 0;
-  void *view;
-
-  if ((flags & BR_VM_MAP_FILE_WRITE) != 0u) {
-    prot |= PROT_WRITE;
-  }
-  if ((flags & BR_VM_MAP_FILE_READ) != 0u || (flags & BR_VM_MAP_FILE_WRITE) == 0u) {
-    prot |= PROT_READ;
-  }
-
-  view = mmap(NULL, size, prot, MAP_SHARED, (int)file, 0);
-  if (view == MAP_FAILED || view == NULL) {
-    return br__vm_mapped_file_result(NULL, 0u, BR_VM_MAP_FILE_ERROR_MAP_FAILURE);
-  }
-
-  return br__vm_mapped_file_result((u8 *)view, size, BR_VM_MAP_FILE_ERROR_NONE);
-}
-
-void br__vm_platform_unmap_file(br_vm_mapped_file mapping) {
-#if defined(MS_SYNC)
-  (void)msync(mapping.data, mapping.size, MS_SYNC);
-#endif
-  (void)munmap(mapping.data, mapping.size);
-}
-
 #endif

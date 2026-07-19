@@ -11,16 +11,6 @@ br_vm_region_result br__vm_region_result(u8 *data, usize size, br_status status)
   return result;
 }
 
-br_vm_mapped_file_result
-br__vm_mapped_file_result(u8 *data, usize size, br_vm_map_file_error error) {
-  br_vm_mapped_file_result result;
-
-  result.value.data = data;
-  result.value.size = size;
-  result.error = error;
-  return result;
-}
-
 usize br__vm_cached_page_size(void) {
   static usize cached_page_size = 0u;
 

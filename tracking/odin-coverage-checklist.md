@@ -71,7 +71,6 @@ Current Bedrock files:
 - `src/mem/virtual/virtual_netbsd.c`
 - `src/mem/virtual/virtual_openbsd.c`
 - `src/mem/virtual/virtual_other.c`
-- `src/mem/virtual/file.c`
 - `src/mem/virtual/arena.c`
 - `src/mem/virtual/arena_util.c`
 
@@ -98,7 +97,7 @@ Current Bedrock files:
 | TLSF allocator | `deferred` | none | Odin has `tlsf/*`; Bedrock does not. |
 | virtual temp / watermark helpers | `adapted` | `virtual_arena.h`, `virtual_arena.c` | Landed as explicit begin/end/ignore/check helpers that return statuses instead of Odin's assertion-based misuse handling. |
 | virtual buffer-backed arena variant | `adapted` | `arena.h`, `arena.c` | Bedrock keeps fixed-buffer arenas in `br_arena` instead of duplicating Odin's `.Buffer` variant here. |
-| file mapping / VM-backed file helpers | `adapted` | `virtual.h`, `src/mem/virtual/file.c` | Path-based map/unmap landed with Odin-style error categories; `virtual/file.c` now owns the high-level open/stat/map flow while per-platform files only map native handles. Bedrock v1 still does not expose the file-handle entry point publicly. |
+| file mapping / VM-backed file helpers | `excluded` | none | Cut July 19, 2026 — file APIs belong in a future `os` module, not `mem`. The path-based map/unmap surface (`br_vm_map_file`, `virtual/file.c`, and the per-OS native-handle mapping) had no consumers and was removed; only the pure VM primitives remain. |
 | `virtual/arena_util.odin` helpers | `adapted` | `virtual_arena_util.h`, `src/mem/virtual/arena_util.c` | Landed as raw helpers plus typed C macros for `new`, `new_aligned`, `new_clone`, `make_slice`, `make_aligned`, and `make_multi_pointer`; Bedrock mirrors Odin's convenience layer without pretending C has `typeid` overloads. |
 
 Summary:

@@ -21,7 +21,6 @@ without hidden ambient context.
 - arena savepoints / rewind markers
 - virtual arena temp/watermark helpers
 - trailing guard-page overflow protection for virtual arenas
-- file mapping / unmapping
 - rollback stack allocator
 - tracking allocator
 - null allocator
@@ -266,11 +265,10 @@ Important Bedrock-specific deviations from Odin for now:
   `virtual_platform`, `virtual_posix`, `virtual_windows`, `virtual_linux`,
   `virtual_darwin`, `virtual_freebsd`, `virtual_netbsd`, `virtual_openbsd`,
   and `virtual_other`
-- file mapping is still path-based only at the public API boundary; internally
-  `virtual/file.c` now owns the high-level open/stat/map flow and the platform
-  backends only perform native-handle mapping
-- the public file-handle entry point remains a later `os/file` integration
-  task
+- file mapping (`br_vm_map_file`/`br_vm_unmap_file`) was cut on July 19, 2026:
+  a filesystem-touching API does not belong in the memory module. It will
+  return in a future `os`/file module. Only the pure virtual-memory primitives
+  (reserve/commit/decommit/release/protect) remain here
 - `virtual/arena_util.odin` style typed convenience helpers now exist as
   C-friendly raw helpers plus typed assignment macros instead of a literal
   syntax port
