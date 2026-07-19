@@ -14,20 +14,20 @@ BR_EXTERN_C_BEGIN
 #endif
 
 /*
-Odin models Futex as a distinct u32. Bedrock keeps the same storage shape, but
-uses an atomic u32 so callers can safely load/store the futex word in C.
+Odin models Futex as a distinct uint32_t. Bedrock keeps the same storage shape, but
+uses an atomic uint32_t so callers can safely load/store the futex word in C.
 */
 typedef br_atomic_u32 br_futex;
 
-#define BR_FUTEX_INIT(value) BR_ATOMIC_INIT((u32)(value))
+#define BR_FUTEX_INIT(value) BR_ATOMIC_INIT((uint32_t)(value))
 
 /*
 Sleep if the futex contains `expected`. The return value is Bedrock-specific:
 Odin asserts backend failures, while C callers need a way to notice unsupported
 or failed waits.
 */
-bool br_futex_wait(br_futex *futex, u32 expected);
-bool br_futex_wait_with_timeout(br_futex *futex, u32 expected, br_duration duration);
+bool br_futex_wait(br_futex *futex, uint32_t expected);
+bool br_futex_wait_with_timeout(br_futex *futex, uint32_t expected, br_duration duration);
 void br_futex_signal(br_futex *futex);
 void br_futex_broadcast(br_futex *futex);
 

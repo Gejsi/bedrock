@@ -8,9 +8,9 @@
 BR_EXTERN_C_BEGIN
 
 typedef struct br_bufio_lookahead_reader {
-  u8 *buf;
-  usize cap;
-  usize n;
+  uint8_t *buf;
+  size_t cap;
+  size_t n;
   br_stream source;
   br_allocator allocator;
   bool owns_storage;
@@ -36,7 +36,7 @@ Initialize a heap-backed lookahead reader with an exact buffer size.
 */
 br_status br_bufio_lookahead_reader_init_with_size(br_bufio_lookahead_reader *reader,
                                                    br_stream source,
-                                                   usize size,
+                                                   size_t size,
                                                    br_allocator allocator);
 
 /*
@@ -45,7 +45,7 @@ Initialize a lookahead reader over caller-provided storage.
 br_status br_bufio_lookahead_reader_init_with_buffer(br_bufio_lookahead_reader *reader,
                                                      br_stream source,
                                                      void *buffer,
-                                                     usize buffer_len);
+                                                     size_t buffer_len);
 
 void br_bufio_lookahead_reader_destroy(br_bufio_lookahead_reader *reader);
 void br_bufio_lookahead_reader_reset(br_bufio_lookahead_reader *reader, br_stream source);
@@ -63,7 +63,7 @@ status is `BR_STATUS_EOF`, matching Odin's lookahead reader semantics.
 `BR_STATUS_BUFFER_FULL` means `n` exceeds the fixed lookahead capacity.
 */
 br_bufio_lookahead_reader_peek_result
-br_bufio_lookahead_reader_peek(br_bufio_lookahead_reader *reader, usize n);
+br_bufio_lookahead_reader_peek(br_bufio_lookahead_reader *reader, size_t n);
 
 /*
 Populate and return the full lookahead buffer.
@@ -74,7 +74,7 @@ br_bufio_lookahead_reader_peek_all(br_bufio_lookahead_reader *reader);
 /*
 Drop the first `n` populated bytes.
 */
-br_status br_bufio_lookahead_reader_consume(br_bufio_lookahead_reader *reader, usize n);
+br_status br_bufio_lookahead_reader_consume(br_bufio_lookahead_reader *reader, size_t n);
 
 /*
 Drop all populated bytes.

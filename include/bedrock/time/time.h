@@ -8,7 +8,7 @@ BR_EXTERN_C_BEGIN
 /*
 Type representing duration, with nanosecond precision.
 */
-typedef i64 br_duration;
+typedef int64_t br_duration;
 
 #define BR_NANOSECOND ((br_duration)1)
 #define BR_MICROSECOND ((br_duration)(1000 * BR_NANOSECOND))
@@ -23,14 +23,14 @@ typedef i64 br_duration;
 Specifies time since the Unix epoch, with nanosecond precision.
 */
 typedef struct br_time {
-  i64 nsec;
+  int64_t nsec;
 } br_time;
 
 /*
 Type representing monotonic time, useful for measuring durations.
 */
 typedef struct br_tick {
-  i64 nsec;
+  int64_t nsec;
 } br_tick;
 
 bool br_time_is_supported(void);
@@ -55,12 +55,12 @@ br_duration br_tick_lap_time(br_tick *prev);
 br_duration br_time_diff(br_time start, br_time end);
 br_duration br_time_since(br_time start);
 
-i64 br_duration_nanoseconds(br_duration duration);
-f64 br_duration_microseconds(br_duration duration);
-f64 br_duration_milliseconds(br_duration duration);
-f64 br_duration_seconds(br_duration duration);
-f64 br_duration_minutes(br_duration duration);
-f64 br_duration_hours(br_duration duration);
+int64_t br_duration_nanoseconds(br_duration duration);
+double br_duration_microseconds(br_duration duration);
+double br_duration_milliseconds(br_duration duration);
+double br_duration_seconds(br_duration duration);
+double br_duration_minutes(br_duration duration);
+double br_duration_hours(br_duration duration);
 
 BR_EXTERN_C_END
 

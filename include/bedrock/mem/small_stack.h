@@ -6,10 +6,10 @@
 BR_EXTERN_C_BEGIN
 
 typedef struct br_small_stack {
-  u8 *data;
-  usize capacity;
-  usize offset;
-  usize peak_used;
+  uint8_t *data;
+  size_t capacity;
+  size_t offset;
+  size_t peak_used;
 } br_small_stack;
 
 /*
@@ -23,17 +23,17 @@ intentional C-side adaptations:
   contract after Odin-style clamping to the small-stack maximum
 */
 
-void br_small_stack_init(br_small_stack *stack, void *buffer, usize capacity);
+void br_small_stack_init(br_small_stack *stack, void *buffer, size_t capacity);
 void br_small_stack_free_all(br_small_stack *stack);
 
-br_alloc_result br_small_stack_alloc(br_small_stack *stack, usize size, usize alignment);
-br_alloc_result br_small_stack_alloc_uninit(br_small_stack *stack, usize size, usize alignment);
+br_alloc_result br_small_stack_alloc(br_small_stack *stack, size_t size, size_t alignment);
+br_alloc_result br_small_stack_alloc_uninit(br_small_stack *stack, size_t size, size_t alignment);
 br_status br_small_stack_free(br_small_stack *stack, void *ptr);
 
 br_alloc_result br_small_stack_resize(
-  br_small_stack *stack, void *ptr, usize old_size, usize new_size, usize alignment);
+  br_small_stack *stack, void *ptr, size_t old_size, size_t new_size, size_t alignment);
 br_alloc_result br_small_stack_resize_uninit(
-  br_small_stack *stack, void *ptr, usize old_size, usize new_size, usize alignment);
+  br_small_stack *stack, void *ptr, size_t old_size, size_t new_size, size_t alignment);
 
 br_allocator br_small_stack_allocator(br_small_stack *stack);
 

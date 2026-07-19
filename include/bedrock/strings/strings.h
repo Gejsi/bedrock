@@ -7,12 +7,12 @@ BR_EXTERN_C_BEGIN
 
 typedef struct br_string {
   char *data;
-  usize len;
+  size_t len;
 } br_string;
 
 typedef struct br_string_view {
   const char *data;
-  usize len;
+  size_t len;
 } br_string_view;
 
 typedef struct br_string_result {
@@ -22,7 +22,7 @@ typedef struct br_string_result {
 
 typedef struct br_string_view_list {
   br_string_view *data;
-  usize len;
+  size_t len;
 } br_string_view_list;
 
 typedef struct br_string_view_list_result {
@@ -39,7 +39,7 @@ typedef struct br_string_rewrite_result {
 
 #define BR_STR_LIT(s) br_string_view_make((s), sizeof(s) - 1u)
 
-static inline br_string br_string_make(void *data, usize len) {
+static inline br_string br_string_make(void *data, size_t len) {
   br_string string;
 
   string.data = (char *)data;
@@ -47,7 +47,7 @@ static inline br_string br_string_make(void *data, usize len) {
   return string;
 }
 
-static inline br_string_view br_string_view_make(const void *data, usize len) {
+static inline br_string_view br_string_view_make(const void *data, size_t len) {
   br_string_view string;
 
   string.data = (const char *)data;
@@ -85,7 +85,7 @@ br_string_result br_string_clone(br_string_view s, br_allocator allocator);
 /*
 Compare two strings lexicographically.
 */
-i32 br_string_compare(br_string_view lhs, br_string_view rhs);
+int32_t br_string_compare(br_string_view lhs, br_string_view rhs);
 
 /*
 Return whether two strings have the same bytes.
@@ -124,32 +124,32 @@ bool br_string_valid(br_string_view s);
 /*
 Return the byte offset of `needle` within `s`, or `-1` if it is absent.
 */
-isize br_string_index(br_string_view s, br_string_view needle);
-isize br_string_index_byte(br_string_view s, u8 byte_value);
+ptrdiff_t br_string_index(br_string_view s, br_string_view needle);
+ptrdiff_t br_string_index_byte(br_string_view s, uint8_t byte_value);
 
 /*
 Return the byte offset of the first occurrence of rune `value`, or `-1` if it
 is absent.
 */
-isize br_string_index_rune(br_string_view s, br_rune value);
-isize br_string_last_index(br_string_view s, br_string_view needle);
-isize br_string_last_index_byte(br_string_view s, u8 byte_value);
-isize br_string_index_any(br_string_view s, br_string_view chars);
-isize br_string_last_index_any(br_string_view s, br_string_view chars);
-usize br_string_count(br_string_view s, br_string_view needle);
+ptrdiff_t br_string_index_rune(br_string_view s, br_rune value);
+ptrdiff_t br_string_last_index(br_string_view s, br_string_view needle);
+ptrdiff_t br_string_last_index_byte(br_string_view s, uint8_t byte_value);
+ptrdiff_t br_string_index_any(br_string_view s, br_string_view chars);
+ptrdiff_t br_string_last_index_any(br_string_view s, br_string_view chars);
+size_t br_string_count(br_string_view s, br_string_view needle);
 
 /*
 Return the number of UTF-8 runes in `s`.
 */
-usize br_string_rune_count(br_string_view s);
+size_t br_string_rune_count(br_string_view s);
 
 br_string_result br_string_join(const br_string_view *parts,
-                                usize part_count,
+                                size_t part_count,
                                 br_string_view sep,
                                 br_allocator allocator);
 br_string_result
-br_string_concat(const br_string_view *parts, usize part_count, br_allocator allocator);
-br_string_result br_string_repeat(br_string_view s, usize count, br_allocator allocator);
+br_string_concat(const br_string_view *parts, size_t part_count, br_allocator allocator);
+br_string_result br_string_repeat(br_string_view s, size_t count, br_allocator allocator);
 
 /*
 Split `s` around separator `sep`.
@@ -160,11 +160,11 @@ Odin's string behavior and splits on UTF-8 rune boundaries.
 br_string_view_list_result
 br_string_split(br_string_view s, br_string_view sep, br_allocator allocator);
 br_string_view_list_result
-br_string_split_n(br_string_view s, br_string_view sep, isize n, br_allocator allocator);
+br_string_split_n(br_string_view s, br_string_view sep, ptrdiff_t n, br_allocator allocator);
 br_string_view_list_result
 br_string_split_after(br_string_view s, br_string_view sep, br_allocator allocator);
 br_string_view_list_result
-br_string_split_after_n(br_string_view s, br_string_view sep, isize n, br_allocator allocator);
+br_string_split_after_n(br_string_view s, br_string_view sep, ptrdiff_t n, br_allocator allocator);
 
 /*
 Replace up to `n` occurrences of `old_string` with `new_string`.
@@ -179,14 +179,14 @@ boundaries, following Odin's string semantics.
 br_string_rewrite_result br_string_replace(br_string_view s,
                                            br_string_view old_string,
                                            br_string_view new_string,
-                                           isize n,
+                                           ptrdiff_t n,
                                            br_allocator allocator);
 br_string_rewrite_result br_string_replace_all(br_string_view s,
                                                br_string_view old_string,
                                                br_string_view new_string,
                                                br_allocator allocator);
 br_string_rewrite_result
-br_string_remove(br_string_view s, br_string_view key, isize n, br_allocator allocator);
+br_string_remove(br_string_view s, br_string_view key, ptrdiff_t n, br_allocator allocator);
 br_string_rewrite_result
 br_string_remove_all(br_string_view s, br_string_view key, br_allocator allocator);
 
@@ -195,7 +195,7 @@ Truncate `s` at the first occurrence of byte `byte_value`.
 
 If `byte_value` does not occur, the original string view is returned.
 */
-br_string_view br_string_truncate_to_byte(br_string_view s, u8 byte_value);
+br_string_view br_string_truncate_to_byte(br_string_view s, uint8_t byte_value);
 
 /*
 Truncate `s` at the first occurrence of rune `value`.

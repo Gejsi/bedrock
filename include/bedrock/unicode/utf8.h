@@ -5,7 +5,7 @@
 
 BR_EXTERN_C_BEGIN
 
-typedef i32 br_rune;
+typedef int32_t br_rune;
 
 #define BR_RUNE_ERROR ((br_rune)0xfffd)
 #define BR_RUNE_SELF ((br_rune)0x80)
@@ -16,12 +16,12 @@ typedef i32 br_rune;
 
 typedef struct br_utf8_decode_result {
   br_rune value;
-  usize width;
+  size_t width;
 } br_utf8_decode_result;
 
 typedef struct br_utf8_encode_result {
-  u8 bytes[BR_UTF8_MAX];
-  usize len;
+  uint8_t bytes[BR_UTF8_MAX];
+  size_t len;
 } br_utf8_encode_result;
 
 /*
@@ -64,7 +64,7 @@ bool br_utf8_valid(br_bytes_view s);
 /*
 Report whether `byte_value` can begin a UTF-8 encoded rune.
 */
-bool br_utf8_rune_start(u8 byte_value);
+bool br_utf8_rune_start(uint8_t byte_value);
 
 /*
 Count runes in `s`.
@@ -72,13 +72,13 @@ Count runes in `s`.
 Like Odin's `rune_count`, invalid or truncated encodings count as width-1 error
 runes rather than being skipped.
 */
-usize br_utf8_rune_count(br_bytes_view s);
+size_t br_utf8_rune_count(br_bytes_view s);
 
 /*
 Return the number of bytes required to encode `value`, or `-1` if `value` is
 not a valid Unicode scalar value.
 */
-i32 br_utf8_rune_size(br_rune value);
+int32_t br_utf8_rune_size(br_rune value);
 
 /*
 Report whether `s` begins with a complete UTF-8 encoding.

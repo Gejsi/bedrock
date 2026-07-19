@@ -10,25 +10,25 @@ typedef struct br_tracking_allocator_internal br_tracking_allocator_internal;
 
 typedef struct br_tracking_allocator_entry {
   void *memory;
-  usize size;
-  usize alignment;
+  size_t size;
+  size_t alignment;
   br_alloc_op op;
   br_status status;
 } br_tracking_allocator_entry;
 
 typedef struct br_tracking_allocator_bad_free {
   void *memory;
-  usize size;
+  size_t size;
 } br_tracking_allocator_bad_free;
 
 typedef struct br_tracking_allocator_stats {
-  usize total_memory_allocated;
-  usize total_allocation_count;
-  usize total_memory_freed;
-  usize total_free_count;
-  usize peak_memory_allocated;
-  usize current_memory_allocated;
-  usize live_allocation_count;
+  size_t total_memory_allocated;
+  size_t total_allocation_count;
+  size_t total_memory_freed;
+  size_t total_free_count;
+  size_t peak_memory_allocated;
+  size_t current_memory_allocated;
+  size_t live_allocation_count;
 } br_tracking_allocator_stats;
 
 typedef void (*br_tracking_allocator_bad_free_fn)(void *ctx,
@@ -43,11 +43,11 @@ typedef struct br_tracking_allocator {
   Lookup uses a private pointer index instead of scanning this array linearly.
   */
   br_tracking_allocator_entry *entries;
-  usize entry_count;
-  usize entry_cap;
+  size_t entry_count;
+  size_t entry_cap;
   br_tracking_allocator_bad_free *bad_frees;
-  usize bad_free_count;
-  usize bad_free_cap;
+  size_t bad_free_count;
+  size_t bad_free_cap;
   br_tracking_allocator_stats stats;
   br_tracking_allocator_bad_free_fn bad_free_fn;
   void *bad_free_ctx;

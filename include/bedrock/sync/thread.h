@@ -5,7 +5,7 @@
 
 BR_EXTERN_C_BEGIN
 
-typedef u64 br_thread_id;
+typedef uint64_t br_thread_id;
 
 #define BR_THREAD_ID_INVALID ((br_thread_id)0)
 

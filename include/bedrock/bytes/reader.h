@@ -15,13 +15,13 @@ without changing the main cursor.
 */
 typedef struct br_byte_reader {
   br_bytes_view source;
-  i64 index;
+  int64_t index;
 } br_byte_reader;
 
 typedef br_io_result br_byte_reader_io_result;
 
 typedef struct br_byte_reader_byte_result {
-  u8 value;
+  uint8_t value;
   br_status status;
 } br_byte_reader_byte_result;
 
@@ -51,12 +51,12 @@ Return the number of unread bytes remaining.
 Like Odin's `reader_length`, this clamps at zero when the cursor is already at
 or beyond the end of the source.
 */
-usize br_byte_reader_len(const br_byte_reader *reader);
+size_t br_byte_reader_len(const br_byte_reader *reader);
 
 /*
 Return the total byte size of the underlying source.
 */
-usize br_byte_reader_size(const br_byte_reader *reader);
+size_t br_byte_reader_size(const br_byte_reader *reader);
 
 /*
 Read into `dst` from the current cursor and advance the cursor by the number of
@@ -65,7 +65,7 @@ bytes copied.
 This mirrors Odin's `reader_read`: reaching the end after a partial read does
 not itself produce EOF. EOF is reported only when no bytes can be read.
 */
-br_byte_reader_io_result br_byte_reader_read(br_byte_reader *reader, void *dst, usize dst_len);
+br_byte_reader_io_result br_byte_reader_read(br_byte_reader *reader, void *dst, size_t dst_len);
 
 /*
 Read from an explicit `offset` without changing the main cursor.
@@ -74,7 +74,7 @@ This mirrors Odin's `reader_read_at`: a short read at the end of the source
 returns the bytes that were copied and also reports EOF.
 */
 br_byte_reader_io_result
-br_byte_reader_read_at(const br_byte_reader *reader, void *dst, usize dst_len, i64 offset);
+br_byte_reader_read_at(const br_byte_reader *reader, void *dst, size_t dst_len, int64_t offset);
 
 /*
 Read one byte and advance the cursor by one.
@@ -97,7 +97,7 @@ Like Odin's `reader_seek`, seeking past the end is allowed. Only negative final
 offsets are rejected.
 */
 br_byte_reader_seek_result
-br_byte_reader_seek(br_byte_reader *reader, i64 offset, br_seek_from whence);
+br_byte_reader_seek(br_byte_reader *reader, int64_t offset, br_seek_from whence);
 
 /*
 Expose this reader through the generic stream interface.

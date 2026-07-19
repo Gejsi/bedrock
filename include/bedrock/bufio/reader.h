@@ -8,17 +8,17 @@
 BR_EXTERN_C_BEGIN
 
 typedef struct br_bufio_reader {
-  u8 *buf;
-  usize cap;
-  usize r;
-  usize w;
+  uint8_t *buf;
+  size_t cap;
+  size_t r;
+  size_t w;
   br_stream source;
   br_allocator allocator;
   br_status err;
   bool owns_storage;
-  isize last_byte;
-  isize last_rune_size;
-  usize max_consecutive_empty_reads;
+  ptrdiff_t last_byte;
+  ptrdiff_t last_rune_size;
+  size_t max_consecutive_empty_reads;
 } br_bufio_reader;
 
 typedef br_io_result br_bufio_reader_io_result;
@@ -42,7 +42,7 @@ Initialize a heap-backed buffered reader with an explicit buffer size.
 */
 br_status br_bufio_reader_init_with_size(br_bufio_reader *reader,
                                          br_stream source,
-                                         usize size,
+                                         size_t size,
                                          br_allocator allocator);
 
 /*
@@ -51,12 +51,12 @@ Initialize a buffered reader over caller-provided storage.
 br_status br_bufio_reader_init_with_buffer(br_bufio_reader *reader,
                                            br_stream source,
                                            void *buffer,
-                                           usize buffer_len);
+                                           size_t buffer_len);
 void br_bufio_reader_destroy(br_bufio_reader *reader);
 void br_bufio_reader_reset(br_bufio_reader *reader, br_stream source);
 
-usize br_bufio_reader_size(const br_bufio_reader *reader);
-usize br_bufio_reader_buffered(const br_bufio_reader *reader);
+size_t br_bufio_reader_size(const br_bufio_reader *reader);
+size_t br_bufio_reader_buffered(const br_bufio_reader *reader);
 
 /*
 Return the next `n` bytes without advancing the reader.
@@ -65,12 +65,12 @@ Like Odin's `bufio.reader_peek`, the returned view becomes invalid after the
 next buffered reader operation. If fewer than `n` bytes are returned, `status`
 explains why the result is short.
 */
-br_bufio_reader_peek_result br_bufio_reader_peek(br_bufio_reader *reader, usize n);
+br_bufio_reader_peek_result br_bufio_reader_peek(br_bufio_reader *reader, size_t n);
 
 /*
 Skip the next `n` bytes and report how many bytes were actually discarded.
 */
-br_bufio_reader_io_result br_bufio_reader_discard(br_bufio_reader *reader, usize n);
+br_bufio_reader_io_result br_bufio_reader_discard(br_bufio_reader *reader, size_t n);
 
 /*
 Read into `dst`.
@@ -78,7 +78,7 @@ Read into `dst`.
 This follows Odin's `bufio.reader_read`: bytes come from at most one read of
 the underlying stream, so a successful short read is allowed.
 */
-br_bufio_reader_io_result br_bufio_reader_read(br_bufio_reader *reader, void *dst, usize dst_len);
+br_bufio_reader_io_result br_bufio_reader_read(br_bufio_reader *reader, void *dst, size_t dst_len);
 br_bufio_reader_byte_result br_bufio_reader_read_byte(br_bufio_reader *reader);
 br_status br_bufio_reader_unread_byte(br_bufio_reader *reader);
 
@@ -98,19 +98,19 @@ Like Odin's `bufio.reader_read_slice`, the returned view is invalidated by the
 next buffered reader operation. `BR_STATUS_BUFFER_FULL` means the current
 buffer filled before the delimiter was found.
 */
-br_bufio_reader_slice_result br_bufio_reader_read_slice(br_bufio_reader *reader, u8 delim);
+br_bufio_reader_slice_result br_bufio_reader_read_slice(br_bufio_reader *reader, uint8_t delim);
 
 /*
 Read until `delim` is found and return an owned byte slice.
 */
 br_bytes_result
-br_bufio_reader_read_bytes(br_bufio_reader *reader, u8 delim, br_allocator allocator);
+br_bufio_reader_read_bytes(br_bufio_reader *reader, uint8_t delim, br_allocator allocator);
 
 /*
 Read until `delim` is found and return an owned string.
 */
 br_string_result
-br_bufio_reader_read_string(br_bufio_reader *reader, u8 delim, br_allocator allocator);
+br_bufio_reader_read_string(br_bufio_reader *reader, uint8_t delim, br_allocator allocator);
 
 /*
 Write all remaining buffered and source bytes into `sink`.

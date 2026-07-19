@@ -5,25 +5,25 @@
 
 BR_EXTERN_C_BEGIN
 
-#define BR_DYNAMIC_ARENA_DEFAULT_BLOCK_SIZE ((usize)65536u)
-#define BR_DYNAMIC_ARENA_DEFAULT_OUT_BAND_SIZE ((usize)6554u)
+#define BR_DYNAMIC_ARENA_DEFAULT_BLOCK_SIZE ((size_t)65536u)
+#define BR_DYNAMIC_ARENA_DEFAULT_OUT_BAND_SIZE ((size_t)6554u)
 
 typedef struct br_dynamic_arena {
-  usize block_size;
-  usize out_band_size;
-  usize alignment;
+  size_t block_size;
+  size_t out_band_size;
+  size_t alignment;
   void **unused_blocks;
-  usize unused_count;
-  usize unused_cap;
+  size_t unused_count;
+  size_t unused_cap;
   void **used_blocks;
-  usize used_count;
-  usize used_cap;
+  size_t used_count;
+  size_t used_cap;
   void **out_band_allocations;
-  usize out_band_count;
-  usize out_band_cap;
+  size_t out_band_count;
+  size_t out_band_cap;
   void *current_block;
-  u8 *current_pos;
-  usize bytes_left;
+  uint8_t *current_pos;
+  size_t bytes_left;
   br_allocator block_allocator;
   br_allocator array_allocator;
 } br_dynamic_arena;
@@ -44,20 +44,22 @@ C-side adaptations:
 br_status br_dynamic_arena_init(br_dynamic_arena *arena,
                                 br_allocator block_allocator,
                                 br_allocator array_allocator,
-                                usize block_size,
-                                usize out_band_size,
-                                usize alignment);
+                                size_t block_size,
+                                size_t out_band_size,
+                                size_t alignment);
 void br_dynamic_arena_destroy(br_dynamic_arena *arena);
 
 void br_dynamic_arena_reset(br_dynamic_arena *arena);
 void br_dynamic_arena_free_all(br_dynamic_arena *arena);
 
-br_alloc_result br_dynamic_arena_alloc(br_dynamic_arena *arena, usize size);
-br_alloc_result br_dynamic_arena_alloc_uninit(br_dynamic_arena *arena, usize size);
+br_alloc_result br_dynamic_arena_alloc(br_dynamic_arena *arena, size_t size);
+br_alloc_result br_dynamic_arena_alloc_uninit(br_dynamic_arena *arena, size_t size);
 br_alloc_result
-br_dynamic_arena_resize(br_dynamic_arena *arena, void *ptr, usize old_size, usize new_size);
-br_alloc_result
-br_dynamic_arena_resize_uninit(br_dynamic_arena *arena, void *ptr, usize old_size, usize new_size);
+br_dynamic_arena_resize(br_dynamic_arena *arena, void *ptr, size_t old_size, size_t new_size);
+br_alloc_result br_dynamic_arena_resize_uninit(br_dynamic_arena *arena,
+                                               void *ptr,
+                                               size_t old_size,
+                                               size_t new_size);
 
 br_allocator br_dynamic_arena_allocator(br_dynamic_arena *arena);
 

@@ -6,8 +6,8 @@
 BR_EXTERN_C_BEGIN
 
 typedef struct br_vm_region {
-  u8 *data;
-  usize size;
+  uint8_t *data;
+  size_t size;
 } br_vm_region;
 
 typedef struct br_vm_region_result {
@@ -16,8 +16,8 @@ typedef struct br_vm_region_result {
 } br_vm_region_result;
 
 typedef struct br_vm_mapped_file {
-  u8 *data;
-  usize size;
+  uint8_t *data;
+  size_t size;
 } br_vm_mapped_file;
 
 typedef enum br_vm_map_file_error {
@@ -35,8 +35,8 @@ typedef struct br_vm_mapped_file_result {
   br_vm_map_file_error error;
 } br_vm_mapped_file_result;
 
-typedef u32 br_vm_protect_flags;
-typedef u32 br_vm_map_file_flags;
+typedef uint32_t br_vm_protect_flags;
+typedef uint32_t br_vm_map_file_flags;
 
 enum {
   BR_VM_PROTECT_READ = 1u << 0,
@@ -49,32 +49,32 @@ enum {
 enum { BR_VM_MAP_FILE_READ = 1u << 0, BR_VM_MAP_FILE_WRITE = 1u << 1 };
 
 /* Returns 0 when Bedrock does not have a VM backend for the current platform. */
-usize br_vm_page_size(void);
+size_t br_vm_page_size(void);
 
 /*
 Reserves a page-backed region without making it readable or writable yet on
 platforms that support that distinction.
 */
-br_vm_region_result br_vm_reserve(usize size);
+br_vm_region_result br_vm_reserve(size_t size);
 
 /* Reserve and immediately commit a region. */
-br_vm_region_result br_vm_reserve_commit(usize size);
+br_vm_region_result br_vm_reserve_commit(size_t size);
 
 /* Commit previously reserved pages so they can be read and written. */
-br_status br_vm_commit(void *ptr, usize size);
+br_status br_vm_commit(void *ptr, size_t size);
 
 /* Decommit previously committed pages while keeping the reservation alive. */
-void br_vm_decommit(void *ptr, usize size);
+void br_vm_decommit(void *ptr, size_t size);
 
 /* Release an entire reserved region back to the operating system. */
-void br_vm_release(void *ptr, usize size);
+void br_vm_release(void *ptr, size_t size);
 
 /*
 Change page protection flags for an already reserved region. Bedrock currently
 exposes the raw primitive but not Odin's higher-level overflow-protected memory
 block flags yet.
 */
-bool br_vm_protect(void *ptr, usize size, br_vm_protect_flags flags);
+bool br_vm_protect(void *ptr, size_t size, br_vm_protect_flags flags);
 
 /*
 This currently maps from a filesystem path rather than an already-open file

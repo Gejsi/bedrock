@@ -15,8 +15,8 @@ growable, or backed by a caller-provided fixed buffer.
 */
 typedef struct br_string_builder {
   char *data;
-  usize len;
-  usize cap;
+  size_t len;
+  size_t cap;
   br_allocator allocator;
   bool owns_storage;
 } br_string_builder;
@@ -24,13 +24,13 @@ typedef struct br_string_builder {
 typedef br_io_result br_string_builder_io_result;
 
 typedef struct br_string_builder_byte_result {
-  u8 value;
+  uint8_t value;
   br_status status;
 } br_string_builder_byte_result;
 
 typedef struct br_string_builder_rune_result {
   br_rune value;
-  usize width;
+  size_t width;
   br_status status;
 } br_string_builder_rune_result;
 
@@ -43,7 +43,7 @@ void br_string_builder_init(br_string_builder *builder, br_allocator allocator);
 Initialize a heap-backed builder with at least `initial_capacity` bytes.
 */
 br_status br_string_builder_init_with_capacity(br_string_builder *builder,
-                                               usize initial_capacity,
+                                               size_t initial_capacity,
                                                br_allocator allocator);
 
 /*
@@ -54,7 +54,7 @@ own the storage and cannot grow past `backing_len`.
 */
 void br_string_builder_init_with_backing(br_string_builder *builder,
                                          void *backing,
-                                         usize backing_len);
+                                         size_t backing_len);
 
 /*
 Release any owned storage and reset the builder to empty.
@@ -74,17 +74,17 @@ bool br_string_builder_is_empty(const br_string_builder *builder);
 /*
 Return the current byte length of the builder contents.
 */
-usize br_string_builder_len(const br_string_builder *builder);
+size_t br_string_builder_len(const br_string_builder *builder);
 
 /*
 Return the total byte capacity of the current backing storage.
 */
-usize br_string_builder_capacity(const br_string_builder *builder);
+size_t br_string_builder_capacity(const br_string_builder *builder);
 
 /*
 Return the remaining writable space before another growth would be required.
 */
-usize br_string_builder_space(const br_string_builder *builder);
+size_t br_string_builder_space(const br_string_builder *builder);
 
 /*
 Return the current contents as a non-owning string view.
@@ -94,12 +94,12 @@ br_string_view br_string_builder_view(const br_string_builder *builder);
 /*
 Ensure that at least `additional` more bytes can be appended.
 */
-br_status br_string_builder_reserve(br_string_builder *builder, usize additional);
+br_status br_string_builder_reserve(br_string_builder *builder, size_t additional);
 
 /*
 Truncate the builder to exactly `n` bytes.
 */
-br_status br_string_builder_truncate(br_string_builder *builder, usize n);
+br_status br_string_builder_truncate(br_string_builder *builder, size_t n);
 
 /*
 Clone the current builder contents into an owned string allocation.
@@ -114,7 +114,7 @@ br_string_builder_io_result br_string_builder_write(br_string_builder *builder, 
 /*
 Append one byte to the builder.
 */
-br_status br_string_builder_write_byte(br_string_builder *builder, u8 byte_value);
+br_status br_string_builder_write_byte(br_string_builder *builder, uint8_t byte_value);
 
 /*
 Append one rune to the builder encoded as UTF-8.

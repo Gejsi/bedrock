@@ -68,9 +68,9 @@ bool br_cond_wait_with_timeout(br_cond *cond, br_mutex *mutex, br_duration durat
 void br_cond_signal(br_cond *cond);
 void br_cond_broadcast(br_cond *cond);
 
-br_status br_sema_init(br_sema *sema, u32 count);
+br_status br_sema_init(br_sema *sema, uint32_t count);
 void br_sema_destroy(br_sema *sema);
-void br_sema_post(br_sema *sema, u32 count);
+void br_sema_post(br_sema *sema, uint32_t count);
 void br_sema_wait(br_sema *sema);
 bool br_sema_wait_with_timeout(br_sema *sema, br_duration duration);
 

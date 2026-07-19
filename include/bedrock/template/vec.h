@@ -13,8 +13,8 @@
 
 typedef struct BR_VEC_NAME {
   BR_VEC_T *data;
-  usize len;
-  usize cap;
+  size_t len;
+  size_t cap;
   br_allocator allocator;
 } BR_VEC_NAME;
 
@@ -43,9 +43,9 @@ BR_VEC_API void BR_CONCAT(BR_VEC_NAME, _destroy)(BR_VEC_NAME *vec) {
   vec->cap = 0u;
 }
 
-BR_VEC_API br_status BR_CONCAT(BR_VEC_NAME, _reserve)(BR_VEC_NAME *vec, usize new_cap) {
+BR_VEC_API br_status BR_CONCAT(BR_VEC_NAME, _reserve)(BR_VEC_NAME *vec, size_t new_cap) {
   br_alloc_result res;
-  usize new_size;
+  size_t new_size;
 
   if (vec == NULL) {
     return BR_STATUS_INVALID_ARGUMENT;
@@ -79,7 +79,7 @@ BR_VEC_API br_status BR_CONCAT(BR_VEC_NAME, _reserve)(BR_VEC_NAME *vec, usize ne
 
 BR_VEC_API br_status BR_CONCAT(BR_VEC_NAME, _push)(BR_VEC_NAME *vec, BR_VEC_T value) {
   br_status status;
-  usize new_cap;
+  size_t new_cap;
 
   if (vec == NULL) {
     return BR_STATUS_INVALID_ARGUMENT;

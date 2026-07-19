@@ -8,7 +8,7 @@
 BR_EXTERN_C_BEGIN
 
 typedef struct br_virtual_arena_block br_virtual_arena_block;
-typedef u32 br_virtual_arena_flags;
+typedef uint32_t br_virtual_arena_flags;
 
 enum { BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION = 1u << 0 };
 
@@ -21,24 +21,24 @@ typedef enum br_virtual_arena_kind {
 typedef struct br_virtual_arena {
   br_virtual_arena_kind kind;
   br_virtual_arena_block *curr_block;
-  usize total_used;
-  usize total_reserved;
-  usize default_commit_size;
-  usize minimum_block_size;
+  size_t total_used;
+  size_t total_reserved;
+  size_t default_commit_size;
+  size_t minimum_block_size;
   br_virtual_arena_flags flags;
-  usize temp_count;
+  size_t temp_count;
   br_mutex mutex;
 } br_virtual_arena;
 
 typedef struct br_virtual_arena_mark {
   br_virtual_arena_block *block;
-  usize used;
+  size_t used;
 } br_virtual_arena_mark;
 
 typedef struct br_virtual_arena_temp {
   br_virtual_arena *arena;
   br_virtual_arena_block *block;
-  usize used;
+  size_t used;
 } br_virtual_arena_temp;
 
 typedef struct br_virtual_arena_temp_result {
@@ -46,15 +46,15 @@ typedef struct br_virtual_arena_temp_result {
   br_status status;
 } br_virtual_arena_temp_result;
 
-#define BR_VIRTUAL_ARENA_DEFAULT_STATIC_COMMIT_SIZE ((usize)1048576u)
-#define BR_VIRTUAL_ARENA_DEFAULT_GROWING_COMMIT_SIZE ((usize)8388608u)
+#define BR_VIRTUAL_ARENA_DEFAULT_STATIC_COMMIT_SIZE ((size_t)1048576u)
+#define BR_VIRTUAL_ARENA_DEFAULT_GROWING_COMMIT_SIZE ((size_t)8388608u)
 #define BR_VIRTUAL_ARENA_DEFAULT_GROWING_MINIMUM_BLOCK_SIZE                                        \
   BR_VIRTUAL_ARENA_DEFAULT_STATIC_COMMIT_SIZE
 
 #if UINTPTR_MAX > UINT32_MAX
-#define BR_VIRTUAL_ARENA_DEFAULT_STATIC_RESERVE_SIZE ((usize)1073741824u)
+#define BR_VIRTUAL_ARENA_DEFAULT_STATIC_RESERVE_SIZE ((size_t)1073741824u)
 #else
-#define BR_VIRTUAL_ARENA_DEFAULT_STATIC_RESERVE_SIZE ((usize)134217728u)
+#define BR_VIRTUAL_ARENA_DEFAULT_STATIC_RESERVE_SIZE ((size_t)134217728u)
 #endif
 
 /*
@@ -72,8 +72,9 @@ void br_virtual_arena_init(br_virtual_arena *arena);
 Callers may prefill `default_commit_size` and `minimum_block_size` on a zeroed
 arena before initialization, matching Odin's growth-policy style.
 */
-br_status br_virtual_arena_init_growing(br_virtual_arena *arena, usize reserved);
-br_status br_virtual_arena_init_static(br_virtual_arena *arena, usize reserved, usize commit_size);
+br_status br_virtual_arena_init_growing(br_virtual_arena *arena, size_t reserved);
+br_status
+br_virtual_arena_init_static(br_virtual_arena *arena, size_t reserved, size_t commit_size);
 
 void br_virtual_arena_reset(br_virtual_arena *arena);
 void br_virtual_arena_destroy(br_virtual_arena *arena);
@@ -91,8 +92,9 @@ br_status br_virtual_arena_temp_end(br_virtual_arena_temp temp);
 br_status br_virtual_arena_temp_ignore(br_virtual_arena_temp temp);
 br_status br_virtual_arena_check_temp(br_virtual_arena *arena);
 
-br_alloc_result br_virtual_arena_alloc(br_virtual_arena *arena, usize size, usize alignment);
-br_alloc_result br_virtual_arena_alloc_uninit(br_virtual_arena *arena, usize size, usize alignment);
+br_alloc_result br_virtual_arena_alloc(br_virtual_arena *arena, size_t size, size_t alignment);
+br_alloc_result
+br_virtual_arena_alloc_uninit(br_virtual_arena *arena, size_t size, size_t alignment);
 br_allocator br_virtual_arena_allocator(br_virtual_arena *arena);
 
 BR_EXTERN_C_END

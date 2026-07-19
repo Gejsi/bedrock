@@ -7,14 +7,14 @@
 BR_EXTERN_C_BEGIN
 
 typedef struct br_bufio_writer {
-  u8 *buf;
-  usize cap;
-  usize n;
+  uint8_t *buf;
+  size_t cap;
+  size_t n;
   br_stream sink;
   br_allocator allocator;
   br_status err;
   bool owns_storage;
-  usize max_consecutive_empty_writes;
+  size_t max_consecutive_empty_writes;
 } br_bufio_writer;
 
 typedef br_io_result br_bufio_writer_io_result;
@@ -29,7 +29,7 @@ Initialize a heap-backed buffered writer with an explicit buffer size.
 */
 br_status br_bufio_writer_init_with_size(br_bufio_writer *writer,
                                          br_stream sink,
-                                         usize size,
+                                         size_t size,
                                          br_allocator allocator);
 
 /*
@@ -38,13 +38,13 @@ Initialize a buffered writer over caller-provided storage.
 br_status br_bufio_writer_init_with_buffer(br_bufio_writer *writer,
                                            br_stream sink,
                                            void *buffer,
-                                           usize buffer_len);
+                                           size_t buffer_len);
 void br_bufio_writer_destroy(br_bufio_writer *writer);
 void br_bufio_writer_reset(br_bufio_writer *writer, br_stream sink);
 
-usize br_bufio_writer_size(const br_bufio_writer *writer);
-usize br_bufio_writer_available(const br_bufio_writer *writer);
-usize br_bufio_writer_buffered(const br_bufio_writer *writer);
+size_t br_bufio_writer_size(const br_bufio_writer *writer);
+size_t br_bufio_writer_available(const br_bufio_writer *writer);
+size_t br_bufio_writer_buffered(const br_bufio_writer *writer);
 
 /*
 Flush buffered bytes into the underlying sink.
@@ -58,8 +58,8 @@ Like Odin's `bufio.writer_write`, this may bypass the internal buffer when the
 buffer is empty and `src` is larger than the remaining buffer space.
 */
 br_bufio_writer_io_result
-br_bufio_writer_write(br_bufio_writer *writer, const void *src, usize src_len);
-br_status br_bufio_writer_write_byte(br_bufio_writer *writer, u8 value);
+br_bufio_writer_write(br_bufio_writer *writer, const void *src, size_t src_len);
+br_status br_bufio_writer_write_byte(br_bufio_writer *writer, uint8_t value);
 br_bufio_writer_io_result br_bufio_writer_write_rune(br_bufio_writer *writer, br_rune value);
 br_bufio_writer_io_result br_bufio_writer_write_string(br_bufio_writer *writer, br_string_view s);
 

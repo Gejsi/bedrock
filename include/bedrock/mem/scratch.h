@@ -5,23 +5,23 @@
 
 BR_EXTERN_C_BEGIN
 
-#define BR_SCRATCH_DEFAULT_BACKING_SIZE ((usize)(4u * 1024u * 1024u))
+#define BR_SCRATCH_DEFAULT_BACKING_SIZE ((size_t)(4u * 1024u * 1024u))
 
 typedef struct br_scratch_leaked_allocation {
   void *memory;
-  usize size;
+  size_t size;
 } br_scratch_leaked_allocation;
 
 typedef struct br_scratch {
-  u8 *data;
-  usize capacity;
-  usize curr_offset;
+  uint8_t *data;
+  size_t capacity;
+  size_t curr_offset;
   void *prev_allocation;
   void *prev_allocation_root;
   br_allocator backup_allocator;
   br_scratch_leaked_allocation *leaked_allocations;
-  usize leaked_count;
-  usize leaked_cap;
+  size_t leaked_count;
+  size_t leaked_cap;
 } br_scratch;
 
 /*
@@ -34,18 +34,18 @@ intentional C-side adaptations:
 - copy paths use explicit `min(old_size, new_size)` semantics
 */
 
-br_status br_scratch_init(br_scratch *scratch, usize size, br_allocator backup_allocator);
+br_status br_scratch_init(br_scratch *scratch, size_t size, br_allocator backup_allocator);
 void br_scratch_destroy(br_scratch *scratch);
 void br_scratch_free_all(br_scratch *scratch);
 
-br_alloc_result br_scratch_alloc(br_scratch *scratch, usize size, usize alignment);
-br_alloc_result br_scratch_alloc_uninit(br_scratch *scratch, usize size, usize alignment);
+br_alloc_result br_scratch_alloc(br_scratch *scratch, size_t size, size_t alignment);
+br_alloc_result br_scratch_alloc_uninit(br_scratch *scratch, size_t size, size_t alignment);
 br_status br_scratch_free(br_scratch *scratch, void *ptr);
 
-br_alloc_result
-br_scratch_resize(br_scratch *scratch, void *ptr, usize old_size, usize new_size, usize alignment);
+br_alloc_result br_scratch_resize(
+  br_scratch *scratch, void *ptr, size_t old_size, size_t new_size, size_t alignment);
 br_alloc_result br_scratch_resize_uninit(
-  br_scratch *scratch, void *ptr, usize old_size, usize new_size, usize alignment);
+  br_scratch *scratch, void *ptr, size_t old_size, size_t new_size, size_t alignment);
 
 br_allocator br_scratch_allocator(br_scratch *scratch);
 

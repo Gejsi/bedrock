@@ -16,7 +16,7 @@
 #define BR_ARRAY_COUNT(a) (sizeof(a) / sizeof((a)[0]))
 #define BR_CONCAT_INNER(a, b) a##b
 #define BR_CONCAT(a, b) BR_CONCAT_INNER(a, b)
-#define BR_DEFAULT_ALIGNMENT ((usize) _Alignof(max_align_t))
+#define BR_DEFAULT_ALIGNMENT ((size_t)_Alignof(max_align_t))
 #define BR_STATIC_ASSERT(cond, msg) _Static_assert(cond, msg)
 #define BR_UNUSED(x) ((void)(x))
 
@@ -34,15 +34,15 @@ typedef enum br_status {
   BR_STATUS_NO_PROGRESS
 } br_status;
 
-static inline bool br_is_power_of_two_size(usize value) {
+static inline bool br_is_power_of_two_size(size_t value) {
   return value != 0u && (value & (value - 1u)) == 0u;
 }
 
-static inline usize br_min_size(usize a, usize b) {
+static inline size_t br_min_size(size_t a, size_t b) {
   return a < b ? a : b;
 }
 
-static inline usize br_max_size(usize a, usize b) {
+static inline size_t br_max_size(size_t a, size_t b) {
   return a > b ? a : b;
 }
 

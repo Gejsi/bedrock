@@ -10,7 +10,7 @@ typedef struct br_buddy_block br_buddy_block;
 typedef struct br_buddy_allocator {
   br_buddy_block *head;
   br_buddy_block *tail;
-  usize alignment;
+  size_t alignment;
 } br_buddy_allocator;
 
 /*
@@ -25,11 +25,11 @@ C-side adaptations:
 */
 
 br_status
-br_buddy_allocator_init(br_buddy_allocator *buddy, void *buffer, usize capacity, usize alignment);
+br_buddy_allocator_init(br_buddy_allocator *buddy, void *buffer, size_t capacity, size_t alignment);
 void br_buddy_allocator_free_all(br_buddy_allocator *buddy);
 
-br_alloc_result br_buddy_allocator_alloc(br_buddy_allocator *buddy, usize size);
-br_alloc_result br_buddy_allocator_alloc_uninit(br_buddy_allocator *buddy, usize size);
+br_alloc_result br_buddy_allocator_alloc(br_buddy_allocator *buddy, size_t size);
+br_alloc_result br_buddy_allocator_alloc_uninit(br_buddy_allocator *buddy, size_t size);
 br_status br_buddy_allocator_free(br_buddy_allocator *buddy, void *ptr);
 
 br_allocator br_buddy_allocator_allocator(br_buddy_allocator *buddy);

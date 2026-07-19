@@ -41,18 +41,18 @@ enum {
 #define br_atomic(T) _Atomic(T)
 
 typedef br_atomic(bool) br_atomic_bool;
-typedef br_atomic(i8) br_atomic_i8;
-typedef br_atomic(i16) br_atomic_i16;
-typedef br_atomic(i32) br_atomic_i32;
-typedef br_atomic(i64) br_atomic_i64;
-typedef br_atomic(u8) br_atomic_u8;
-typedef br_atomic(u16) br_atomic_u16;
-typedef br_atomic(u32) br_atomic_u32;
-typedef br_atomic(u64) br_atomic_u64;
-typedef br_atomic(isize) br_atomic_isize;
-typedef br_atomic(usize) br_atomic_usize;
-typedef br_atomic(iptr) br_atomic_iptr;
-typedef br_atomic(uptr) br_atomic_uptr;
+typedef br_atomic(int8_t) br_atomic_i8;
+typedef br_atomic(int16_t) br_atomic_i16;
+typedef br_atomic(int32_t) br_atomic_i32;
+typedef br_atomic(int64_t) br_atomic_i64;
+typedef br_atomic(uint8_t) br_atomic_u8;
+typedef br_atomic(uint16_t) br_atomic_u16;
+typedef br_atomic(uint32_t) br_atomic_u32;
+typedef br_atomic(uint64_t) br_atomic_u64;
+typedef br_atomic(ptrdiff_t) br_atomic_isize;
+typedef br_atomic(size_t) br_atomic_usize;
+typedef br_atomic(intptr_t) br_atomic_iptr;
+typedef br_atomic(uintptr_t) br_atomic_uptr;
 
 /*
 Hint to the CPU that the current thread is in a short spin loop.

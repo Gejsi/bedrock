@@ -7,7 +7,7 @@
 BR_EXTERN_C_BEGIN
 
 typedef struct br_wait_group {
-  i32 counter;
+  int32_t counter;
   br_mutex mutex;
   br_cond cond;
 } br_wait_group;
@@ -15,9 +15,9 @@ typedef struct br_wait_group {
 typedef struct br_barrier {
   br_mutex mutex;
   br_cond cond;
-  i32 index;
-  i32 generation;
-  i32 thread_count;
+  int32_t index;
+  int32_t generation;
+  int32_t thread_count;
 } br_barrier;
 
 typedef void (*br_once_fn)(void *ctx);
@@ -72,16 +72,17 @@ typedef struct br_ticket_mutex {
 
 #define BR_ONE_SHOT_EVENT_INIT {.state = BR_FUTEX_INIT(0u)}
 
-#define BR_TICKET_MUTEX_INIT {.ticket = BR_ATOMIC_INIT((u32)0), .serving = BR_ATOMIC_INIT((u32)0)}
+#define BR_TICKET_MUTEX_INIT                                                                       \
+  {.ticket = BR_ATOMIC_INIT((uint32_t)0), .serving = BR_ATOMIC_INIT((uint32_t)0)}
 
 br_status br_wait_group_init(br_wait_group *wg);
 void br_wait_group_destroy(br_wait_group *wg);
-void br_wait_group_add(br_wait_group *wg, i32 delta);
+void br_wait_group_add(br_wait_group *wg, int32_t delta);
 void br_wait_group_done(br_wait_group *wg);
 void br_wait_group_wait(br_wait_group *wg);
 bool br_wait_group_wait_with_timeout(br_wait_group *wg, br_duration duration);
 
-br_status br_barrier_init(br_barrier *barrier, i32 thread_count);
+br_status br_barrier_init(br_barrier *barrier, int32_t thread_count);
 void br_barrier_destroy(br_barrier *barrier);
 bool br_barrier_wait(br_barrier *barrier);
 

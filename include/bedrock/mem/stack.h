@@ -6,11 +6,11 @@
 BR_EXTERN_C_BEGIN
 
 typedef struct br_stack {
-  u8 *data;
-  usize capacity;
-  usize prev_offset;
-  usize curr_offset;
-  usize peak_used;
+  uint8_t *data;
+  size_t capacity;
+  size_t prev_offset;
+  size_t curr_offset;
+  size_t peak_used;
 } br_stack;
 
 /*
@@ -22,17 +22,17 @@ C-side adaptations:
   not Odin's richer query-features/query-info modes
 */
 
-void br_stack_init(br_stack *stack, void *buffer, usize capacity);
+void br_stack_init(br_stack *stack, void *buffer, size_t capacity);
 void br_stack_free_all(br_stack *stack);
 
-br_alloc_result br_stack_alloc(br_stack *stack, usize size, usize alignment);
-br_alloc_result br_stack_alloc_uninit(br_stack *stack, usize size, usize alignment);
+br_alloc_result br_stack_alloc(br_stack *stack, size_t size, size_t alignment);
+br_alloc_result br_stack_alloc_uninit(br_stack *stack, size_t size, size_t alignment);
 br_status br_stack_free(br_stack *stack, void *ptr);
 
 br_alloc_result
-br_stack_resize(br_stack *stack, void *ptr, usize old_size, usize new_size, usize alignment);
-br_alloc_result
-br_stack_resize_uninit(br_stack *stack, void *ptr, usize old_size, usize new_size, usize alignment);
+br_stack_resize(br_stack *stack, void *ptr, size_t old_size, size_t new_size, size_t alignment);
+br_alloc_result br_stack_resize_uninit(
+  br_stack *stack, void *ptr, size_t old_size, size_t new_size, size_t alignment);
 
 br_allocator br_stack_allocator(br_stack *stack);
 

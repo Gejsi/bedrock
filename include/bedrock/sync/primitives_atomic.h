@@ -12,10 +12,10 @@ typedef enum br_atomic_mutex_state {
   BR_ATOMIC_MUTEX_WAITING,
 } br_atomic_mutex_state;
 
-typedef usize br_atomic_rw_mutex_state;
+typedef size_t br_atomic_rw_mutex_state;
 
-#define BR_ATOMIC_RW_MUTEX_STATE_IS_WRITING ((usize)1 << (sizeof(usize) * 8u - 1u))
-#define BR_ATOMIC_RW_MUTEX_STATE_READER ((usize)1)
+#define BR_ATOMIC_RW_MUTEX_STATE_IS_WRITING ((size_t)1 << (sizeof(size_t) * 8u - 1u))
+#define BR_ATOMIC_RW_MUTEX_STATE_READER ((size_t)1)
 #define BR_ATOMIC_RW_MUTEX_STATE_READER_MASK (~BR_ATOMIC_RW_MUTEX_STATE_IS_WRITING)
 
 /*
@@ -60,7 +60,7 @@ backend split.
 */
 typedef struct br_atomic_recursive_mutex {
   br_atomic_u64 owner;
-  u32 recursion;
+  uint32_t recursion;
   br_atomic_mutex mutex;
 } br_atomic_recursive_mutex;
 
@@ -108,8 +108,8 @@ bool br_atomic_cond_wait_with_timeout(br_atomic_cond *cond,
 void br_atomic_cond_signal(br_atomic_cond *cond);
 void br_atomic_cond_broadcast(br_atomic_cond *cond);
 
-void br_atomic_sema_init(br_atomic_sema *sema, u32 count);
-void br_atomic_sema_post(br_atomic_sema *sema, u32 count);
+void br_atomic_sema_init(br_atomic_sema *sema, uint32_t count);
+void br_atomic_sema_post(br_atomic_sema *sema, uint32_t count);
 void br_atomic_sema_wait(br_atomic_sema *sema);
 bool br_atomic_sema_wait_with_timeout(br_atomic_sema *sema, br_duration duration);
 
