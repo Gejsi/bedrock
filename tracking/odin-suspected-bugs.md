@@ -35,6 +35,30 @@ All issues below were verified present in upstream Odin at `2c25fb9`
   arena's configured minimum, contradicting the documented contract.
 - Bedrock: floors the out-band path by `minimum_alignment`.
 
+## `core/mem` dynamic arena reused-block under-alignment
+
+- File: `core/mem/allocators.odin`
+- Area: `dynamic_arena_alloc_bytes_non_zeroed` in-band path plus
+  `_dynamic_arena_cycle_new_block`
+- Issue: after cycling a new current block, the alloc path sets
+  `margin = 0; memory = a.current_pos` unconditionally (allocators.odin
+  :1824-1825), assuming the block base satisfies
+  `max(minimum_alignment, alignment)`. Fresh blocks are allocated at that
+  alignment (:1733), but blocks reused from `unused_blocks` (:1726) were
+  created for a possibly-smaller alignment and are neither re-aligned nor
+  checked.
+- Expected: re-align the bump pointer against the block actually obtained and
+  recompute the margin after cycling.
+- Effect: an allocation whose alignment exceeds the reused block's original
+  alignment can return an under-aligned pointer (undefined behavior; potential
+  fault for over-aligned types). Reachable via reset followed by a
+  larger-alignment allocation; latent because most callers use one uniform
+  alignment.
+- Bedrock: re-aligns against the obtained block and re-checks the margin after
+  cycling; returns a correctly aligned pointer or `BR_STATUS_OUT_OF_MEMORY`,
+  never an under-aligned pointer (`src/mem/dynamic_arena.c`, documented
+  in-code).
+
 ## `core/encoding/hex` decode leak on invalid input
 
 - File: `core/encoding/hex/hex.odin`
