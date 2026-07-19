@@ -1,6 +1,7 @@
 #ifndef BEDROCK_STRINGS_BUILDER_H
 #define BEDROCK_STRINGS_BUILDER_H
 
+#include <bedrock/strconv/strconv.h>
 #include <bedrock/strings/strings.h>
 #include <bedrock/io/io.h>
 
@@ -131,6 +132,28 @@ Invalid trailing encodings follow the UTF-8 decoder behavior and pop as a
 replacement rune of width 1.
 */
 br_string_builder_rune_result br_string_builder_pop_rune(br_string_builder *builder);
+
+/*
+Append the decimal (or `base`) text of an integer, formatted directly into the
+builder's storage. `base` outside 2..36 yields `BR_STATUS_INVALID_ARGUMENT`.
+*/
+br_string_builder_io_result
+br_string_builder_write_int(br_string_builder *builder, int64_t value, int base);
+br_string_builder_io_result
+br_string_builder_write_uint(br_string_builder *builder, uint64_t value, int base);
+
+/*
+Append the text of a floating-point value, formatted directly into the builder's
+storage. `fmt`/`prec` follow `br_format_f64`/`br_format_f32`. `write_f32` formats
+at `float` precision rather than promoting to `double`, so `0.1f` renders as
+"0.1" (its shortest float form), not the wider double expansion.
+*/
+br_string_builder_io_result br_string_builder_write_f64(br_string_builder *builder,
+                                                        double value,
+                                                        br_float_format fmt,
+                                                        int prec);
+br_string_builder_io_result
+br_string_builder_write_f32(br_string_builder *builder, float value, br_float_format fmt, int prec);
 
 /*
 Expose this builder through the generic stream interface.

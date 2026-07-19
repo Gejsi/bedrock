@@ -185,6 +185,119 @@ br_status br_string_builder_reserve(br_string_builder *builder, usize additional
   return br__string_builder_grow(builder, additional);
 }
 
+/*
+Reserve `bound` bytes and hand the caller the writable tail so a formatter can
+render straight into the builder's storage (no intermediate stack buffer). On
+success the tail spans at least `bound` bytes; the caller advances the length by
+the count it wrote. `bound` of 0 is treated as caller misuse from a formatter.
+*/
+static br_string_builder_io_result br__string_builder_reserve_tail(br_string_builder *builder,
+                                                                   usize bound,
+                                                                   u8 **tail,
+                                                                   usize *tail_cap) {
+  br_status status;
+
+  if (builder == NULL) {
+    return br__string_builder_io_result(0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+  status = br__string_builder_grow(builder, bound);
+  if (status != BR_STATUS_OK) {
+    return br__string_builder_io_result(0u, status);
+  }
+  *tail = (u8 *)builder->data + builder->len;
+  *tail_cap = builder->cap - builder->len;
+  return br__string_builder_io_result(0u, BR_STATUS_OK);
+}
+
+br_string_builder_io_result
+br_string_builder_write_int(br_string_builder *builder, i64 value, int base) {
+  u8 *tail;
+  usize tail_cap;
+  br_string_builder_io_result reserved;
+  br_io_result formatted;
+
+  /* base 2 needs 64 digits + sign; validate here so a bad base does not grow. */
+  if (base < 2 || base > 36) {
+    return br__string_builder_io_result(0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+  reserved = br__string_builder_reserve_tail(builder, 66u, &tail, &tail_cap);
+  if (reserved.status != BR_STATUS_OK) {
+    return reserved;
+  }
+  formatted = br_format_i64(value, base, tail, tail_cap);
+  if (formatted.status != BR_STATUS_OK) {
+    return br__string_builder_io_result(0u, formatted.status);
+  }
+  builder->len += formatted.count;
+  return br__string_builder_io_result(formatted.count, BR_STATUS_OK);
+}
+
+br_string_builder_io_result
+br_string_builder_write_uint(br_string_builder *builder, u64 value, int base) {
+  u8 *tail;
+  usize tail_cap;
+  br_string_builder_io_result reserved;
+  br_io_result formatted;
+
+  if (base < 2 || base > 36) {
+    return br__string_builder_io_result(0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+  reserved = br__string_builder_reserve_tail(builder, 66u, &tail, &tail_cap);
+  if (reserved.status != BR_STATUS_OK) {
+    return reserved;
+  }
+  formatted = br_format_u64(value, base, tail, tail_cap);
+  if (formatted.status != BR_STATUS_OK) {
+    return br__string_builder_io_result(0u, formatted.status);
+  }
+  builder->len += formatted.count;
+  return br__string_builder_io_result(formatted.count, BR_STATUS_OK);
+}
+
+br_string_builder_io_result br_string_builder_write_f64(br_string_builder *builder,
+                                                        double value,
+                                                        br_float_format fmt,
+                                                        int prec) {
+  u8 *tail;
+  usize tail_cap;
+  br_string_builder_io_result reserved;
+  br_io_result formatted;
+
+  reserved =
+    br__string_builder_reserve_tail(builder, br_format_f64_bound(fmt, prec), &tail, &tail_cap);
+  if (reserved.status != BR_STATUS_OK) {
+    return reserved;
+  }
+  formatted = br_format_f64(value, fmt, prec, tail, tail_cap);
+  if (formatted.status != BR_STATUS_OK) {
+    return br__string_builder_io_result(0u, formatted.status);
+  }
+  builder->len += formatted.count;
+  return br__string_builder_io_result(formatted.count, BR_STATUS_OK);
+}
+
+br_string_builder_io_result br_string_builder_write_f32(br_string_builder *builder,
+                                                        float value,
+                                                        br_float_format fmt,
+                                                        int prec) {
+  u8 *tail;
+  usize tail_cap;
+  br_string_builder_io_result reserved;
+  br_io_result formatted;
+
+  reserved =
+    br__string_builder_reserve_tail(builder, br_format_f32_bound(fmt, prec), &tail, &tail_cap);
+  if (reserved.status != BR_STATUS_OK) {
+    return reserved;
+  }
+  formatted = br_format_f32(value, fmt, prec, tail, tail_cap);
+  if (formatted.status != BR_STATUS_OK) {
+    return br__string_builder_io_result(0u, formatted.status);
+  }
+  builder->len += formatted.count;
+  return br__string_builder_io_result(formatted.count, BR_STATUS_OK);
+}
+
 br_status br_string_builder_truncate(br_string_builder *builder, usize n) {
   if (builder == NULL) {
     return BR_STATUS_INVALID_ARGUMENT;

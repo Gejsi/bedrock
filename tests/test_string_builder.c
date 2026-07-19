@@ -91,9 +91,60 @@ static void test_string_builder_init_with_capacity_and_invalid_pop(void) {
   br_string_builder_destroy(&builder);
 }
 
+static void test_string_builder_write_numbers(void) {
+  br_string_builder builder;
+  br_string_builder_io_result r;
+
+  br_string_builder_init(&builder, br_allocator_heap());
+
+  /* Numbers format directly into the builder tail and append to prior content. */
+  assert(br_string_builder_write(&builder, BR_STR_LIT("n=")).status == BR_STATUS_OK);
+  r = br_string_builder_write_int(&builder, -42, 10);
+  assert(r.status == BR_STATUS_OK && r.count == 3u);
+  assert(br_string_equal(br_string_builder_view(&builder), BR_STR_LIT("n=-42")));
+
+  r = br_string_builder_write_uint(&builder, 255u, 16);
+  assert(r.status == BR_STATUS_OK && r.count == 2u);
+  assert(br_string_equal(br_string_builder_view(&builder), BR_STR_LIT("n=-42ff")));
+
+  br_string_builder_reset(&builder);
+  r = br_string_builder_write_f64(&builder, 3.14, BR_FLOAT_DECIMAL, 2);
+  assert(r.status == BR_STATUS_OK);
+  assert(br_string_equal(br_string_builder_view(&builder), BR_STR_LIT("3.14")));
+
+  /* write_f32 must use the f32 path: 0.1f is "0.1", not the promoted-double form. */
+  br_string_builder_reset(&builder);
+  r = br_string_builder_write_f32(&builder, 0.1f, BR_FLOAT_SHORTEST, 0);
+  assert(r.status == BR_STATUS_OK);
+  assert(br_string_equal(br_string_builder_view(&builder), BR_STR_LIT("0.1")));
+
+  /* A bad base is caller misuse and leaves the builder unchanged. */
+  br_string_builder_reset(&builder);
+  r = br_string_builder_write_int(&builder, 1, 37);
+  assert(r.status == BR_STATUS_INVALID_ARGUMENT && r.count == 0u);
+  assert(br_string_builder_is_empty(&builder));
+
+  br_string_builder_destroy(&builder);
+}
+
+static void test_string_builder_write_numbers_fixed_backing(void) {
+  br_string_builder builder;
+  char storage[4];
+  br_string_builder_io_result r;
+
+  /* A fixed backing too small for the formatted number reports the failure and
+     does not partially write or overrun. */
+  br_string_builder_init_with_backing(&builder, storage, sizeof(storage));
+  r = br_string_builder_write_int(&builder, 1234567, 10);
+  assert(r.status != BR_STATUS_OK && r.count == 0u);
+  assert(br_string_builder_is_empty(&builder));
+}
+
 int main(void) {
   test_string_builder_heap_backing();
   test_string_builder_fixed_backing();
   test_string_builder_init_with_capacity_and_invalid_pop();
+  test_string_builder_write_numbers();
+  test_string_builder_write_numbers_fixed_backing();
   return 0;
 }
