@@ -56,7 +56,7 @@ lines at `2c25fb9`.
 
 | Package | Size | Rationale |
 | --- | --- | --- |
-| `core/strconv` | 3180 | Number/string parse and format. The coverage checklist already depends on it (builder write_int/write_float), and it is the most-reached-for stdlib facility C under-serves (strtol/snprintf are clumsy and locale-tainted). Highest-value un-ported package. |
+| `core/strconv` | 3180 | Number/string parse and format — the most-reached-for stdlib facility C under-serves (strtol/snprintf are clumsy and locale-tainted). Was the highest-value un-ported package; LANDED July 19, 2026 (see the v1 row above). |
 | `core/math/rand` | 2235 | Seedable PRNG — a genuine C gap (rand() is bad and global). Focused core: generator + int/float/range/shuffle; distributions on demand. |
 
 ### DEFER (gate on a concrete consumer)
