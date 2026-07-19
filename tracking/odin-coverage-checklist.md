@@ -425,14 +425,15 @@ Current Bedrock files:
 - `include/bedrock/encoding/hex.h`, `src/encoding/hex.c`
 - `include/bedrock/encoding/base64.h`, `src/encoding/base64.c`
 - `include/bedrock/encoding/endian.h` (header-only)
-- `tests/test_hex.c`, `tests/test_base64.c`, `tests/test_endian.c`
+- `include/bedrock/encoding/varint.h`, `src/encoding/varint.c`
+- `tests/test_hex.c`, `tests/test_base64.c`, `tests/test_endian.c`, `tests/test_varint.c`
 
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
 | `encoding/hex` | `adapted` | `encoding/hex.h`, `src/encoding/hex.c` | Encode (lower/upper, allocating/into-buffer/writer), decode (allocating/into-buffer), decode_sequence. Deviations per spec: frees on error (fixes Odin's leak wart), byte `error_offset` reporting, `BR_STATUS_INVALID_ENCODING` for malformed input. |
 | `encoding/endian` | `adapted` | `encoding/endian.h` | All 8 widths checked get/put over views plus unchecked raw-pointer forms. Deviations per spec: `br_endian_` prefix, shift-based host-agnostic assembly, memcpy float bit-casts, memcpy byte-order probe (no compiler extensions), no f16. Upstream has zero tests; Bedrock's suite is the first. |
 | `encoding/base64` | `adapted` | `encoding/base64.h`, `src/encoding/base64.c` | Std/URL alphabets x padded/raw presets + a strict flag; encode (allocating/into-buffer/writer) and decode (allocating/into-buffer/writer). Deviations per spec: explicit presets + strict/padded controls (Odin exposes only a lenient decoder); drops Odin's dead `dst` decode param (caller buffers go through the into-buffer variant); no whitespace skipping (Go's decoder skips `\r\n`, Bedrock rejects any non-alphabet byte at its `error_offset`); strict rejects a non-canonical final quantum, lenient masks. RFC 4648 vectors. |
-| `encoding/varint` | `planned` | none | u64/i64 LEB128 per spec deviation. |
+| `encoding/varint` | `adapted` | `encoding/varint.h`, `src/encoding/varint.c` | Unsigned + signed LEB128 over the u64/i64 ABI: encoded_len, encode (into-buffer), decode. Deviations per spec: u64/i64 canonical width (Odin uses u128/i128; max 10 bytes not 19); DWARF sign-extended signed LEB128 (NOT Go's zig-zag); own `br_uleb128_result`/`br_ileb128_result` structs (no `error_offset` — `size` is bytes consumed always); truncation -> `UNEXPECTED_EOF`, value-too-wide -> `INVALID_ENCODING`, short encode buffer -> `SHORT_BUFFER` (never truncates). Signed 10th-byte padding bits must match the sign (`INT64_MIN` fills all 10 bytes). Stream read/write variants deferred. |
 
 ## `core/path`
 
