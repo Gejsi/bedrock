@@ -24,43 +24,43 @@ static void test_mem_set_zero(void) {
   assert(buf[0] == 0x11u);
 }
 
-static void test_mem_copy_overlap(void) {
+static void test_mem_copy_move(void) {
   u8 buf[8];
   u8 disjoint_src[4] = {1u, 2u, 3u, 4u};
   u8 disjoint_dst[4];
   void *ret;
 
-  /* Forward overlap: dst ahead of src within the same buffer. memmove must not
-     corrupt the tail the way a naive forward memcpy would. */
+  /* br_mem_copy: non-overlapping copy between disjoint buffers. */
+  ret = br_mem_copy(disjoint_dst, disjoint_src, sizeof(disjoint_src));
+  assert(ret == disjoint_dst);
+  assert(br_mem_compare_ptrs(disjoint_dst, disjoint_src, sizeof(disjoint_src)) == 0);
+
+  /* br_mem_move forward overlap: dst ahead of src in the same buffer. move must
+     not corrupt the tail the way a naive forward copy would. */
   for (usize i = 0u; i < sizeof(buf); i += 1u) {
     buf[i] = (u8)(i + 1u); /* 1 2 3 4 5 6 7 8 */
   }
-  ret = br_mem_copy(buf + 2, buf, 4u); /* copy [1 2 3 4] over offset 2 */
+  ret = br_mem_move(buf + 2, buf, 4u); /* move [1 2 3 4] over offset 2 */
   assert(ret == buf + 2);
   {
     static const u8 expect[8] = {1u, 2u, 1u, 2u, 3u, 4u, 7u, 8u};
     assert(br_mem_compare_ptrs(buf, expect, sizeof(buf)) == 0);
   }
 
-  /* Backward overlap: src ahead of dst. */
+  /* br_mem_move backward overlap: src ahead of dst. */
   for (usize i = 0u; i < sizeof(buf); i += 1u) {
     buf[i] = (u8)(i + 1u);
   }
-  ret = br_mem_copy(buf, buf + 2, 4u); /* copy [3 4 5 6] to the front */
+  ret = br_mem_move(buf, buf + 2, 4u); /* move [3 4 5 6] to the front */
   assert(ret == buf);
   {
     static const u8 expect[8] = {3u, 4u, 5u, 6u, 5u, 6u, 7u, 8u};
     assert(br_mem_compare_ptrs(buf, expect, sizeof(buf)) == 0);
   }
 
-  /* Non-overlapping copy between disjoint buffers. */
-  ret = br_mem_copy_non_overlapping(disjoint_dst, disjoint_src, sizeof(disjoint_src));
-  assert(ret == disjoint_dst);
-  assert(br_mem_compare_ptrs(disjoint_dst, disjoint_src, sizeof(disjoint_src)) == 0);
-
-  /* Zero-length copies are no-ops that still return dst. */
+  /* Zero-length copy and move are no-ops that still return dst. */
   assert(br_mem_copy(buf, disjoint_src, 0u) == buf);
-  assert(br_mem_copy_non_overlapping(buf, disjoint_src, 0u) == buf);
+  assert(br_mem_move(buf, disjoint_src, 0u) == buf);
 }
 
 static void test_mem_compare(void) {
@@ -122,7 +122,7 @@ static void test_mem_check_zero(void) {
 
 int main(void) {
   test_mem_set_zero();
-  test_mem_copy_overlap();
+  test_mem_copy_move();
   test_mem_compare();
   test_mem_check_zero();
   return 0;

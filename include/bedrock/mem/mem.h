@@ -6,13 +6,9 @@
 BR_EXTERN_C_BEGIN
 
 /*
-Portable low-level memory helpers, a thin Bedrock-typed layer over the C library
-memory routines. These mirror the portable subset of Odin's `core/mem` byte
-helpers; Odin's runtime-layout surface (`ptr_offset`, `ptr_sub`, slice/typeid
-helpers) is intentionally excluded.
-
-All helpers take `void *`/`size_t` and are defined header-only because each is a
-single wrapper over `<string.h>`.
+Portable low-level memory helpers: a thin, standard-C-typed layer over the C
+library memory routines. All helpers take `void *`/`size_t` and are header-only
+because each is a single wrapper over `<string.h>`.
 */
 
 /*
@@ -29,8 +25,8 @@ static inline void *br_mem_set(void *dst, uint8_t value, size_t len) {
 Set the first `len` bytes at `dst` to zero; returns `dst`.
 
 This is an ordinary zeroing and may be optimized away when the store is not
-observed. A guaranteed, non-elidable secure zero (Odin's `zero_explicit`) is a
-distinct primitive and is not provided yet.
+observed. A guaranteed, non-elidable secure zero is a distinct primitive and is
+not provided yet.
 */
 static inline void *br_mem_zero(void *dst, size_t len) {
   if (len != 0u) {
@@ -40,23 +36,23 @@ static inline void *br_mem_zero(void *dst, size_t len) {
 }
 
 /*
-Copy `len` bytes from `src` to `dst`, which may overlap (memmove semantics);
-returns `dst`.
+Copy `len` bytes from `src` to `dst`, which must NOT overlap; returns `dst`.
+Overlapping ranges are undefined behavior; use `br_mem_move` when they may
+overlap.
 */
 static inline void *br_mem_copy(void *dst, const void *src, size_t len) {
   if (len != 0u) {
-    memmove(dst, src, len);
+    memcpy(dst, src, len);
   }
   return dst;
 }
 
 /*
-Copy `len` bytes from `src` to `dst`, which must NOT overlap (memcpy semantics);
-returns `dst`. Overlapping ranges are undefined behavior.
+Copy `len` bytes from `src` to `dst`, which may overlap; returns `dst`.
 */
-static inline void *br_mem_copy_non_overlapping(void *dst, const void *src, size_t len) {
+static inline void *br_mem_move(void *dst, const void *src, size_t len) {
   if (len != 0u) {
-    memcpy(dst, src, len);
+    memmove(dst, src, len);
   }
   return dst;
 }
@@ -84,8 +80,8 @@ static inline int br_mem_compare_ptrs(const void *a, const void *b, size_t n) {
 /*
 Compare two byte ranges of possibly different lengths, returning `-1`, `0`, or
 `+1`. The shared prefix is compared first; if it is equal, the shorter range
-compares as smaller. Two empty ranges compare equal. Mirrors Odin's `compare`
-and matches `br_bytes_compare`.
+compares as smaller. Two empty ranges compare equal. This matches
+`br_bytes_compare`.
 */
 static inline int br_mem_compare(const void *a, size_t a_len, const void *b, size_t b_len) {
   size_t common = a_len < b_len ? a_len : b_len;
@@ -104,8 +100,8 @@ static inline int br_mem_compare(const void *a, size_t a_len, const void *b, siz
 Report whether all `len` bytes starting at `ptr` are zero. A zero length (or a
 NULL pointer with zero length) is vacuously all-zero and returns `true`.
 
-The scan is a straightforward in-bounds byte walk: unlike Odin's
-`check_zero_ptr`, it never reads outside `[ptr, ptr + len)`.
+The scan is a straightforward in-bounds byte walk that never reads outside
+`[ptr, ptr + len)`.
 */
 static inline bool br_mem_check_zero(const void *ptr, size_t len) {
   const uint8_t *bytes = (const uint8_t *)ptr;
