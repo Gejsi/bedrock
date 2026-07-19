@@ -84,9 +84,17 @@ internal gcd/lcm toolkit. Excluded entirely: all `TZ_*` timezone types.
 ```c
 /* Civil datetime <-> Unix-nanosecond instant, treating the datetime as UTC.
    The bridge lives in `time` (the epoch is time's domain; the calendar math is
-   the datetime slice's). */
-br_time     br_datetime_to_time(br_datetime dt);
-br_datetime br_time_to_datetime(br_time t);
+   the datetime slice's).
+
+   br_time's int64 nanosecond range spans civil years ~1677..2262 only, while
+   br_datetime spans ±25 quadrillion years — so datetime->instant is the one
+   direction that can fail. A datetime outside the representable window returns
+   BR_STATUS_OUT_OF_RANGE via an overflow-safe bounds check (never a silent
+   int64 wrap). instant->datetime is total: every int64 nanosecond value maps
+   to a valid civil datetime. */
+typedef struct br_time_result { br_time value; br_status status; } br_time_result;
+br_time_result br_datetime_to_time(br_datetime dt);
+br_datetime    br_time_to_datetime(br_time t);
 ```
 
 ### Zero-value contracts
@@ -164,11 +172,15 @@ br_io_result br_rfc3339_format(br_time t, int32_t utc_offset_min, uint8_t *dst, 
   `utc_offset_min` from a parse to re-emit the original local offset. Always
   uppercase `T`/`Z`. Fractional output emits `nano` only when nonzero, trailing
   zeros trimmed (Go's RFC3339Nano behavior — no `.000`).
-- YEAR-RANGE CONTRACT: RFC 3339's grammar is a FIXED 4-digit year. A `br_time`
-  whose civil year is outside 0000..9999 is a valid instant but unrepresentable
-  in the format; `br_rfc3339_format` returns `BR_STATUS_OUT_OF_RANGE` (count 0)
-  rather than emit a malformed >4-digit or negative-year string. (Same strconv
-  taxonomy: valid input, target can't represent it.)
+- YEAR RANGE: RFC 3339's grammar is a FIXED 4-digit year (0000..9999) — and
+  every representable `br_time` already satisfies it, because int64 nanoseconds
+  span civil years ~1677..2262 only. `br_rfc3339_format` therefore CANNOT fail
+  on range and carries no dead year guard; its only failure is `SHORT_BUFFER`.
+  The valid-input-unrepresentable-target case lives where it is actually
+  reachable: at the epoch bridge (`br_datetime_to_time` returns
+  `BR_STATUS_OUT_OF_RANGE` for datetimes outside the int64-ns window). If
+  `br_time` ever widens beyond int64 nanoseconds, the format year guard must
+  be revisited with it.
 
 ## Deviations from Odin / Go / Rust
 
@@ -185,8 +197,8 @@ br_io_result br_rfc3339_format(br_time t, int32_t utc_offset_min, uint8_t *dst, 
   themselves.
 - Strict-by-default parse (`_prefix` permissive), consumed-length, and the
   `INVALID_ENCODING` (malformed text) vs `INVALID_ARGUMENT` (caller-built bad
-  struct) vs `OUT_OF_RANGE` (unrepresentable civil year) taxonomy are reused
-  from strconv.
+  struct) vs `OUT_OF_RANGE` (datetime outside `br_time`'s int64-ns window, at
+  the epoch bridge) taxonomy are reused from strconv.
 - vs Go: Go's `time.RFC3339` parses via a reference-layout string and its `Time`
   carries a `*Location`; Bedrock is a dedicated parser producing a naive
   datetime + explicit offset int (no Location). Bedrock matches Go on full
@@ -214,9 +226,12 @@ br_io_result br_rfc3339_format(br_time t, int32_t utc_offset_min, uint8_t *dst, 
   malformed inputs (bad month/day/hour, missing fields, short strings) ->
   `INVALID_ENCODING` at the right `consumed` offset; strict rejects trailing
   bytes, `_prefix` accepts them with `consumed` set.
-- Format boundaries: `9999-12-31T23:59:59.999999999Z` formats; one nanosecond
-  later (year 10000) returns `BR_STATUS_OUT_OF_RANGE`, count 0; undersized `dst`
-  -> `SHORT_BUFFER`, count 0.
+- Range boundaries at the TRUE extremes: the exact INT64_MAX- and INT64_MIN-
+  nanosecond instants (civil years 2262 and 1677) format and round-trip;
+  `br_datetime_to_time` returns `BR_STATUS_OUT_OF_RANGE` for datetimes outside
+  the window (e.g. year 9999 and year 2263+) with no silent wrap — the
+  overflow-safe check is the regression target; undersized `dst` ->
+  `SHORT_BUFFER`, count 0.
 - date<->ordinal round-trip across the year range incl. leap years,
   century/400-year boundaries, negative (B.C.) years, and `BR_ORDINAL_MIN/MAX`.
 - `is_leap_year` known cases (1900 no, 2000 yes, 2004 yes).
