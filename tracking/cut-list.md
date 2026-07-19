@@ -23,6 +23,12 @@ library is fine *if every piece is obviously useful*. The enemy is not size; it
 is choice-paralysis and museum pieces — code ported because it existed in Odin,
 not because a C dev wants it.
 
+Maintainer's stated philosophy (July 19, 2026): **"code is a liability."**
+Cutting is good, and the same logic applies BEFORE porting — a package that
+isn't worth porting should not be ported at all. This list therefore covers
+both landed code (CUT/KEEP/DEMOTE) and, as a pre-port scrutiny section, the
+remaining roadmap (PORT/SKIP/DEFER).
+
 ## The framing fact
 
 `mem` is ~5,900 lines, roughly **half of all of `src/`**. Bedrock currently
