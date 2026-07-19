@@ -281,6 +281,9 @@ boundary.
 | sync benaphores | SKIP | 2026-07-19 | redundant vs mutex/sema |
 | sync per-OS primitive split | SKIP (as goal) | 2026-07-19 | capability already exists |
 | rfc3339 + minimal datetime slice | PORT | 2026-07-19 | slice being mapped; datetime remainder DEFER |
+| strconv, hash, math/rand, uuid, base32 | PORT | 2026-07-19 | full-enumeration additions; strconv is the priority (checklist already depends on it) |
+| math core float functions | SKIP | 2026-07-19 | libm is the answer; struck outright |
+| text/regex | SKIP | 2026-07-19 | PCRE2 is the answer, as cJSON is for json |
 | time/stopwatch | DEFER | 2026-07-19 | on concrete demand |
 | small_stack | | | |
 | compat_allocator | | | |

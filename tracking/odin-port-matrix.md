@@ -51,7 +51,7 @@ every Odin `core/` package has an explicit decision. Recommendations pending
 the maintainer's ruling use the cut-list methodology; sizes are Odin source
 lines at `2c25fb9`.
 
-### Recommended PORT
+### PORT (accepted by the maintainer, July 19, 2026)
 
 | Package | Size | Rationale |
 | --- | --- | --- |
@@ -61,13 +61,11 @@ lines at `2c25fb9`.
 | `core/hash` | 3629 | Non-cryptographic hashes (crc32, fnv, xxhash) — daily-driver for checksums and hash tables, not covered by libc, no security surface (crypto stays excluded). |
 | `core/math/rand` | subtree | Seedable PRNG — a genuine C gap (rand() is bad and global). Generator first; distributions on demand. |
 
-### Recommended DEFER (gate on a concrete consumer)
+### DEFER (gate on a concrete consumer)
 
 | Package | Size | Rationale |
 | --- | --- | --- |
 | `core/slice` | 2167 | Generic slice algorithms; folds into the planned container/sort redesign rather than a standalone port. |
-| `core/math` (float functions) | 4471 | libm already ships all of it, universally linked; a replacement adds value only for freestanding/no-libm or bit-exact goals, neither a v1 aim. Do not reimplement libm on spec. |
-| `core/text/regex` | 4068 | Real demand (C has no stdlib regex) but a correctness-and-fuzz wave of its own. |
 | `core/log` | 1130 | Useful; couples to output policy; add on demand. |
 | `core/text/scanner` | 667 | Overlaps the planned bufio scanner; decide one home when the parser family lands. |
 | `core/path/filepath` | subtree | OS-aware paths; needs the excluded os layer. `br_path_` stays reserved. |
@@ -75,10 +73,12 @@ lines at `2c25fb9`.
 | `core/encoding/cbor` | 3806 | Real but niche binary serialization; below json in demand. |
 | `core/unicode/utf16` | subtree | Windows/JS interop transcode; add when a consumer hits it. |
 
-### Recommended SKIP
+### SKIP (ruled by the maintainer, July 19, 2026)
 
 | Package | Rationale |
 | --- | --- |
+| `core/math` (float functions, 4471 lines) | libm already ships all of it and every C program links it; reimplementing adds nothing for Bedrock's goals. Struck outright. |
+| `core/text/regex` (4068 lines) | Genuine demand, but a correctness-and-fuzz mini-language of its own; the ecosystem answer is PCRE2, the same way json's answer is cJSON. Struck. |
 | `core/text/i18n`, `text/match`, `text/edit`, `text/table` | Application/presentation concerns, not stdlib primitives. |
 | `core/encoding/asn1`, `encoding/pem` | Crypto/PKI-adjacent; belong with the excluded crypto surface. |
 | `core/encoding/entity`, `encoding/hxa` | Generated HTML-entity data (xml is excluded) and a niche 3D asset format. |
