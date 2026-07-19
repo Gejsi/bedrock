@@ -10,6 +10,7 @@
 #include <bedrock/io.h>
 #include <bedrock/bufio.h>
 #include <bedrock/sync.h>
+#include <bedrock/thread.h>
 #include <bedrock/time.h>
 #include <bedrock/encoding.h>
 #include <bedrock/path.h>
