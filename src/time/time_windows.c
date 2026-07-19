@@ -6,6 +6,11 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 
+/* GetSystemTimePreciseAsFileTime requires Windows 8 (0x0602). */
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0602
+#endif
+
 #include <windows.h>
 
 #define BR__WINDOWS_EPOCH_OFFSET_100NS ((u64)116444736000000000ull)
