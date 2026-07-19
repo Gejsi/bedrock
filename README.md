@@ -39,7 +39,11 @@ Current implemented bootstrap:
 - `strings.Builder`-style mutable storage in `include/bedrock/strings/builder.h` and `src/strings/builder.c`
 - `strings.Reader`-style read-only cursor in `include/bedrock/strings/reader.h` and `src/strings/reader.c`
 - typed vector template in `include/bedrock/template/vec.h`
-- compatibility forwarding headers remain at the old flat include paths like `include/bedrock/bytes.h`
+- a three-tier include layout: canonical per-file headers at
+  `include/bedrock/<module>/<file>.h`, one convenience umbrella per module at
+  `include/bedrock/<module>.h` (e.g. `bedrock/mem.h`, `bedrock/strings.h`), and
+  the master `include/bedrock.h` that pulls in every module umbrella
+  (`bedrock/template/vec.h` stays a direct include because it is a macro template)
 - smoke and module tests live under `tests/`
 
 Build and test:
