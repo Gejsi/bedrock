@@ -164,7 +164,16 @@ static br_status br__virtual_block_create(usize committed,
     Bedrock keeps overflow protection as a trailing guard page past the usable
     payload. This stays close to Odin's intent while avoiding exposing the guard
     page itself as part of `block.reserved`.
+
+    The guard page must be committed before it is protected: Windows'
+    VirtualProtect only operates on committed pages, while POSIX mprotect also
+    accepts reserved-only mappings. The page is never touched afterwards, so
+    committing it costs address space only on overcommitting platforms.
     */
+    if (br_vm_commit((u8 *)(void *)platform_block + payload_limit, page_size) != BR_STATUS_OK) {
+      br__vm_platform_memory_free(platform_block);
+      return BR_STATUS_OUT_OF_MEMORY;
+    }
     if (!br_vm_protect(
           (u8 *)(void *)platform_block + payload_limit, page_size, BR_VM_PROTECT_NONE)) {
       br__vm_platform_memory_free(platform_block);
