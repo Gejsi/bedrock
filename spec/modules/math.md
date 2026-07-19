@@ -7,7 +7,7 @@ Bit-level integer operations ported from Odin `core/math/bits` (modeled on Go's
 
 | Package | Bedrock header | Impl | Status |
 | --- | --- | --- | --- |
-| math/bits | math/bits.h | src/math/bits.c | planned |
+| math/bits | math/bits.h | src/math/bits.c | v1 |
 
 Module umbrella: include/bedrock/math.h. Byte-ORDER conversion (from_be/to_le)
 is NOT here — it lives in encoding/endian (spec/modules/encoding.md). This
@@ -139,3 +139,13 @@ bit_width(x) - 1 == index of highest set bit for x > 0; div reconstructs
 (quo*y + rem == (hi:lo)) when status OK; div by 0 and overflow return
 INVALID_ARGUMENT. Fuzz div/mul/add/sub for
 wraparound correctness.
+
+Landed (`tests/test_bits.c`): the differential harness compiles `src/math/bits.c`
+a second time inside the test TU under `BR_BITS_FORCE_FALLBACK` with a private
+symbol prefix, so one binary runs the host's native tier against the portable
+fallback (exhaustive u8/u16, ~200k-iteration random u32/u64 sweeps including 0,
+all-ones, and single-bit patterns). Running that under sanitize immediately paid
+off: it caught signed-overflow UB in the fallback ctz (`-(int64_t)x` at bit 63),
+now fixed to negate in unsigned arithmetic — a bug the native tier would have
+hidden. Sanitize must therefore continue to exercise both the native and forced-
+fallback paths.
