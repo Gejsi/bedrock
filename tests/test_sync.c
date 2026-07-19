@@ -6,9 +6,6 @@ static void test_once_increment(void *ctx) {
   br_atomic_add_explicit((br_atomic_i32 *)ctx, 1, BR_ATOMIC_RELAXED);
 }
 
-#if !defined(_WIN32)
-#include <pthread.h>
-
 static void test_spin_until_bool(const br_atomic_bool *value, bool expected) {
   while (br_atomic_load_explicit(value, BR_ATOMIC_ACQUIRE) != expected) {
     br_cpu_relax();
@@ -91,7 +88,7 @@ typedef struct test_ticket_state {
   i32 iterations;
 } test_ticket_state;
 
-static void *test_cond_waiter(void *ctx) {
+static int test_cond_waiter(void *ctx) {
   test_cond_state *state = (test_cond_state *)ctx;
 
   br_mutex_lock(&state->mutex);
@@ -101,19 +98,19 @@ static void *test_cond_waiter(void *ctx) {
   }
   br_atomic_add_explicit(&state->seen, 1, BR_ATOMIC_RELAXED);
   br_mutex_unlock(&state->mutex);
-  return NULL;
+  return 0;
 }
 
-static void *test_sema_waiter(void *ctx) {
+static int test_sema_waiter(void *ctx) {
   test_sema_state *state = (test_sema_state *)ctx;
 
   br_atomic_add_explicit(&state->waiting, 1, BR_ATOMIC_RELEASE);
   br_sema_wait(state->sema);
   br_atomic_add_explicit(&state->seen, 1, BR_ATOMIC_RELAXED);
-  return NULL;
+  return 0;
 }
 
-static void *test_rw_reader(void *ctx) {
+static int test_rw_reader(void *ctx) {
   test_rw_reader_state *state = (test_rw_reader_state *)ctx;
 
   br_rw_mutex_shared_lock(state->mutex);
@@ -122,18 +119,18 @@ static void *test_rw_reader(void *ctx) {
     br_cpu_relax();
   }
   br_rw_mutex_shared_unlock(state->mutex);
-  return NULL;
+  return 0;
 }
 
-static void *test_wait_group_worker(void *ctx) {
+static int test_wait_group_worker(void *ctx) {
   test_wait_group_state *state = (test_wait_group_state *)ctx;
 
   br_atomic_add_explicit(state->counter, 1, BR_ATOMIC_RELAXED);
   br_wait_group_done(state->wg);
-  return NULL;
+  return 0;
 }
 
-static void *test_barrier_worker(void *ctx) {
+static int test_barrier_worker(void *ctx) {
   test_barrier_state *state = (test_barrier_state *)ctx;
   i32 round;
 
@@ -143,45 +140,45 @@ static void *test_barrier_worker(void *ctx) {
     }
     br_atomic_add_explicit(&state->after_per_round[round], 1, BR_ATOMIC_RELAXED);
   }
-  return NULL;
+  return 0;
 }
 
-static void *test_once_worker(void *ctx) {
+static int test_once_worker(void *ctx) {
   test_once_state *state = (test_once_state *)ctx;
 
   test_spin_until_bool(state->start, true);
   br_once_do(state->once, test_once_increment, state->count);
-  return NULL;
+  return 0;
 }
 
-static void *test_auto_reset_event_worker(void *ctx) {
+static int test_auto_reset_event_worker(void *ctx) {
   test_auto_reset_event_state *state = (test_auto_reset_event_state *)ctx;
 
   br_atomic_add_explicit(state->waiting, 1, BR_ATOMIC_RELEASE);
   br_auto_reset_event_wait(state->event);
   br_atomic_add_explicit(state->seen, 1, BR_ATOMIC_RELEASE);
-  return NULL;
+  return 0;
 }
 
-static void *test_parker_worker(void *ctx) {
+static int test_parker_worker(void *ctx) {
   test_parker_state *state = (test_parker_state *)ctx;
 
   br_atomic_add_explicit(state->waiting, 1, BR_ATOMIC_RELEASE);
   br_parker_park(state->parker);
   br_atomic_add_explicit(state->seen, 1, BR_ATOMIC_RELEASE);
-  return NULL;
+  return 0;
 }
 
-static void *test_one_shot_event_worker(void *ctx) {
+static int test_one_shot_event_worker(void *ctx) {
   test_one_shot_event_state *state = (test_one_shot_event_state *)ctx;
 
   br_atomic_add_explicit(state->waiting, 1, BR_ATOMIC_RELEASE);
   br_one_shot_event_wait(state->event);
   br_atomic_add_explicit(state->seen, 1, BR_ATOMIC_RELEASE);
-  return NULL;
+  return 0;
 }
 
-static void *test_ticket_worker(void *ctx) {
+static int test_ticket_worker(void *ctx) {
   test_ticket_state *state = (test_ticket_state *)ctx;
   i32 i;
 
@@ -196,9 +193,8 @@ static void *test_ticket_worker(void *ctx) {
     assert(br_atomic_sub_explicit(state->inside, 1, BR_ATOMIC_ACQ_REL) == 1);
     br_ticket_mutex_unlock(state->mutex);
   }
-  return NULL;
+  return 0;
 }
-#endif
 
 static void test_sync_mutex_and_guard(void) {
   br_mutex mutex;
@@ -235,7 +231,6 @@ static void test_sync_recursive_mutex(void) {
   br_recursive_mutex_destroy(&mutex);
 }
 
-#if !defined(_WIN32)
 static void test_sync_zero_value_public_primitives(void) {
   br_mutex mutex = {0};
   br_rw_mutex rw_mutex = {0};
@@ -284,13 +279,13 @@ static void test_sync_zero_value_extended_primitives(void) {
 
 static void test_sync_zero_value_cond_signal(void) {
   test_cond_state state = {0};
-  pthread_t thread;
+  br_thread thread;
 
   state.ready = false;
   br_atomic_init(&state.waiting, 0);
   br_atomic_init(&state.seen, 0);
 
-  assert(pthread_create(&thread, NULL, test_cond_waiter, &state) == 0);
+  assert(br_thread_create(&thread, test_cond_waiter, &state) == BR_STATUS_OK);
   test_spin_until_i32_eq(&state.waiting, 1);
 
   br_mutex_lock(&state.mutex);
@@ -298,26 +293,26 @@ static void test_sync_zero_value_cond_signal(void) {
   br_cond_signal(&state.cond);
   br_mutex_unlock(&state.mutex);
 
-  assert(pthread_join(thread, NULL) == 0);
+  assert(br_thread_join(&thread, NULL) == BR_STATUS_OK);
   assert(br_atomic_load_explicit(&state.seen, BR_ATOMIC_RELAXED) == 1);
 }
 
 static void test_sync_zero_value_sema(void) {
   br_sema sema = {0};
   test_sema_state state;
-  pthread_t thread;
+  br_thread thread;
 
   state.sema = &sema;
   br_atomic_init(&state.waiting, 0);
   br_atomic_init(&state.seen, 0);
 
-  assert(pthread_create(&thread, NULL, test_sema_waiter, &state) == 0);
+  assert(br_thread_create(&thread, test_sema_waiter, &state) == BR_STATUS_OK);
   test_spin_until_i32_eq(&state.waiting, 1);
   assert(br_atomic_load_explicit(&state.seen, BR_ATOMIC_RELAXED) == 0);
 
   br_sema_post(&sema, 1u);
 
-  assert(pthread_join(thread, NULL) == 0);
+  assert(br_thread_join(&thread, NULL) == BR_STATUS_OK);
   assert(br_atomic_load_explicit(&state.seen, BR_ATOMIC_RELAXED) == 1);
   br_sema_destroy(&sema);
 }
@@ -329,7 +324,6 @@ static void test_sync_sema_init_with_count(void) {
   br_sema_wait(&sema);
   br_sema_destroy(&sema);
 }
-#endif
 
 static void test_sync_once_basic(void) {
   br_once once;
@@ -345,10 +339,9 @@ static void test_sync_once_basic(void) {
   br_once_destroy(&once);
 }
 
-#if !defined(_WIN32)
 static void test_sync_cond_signal(void) {
   test_cond_state state;
-  pthread_t thread;
+  br_thread thread;
 
   assert(br_mutex_init(&state.mutex) == BR_STATUS_OK);
   assert(br_cond_init(&state.cond) == BR_STATUS_OK);
@@ -356,7 +349,7 @@ static void test_sync_cond_signal(void) {
   br_atomic_init(&state.waiting, 0);
   br_atomic_init(&state.seen, 0);
 
-  assert(pthread_create(&thread, NULL, test_cond_waiter, &state) == 0);
+  assert(br_thread_create(&thread, test_cond_waiter, &state) == BR_STATUS_OK);
   test_spin_until_i32_eq(&state.waiting, 1);
 
   br_mutex_lock(&state.mutex);
@@ -364,7 +357,7 @@ static void test_sync_cond_signal(void) {
   br_cond_signal(&state.cond);
   br_mutex_unlock(&state.mutex);
 
-  assert(pthread_join(thread, NULL) == 0);
+  assert(br_thread_join(&thread, NULL) == BR_STATUS_OK);
   assert(br_atomic_load_explicit(&state.seen, BR_ATOMIC_RELAXED) == 1);
 
   br_cond_destroy(&state.cond);
@@ -374,7 +367,7 @@ static void test_sync_cond_signal(void) {
 static void test_sync_cond_broadcast(void) {
   enum { THREAD_COUNT = 4 };
   test_cond_state state;
-  pthread_t threads[THREAD_COUNT];
+  br_thread threads[THREAD_COUNT];
   i32 i;
 
   assert(br_mutex_init(&state.mutex) == BR_STATUS_OK);
@@ -384,7 +377,7 @@ static void test_sync_cond_broadcast(void) {
   br_atomic_init(&state.seen, 0);
 
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_create(&threads[(usize)i], NULL, test_cond_waiter, &state) == 0);
+    assert(br_thread_create(&threads[(usize)i], test_cond_waiter, &state) == BR_STATUS_OK);
   }
   test_spin_until_i32_eq(&state.waiting, THREAD_COUNT);
 
@@ -394,7 +387,7 @@ static void test_sync_cond_broadcast(void) {
   br_mutex_unlock(&state.mutex);
 
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_join(threads[(usize)i], NULL) == 0);
+    assert(br_thread_join(&threads[(usize)i], NULL) == BR_STATUS_OK);
   }
 
   assert(br_atomic_load_explicit(&state.seen, BR_ATOMIC_RELAXED) == THREAD_COUNT);
@@ -416,7 +409,7 @@ static void test_sync_rw_mutex(void) {
   enum { THREAD_COUNT = 2 };
   br_rw_mutex mutex;
   test_rw_reader_state state;
-  pthread_t threads[THREAD_COUNT];
+  br_thread threads[THREAD_COUNT];
   i32 i;
 
   assert(br_rw_mutex_init(&mutex) == BR_STATUS_OK);
@@ -425,14 +418,14 @@ static void test_sync_rw_mutex(void) {
   br_atomic_init(&state.release, false);
 
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_create(&threads[(usize)i], NULL, test_rw_reader, &state) == 0);
+    assert(br_thread_create(&threads[(usize)i], test_rw_reader, &state) == BR_STATUS_OK);
   }
   test_spin_until_i32_eq(&state.entered, THREAD_COUNT);
 
   assert(!br_rw_mutex_try_lock(&mutex));
   br_atomic_store_explicit(&state.release, true, BR_ATOMIC_RELEASE);
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_join(threads[(usize)i], NULL) == 0);
+    assert(br_thread_join(&threads[(usize)i], NULL) == BR_STATUS_OK);
   }
   assert(br_rw_mutex_try_lock(&mutex));
   br_rw_mutex_unlock(&mutex);
@@ -444,7 +437,7 @@ static void test_sync_wait_group(void) {
   enum { THREAD_COUNT = 4 };
   br_wait_group wg;
   test_wait_group_state state;
-  pthread_t threads[THREAD_COUNT];
+  br_thread threads[THREAD_COUNT];
   br_atomic_i32 counter;
   i32 i;
 
@@ -455,12 +448,12 @@ static void test_sync_wait_group(void) {
 
   br_wait_group_add(&wg, THREAD_COUNT);
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_create(&threads[(usize)i], NULL, test_wait_group_worker, &state) == 0);
+    assert(br_thread_create(&threads[(usize)i], test_wait_group_worker, &state) == BR_STATUS_OK);
   }
 
   br_wait_group_wait(&wg);
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_join(threads[(usize)i], NULL) == 0);
+    assert(br_thread_join(&threads[(usize)i], NULL) == BR_STATUS_OK);
   }
 
   assert(br_atomic_load_explicit(&counter, BR_ATOMIC_RELAXED) == THREAD_COUNT);
@@ -491,7 +484,7 @@ static void test_sync_barrier(void) {
   enum { THREAD_COUNT = 3, ROUNDS = 4 };
   br_barrier barrier;
   test_barrier_state state;
-  pthread_t threads[THREAD_COUNT];
+  br_thread threads[THREAD_COUNT];
   br_atomic_i32 leaders_per_round[ROUNDS];
   br_atomic_i32 after_per_round[ROUNDS];
   i32 i;
@@ -509,7 +502,7 @@ static void test_sync_barrier(void) {
   }
 
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_create(&threads[(usize)i], NULL, test_barrier_worker, &state) == 0);
+    assert(br_thread_create(&threads[(usize)i], test_barrier_worker, &state) == BR_STATUS_OK);
   }
 
   for (round = 0; round < ROUNDS; ++round) {
@@ -520,7 +513,7 @@ static void test_sync_barrier(void) {
   }
 
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_join(threads[(usize)i], NULL) == 0);
+    assert(br_thread_join(&threads[(usize)i], NULL) == BR_STATUS_OK);
   }
 
   for (round = 0; round < ROUNDS; ++round) {
@@ -535,7 +528,7 @@ static void test_sync_once_threads(void) {
   enum { THREAD_COUNT = 6 };
   br_once once;
   test_once_state state;
-  pthread_t threads[THREAD_COUNT];
+  br_thread threads[THREAD_COUNT];
   br_atomic_i32 count;
   br_atomic_bool start;
   i32 i;
@@ -548,11 +541,11 @@ static void test_sync_once_threads(void) {
   state.start = &start;
 
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_create(&threads[(usize)i], NULL, test_once_worker, &state) == 0);
+    assert(br_thread_create(&threads[(usize)i], test_once_worker, &state) == BR_STATUS_OK);
   }
   br_atomic_store_explicit(&start, true, BR_ATOMIC_RELEASE);
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_join(threads[(usize)i], NULL) == 0);
+    assert(br_thread_join(&threads[(usize)i], NULL) == BR_STATUS_OK);
   }
 
   assert(br_atomic_load_explicit(&count, BR_ATOMIC_RELAXED) == 1);
@@ -574,7 +567,7 @@ static void test_sync_auto_reset_event_releases_one_waiter(void) {
   br_atomic_i32 waiting;
   br_atomic_i32 seen;
   test_auto_reset_event_state state;
-  pthread_t threads[THREAD_COUNT];
+  br_thread threads[THREAD_COUNT];
   i32 i;
 
   assert(br_auto_reset_event_init(&event) == BR_STATUS_OK);
@@ -585,7 +578,8 @@ static void test_sync_auto_reset_event_releases_one_waiter(void) {
   state.seen = &seen;
 
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_create(&threads[(usize)i], NULL, test_auto_reset_event_worker, &state) == 0);
+    assert(br_thread_create(&threads[(usize)i], test_auto_reset_event_worker, &state) ==
+           BR_STATUS_OK);
   }
 
   test_spin_until_i32_eq(&waiting, THREAD_COUNT);
@@ -600,7 +594,7 @@ static void test_sync_auto_reset_event_releases_one_waiter(void) {
   assert(br_atomic_load_explicit(&seen, BR_ATOMIC_ACQUIRE) == THREAD_COUNT);
 
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_join(threads[(usize)i], NULL) == 0);
+    assert(br_thread_join(&threads[(usize)i], NULL) == BR_STATUS_OK);
   }
   br_auto_reset_event_destroy(&event);
 }
@@ -618,7 +612,7 @@ static void test_sync_parker_threaded_unpark(void) {
   br_atomic_i32 waiting;
   br_atomic_i32 seen;
   test_parker_state state;
-  pthread_t thread;
+  br_thread thread;
 
   br_atomic_init(&waiting, 0);
   br_atomic_init(&seen, 0);
@@ -626,13 +620,13 @@ static void test_sync_parker_threaded_unpark(void) {
   state.waiting = &waiting;
   state.seen = &seen;
 
-  assert(pthread_create(&thread, NULL, test_parker_worker, &state) == 0);
+  assert(br_thread_create(&thread, test_parker_worker, &state) == BR_STATUS_OK);
   test_spin_until_i32_eq(&waiting, 1);
   assert(br_atomic_load_explicit(&seen, BR_ATOMIC_ACQUIRE) == 0);
 
   br_parker_unpark(&parker);
   test_spin_until_i32_eq(&seen, 1);
-  assert(pthread_join(thread, NULL) == 0);
+  assert(br_thread_join(&thread, NULL) == BR_STATUS_OK);
 }
 
 static void test_sync_parker_timeout_cleanup(void) {
@@ -658,7 +652,7 @@ static void test_sync_one_shot_event_broadcast(void) {
   br_atomic_i32 waiting;
   br_atomic_i32 seen;
   test_one_shot_event_state state;
-  pthread_t threads[THREAD_COUNT];
+  br_thread threads[THREAD_COUNT];
   i32 i;
 
   br_one_shot_event_init(&event);
@@ -669,7 +663,8 @@ static void test_sync_one_shot_event_broadcast(void) {
   state.seen = &seen;
 
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_create(&threads[(usize)i], NULL, test_one_shot_event_worker, &state) == 0);
+    assert(br_thread_create(&threads[(usize)i], test_one_shot_event_worker, &state) ==
+           BR_STATUS_OK);
   }
 
   test_spin_until_i32_eq(&waiting, THREAD_COUNT);
@@ -679,7 +674,7 @@ static void test_sync_one_shot_event_broadcast(void) {
   test_spin_until_i32_eq(&seen, THREAD_COUNT);
 
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_join(threads[(usize)i], NULL) == 0);
+    assert(br_thread_join(&threads[(usize)i], NULL) == BR_STATUS_OK);
   }
 }
 
@@ -687,7 +682,7 @@ static void test_sync_ticket_mutex(void) {
   enum { THREAD_COUNT = 4, ITERATIONS = 1000 };
   br_ticket_mutex mutex;
   test_ticket_state state;
-  pthread_t threads[THREAD_COUNT];
+  br_thread threads[THREAD_COUNT];
   br_atomic_i32 counter;
   br_atomic_i32 inside;
   br_atomic_bool start;
@@ -704,30 +699,26 @@ static void test_sync_ticket_mutex(void) {
   state.iterations = ITERATIONS;
 
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_create(&threads[(usize)i], NULL, test_ticket_worker, &state) == 0);
+    assert(br_thread_create(&threads[(usize)i], test_ticket_worker, &state) == BR_STATUS_OK);
   }
   br_atomic_store_explicit(&start, true, BR_ATOMIC_RELEASE);
   for (i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_join(threads[(usize)i], NULL) == 0);
+    assert(br_thread_join(&threads[(usize)i], NULL) == BR_STATUS_OK);
   }
 
   assert(br_atomic_load_explicit(&counter, BR_ATOMIC_RELAXED) == THREAD_COUNT * ITERATIONS);
   assert(br_atomic_load_explicit(&inside, BR_ATOMIC_RELAXED) == 0);
 }
-#endif
 
 int main(void) {
   test_sync_mutex_and_guard();
   test_sync_recursive_mutex();
-#if !defined(_WIN32)
   test_sync_zero_value_public_primitives();
   test_sync_zero_value_extended_primitives();
   test_sync_zero_value_cond_signal();
   test_sync_zero_value_sema();
   test_sync_sema_init_with_count();
-#endif
   test_sync_once_basic();
-#if !defined(_WIN32)
   test_sync_cond_signal();
   test_sync_cond_broadcast();
   test_sync_cond_wait_with_timeout();
@@ -745,6 +736,5 @@ int main(void) {
   test_sync_one_shot_event_pre_signal();
   test_sync_one_shot_event_broadcast();
   test_sync_ticket_mutex();
-#endif
   return 0;
 }

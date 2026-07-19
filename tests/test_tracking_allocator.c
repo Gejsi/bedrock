@@ -169,9 +169,6 @@ static void test_tracking_allocator_many_allocations(void) {
   br_tracking_allocator_destroy(&tracking);
 }
 
-#if !defined(_WIN32)
-#include <pthread.h>
-
 #define TEST_TRACKING_THREAD_COUNT 4u
 #define TEST_TRACKING_ITERATIONS 1000u
 
@@ -200,7 +197,7 @@ static usize test_tracking_expected_bytes_per_thread(void) {
   return total;
 }
 
-static void *test_tracking_allocator_worker(void *ctx) {
+static int test_tracking_allocator_worker(void *ctx) {
   test_tracking_allocator_thread *thread = (test_tracking_allocator_thread *)ctx;
 
   test_tracking_spin_until_bool(thread->start, true);
@@ -213,7 +210,7 @@ static void *test_tracking_allocator_worker(void *ctx) {
     assert(br_allocator_free(thread->allocator, allocation.ptr, allocation.size) == BR_STATUS_OK);
   }
 
-  return NULL;
+  return 0;
 }
 
 static void test_tracking_allocator_serializes_state(void) {
@@ -221,7 +218,7 @@ static void test_tracking_allocator_serializes_state(void) {
   br_allocator allocator;
   br_atomic_bool start;
   test_tracking_allocator_thread thread;
-  pthread_t threads[TEST_TRACKING_THREAD_COUNT];
+  br_thread threads[TEST_TRACKING_THREAD_COUNT];
   usize expected_bytes = test_tracking_expected_bytes_per_thread() * TEST_TRACKING_THREAD_COUNT;
 
   br_tracking_allocator_init(&tracking, br_allocator_heap(), br_allocator_heap());
@@ -231,13 +228,13 @@ static void test_tracking_allocator_serializes_state(void) {
   thread.start = &start;
 
   for (usize i = 0u; i < TEST_TRACKING_THREAD_COUNT; ++i) {
-    assert(pthread_create(&threads[i], NULL, test_tracking_allocator_worker, &thread) == 0);
+    assert(br_thread_create(&threads[i], test_tracking_allocator_worker, &thread) == BR_STATUS_OK);
   }
 
   br_atomic_store_explicit(&start, true, BR_ATOMIC_RELEASE);
 
   for (usize i = 0u; i < TEST_TRACKING_THREAD_COUNT; ++i) {
-    assert(pthread_join(threads[i], NULL) == 0);
+    assert(br_thread_join(&threads[i], NULL) == BR_STATUS_OK);
   }
 
   assert(tracking.entry_count == 0u);
@@ -252,7 +249,6 @@ static void test_tracking_allocator_serializes_state(void) {
 
   br_tracking_allocator_destroy(&tracking);
 }
-#endif
 
 int main(void) {
   test_tracking_allocator_stats();
@@ -261,8 +257,6 @@ int main(void) {
   test_tracking_allocator_clear_and_reset();
   test_tracking_allocator_index_updates();
   test_tracking_allocator_many_allocations();
-#if !defined(_WIN32)
   test_tracking_allocator_serializes_state();
-#endif
   return 0;
 }

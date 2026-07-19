@@ -3,8 +3,8 @@
 
 #include <bedrock.h>
 
+/* fork/SIGSEGV guard-page death test, POSIX-only — not thread gating. */
 #if !defined(_WIN32)
-#include <pthread.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -362,6 +362,7 @@ static void test_virtual_arena_overflow_protection(void) {
   br_virtual_arena_destroy(&arena);
 }
 
+/* fork/SIGSEGV death test, POSIX-only — not thread gating; do not drop. */
 #if !defined(_WIN32)
 /*
 Prove the overflow-protection guard page actually faults on an out-of-bounds
@@ -432,6 +433,7 @@ static void test_virtual_arena_guard_page_faults(void) {
 
   br_virtual_arena_destroy(&arena);
 }
+#endif /* !defined(_WIN32): end of the POSIX-only guard-page death test */
 
 #define TEST_VIRTUAL_ARENA_THREAD_COUNT 4u
 #define TEST_VIRTUAL_ARENA_ITERATIONS 128u
@@ -448,7 +450,7 @@ static void test_virtual_arena_spin_until_bool(const br_atomic_bool *value, bool
   }
 }
 
-static void *test_virtual_arena_worker(void *ctx) {
+static int test_virtual_arena_worker(void *ctx) {
   test_virtual_arena_thread *thread = (test_virtual_arena_thread *)ctx;
 
   test_virtual_arena_spin_until_bool(thread->start, true);
@@ -461,14 +463,14 @@ static void *test_virtual_arena_worker(void *ctx) {
     memset(allocation.ptr, (u8)i, allocation.size);
   }
 
-  return NULL;
+  return 0;
 }
 
 static void test_virtual_arena_serializes_allocations(void) {
   br_virtual_arena arena;
   br_atomic_bool start;
   test_virtual_arena_thread thread;
-  pthread_t threads[TEST_VIRTUAL_ARENA_THREAD_COUNT];
+  br_thread threads[TEST_VIRTUAL_ARENA_THREAD_COUNT];
   usize page_size = br_vm_page_size();
   usize expected_used =
     TEST_VIRTUAL_ARENA_THREAD_COUNT * TEST_VIRTUAL_ARENA_ITERATIONS * TEST_VIRTUAL_ARENA_ALLOC_SIZE;
@@ -491,13 +493,13 @@ static void test_virtual_arena_serializes_allocations(void) {
   thread.start = &start;
 
   for (usize i = 0u; i < TEST_VIRTUAL_ARENA_THREAD_COUNT; ++i) {
-    assert(pthread_create(&threads[i], NULL, test_virtual_arena_worker, &thread) == 0);
+    assert(br_thread_create(&threads[i], test_virtual_arena_worker, &thread) == BR_STATUS_OK);
   }
 
   br_atomic_store_explicit(&start, true, BR_ATOMIC_RELEASE);
 
   for (usize i = 0u; i < TEST_VIRTUAL_ARENA_THREAD_COUNT; ++i) {
-    assert(pthread_join(threads[i], NULL) == 0);
+    assert(br_thread_join(&threads[i], NULL) == BR_STATUS_OK);
   }
 
   assert(arena.total_used == expected_used);
@@ -505,7 +507,6 @@ static void test_virtual_arena_serializes_allocations(void) {
 
   br_virtual_arena_destroy(&arena);
 }
-#endif
 
 int main(void) {
   test_vm_reserve_commit_release();
@@ -519,9 +520,10 @@ int main(void) {
   test_virtual_arena_lazy_mark_rewind();
   test_virtual_arena_lazy_temp();
   test_virtual_arena_overflow_protection();
+  test_virtual_arena_serializes_allocations();
+  /* fork/SIGSEGV death test, POSIX-only — not thread gating. */
 #if !defined(_WIN32)
   test_virtual_arena_guard_page_faults();
-  test_virtual_arena_serializes_allocations();
 #endif
   return 0;
 }

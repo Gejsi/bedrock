@@ -36,9 +36,6 @@ static void test_mutex_allocator_forwards_reset(void) {
   assert(arena.offset == 0u);
 }
 
-#if !defined(_WIN32)
-#include <pthread.h>
-
 typedef struct test_mutex_allocator_backing {
   br_allocator backing;
   br_atomic_i32 inside;
@@ -76,7 +73,7 @@ static br_alloc_result test_mutex_allocator_backing_fn(void *ctx, const br_alloc
   return result;
 }
 
-static void *test_mutex_allocator_worker(void *ctx) {
+static int test_mutex_allocator_worker(void *ctx) {
   test_mutex_allocator_thread *thread = (test_mutex_allocator_thread *)ctx;
 
   test_spin_until_bool(thread->start, true);
@@ -88,7 +85,7 @@ static void *test_mutex_allocator_worker(void *ctx) {
     assert(br_allocator_free(thread->allocator, allocation.ptr, allocation.size) == BR_STATUS_OK);
   }
 
-  return NULL;
+  return 0;
 }
 
 static void test_mutex_allocator_serializes_backing_calls(void) {
@@ -99,7 +96,7 @@ static void test_mutex_allocator_serializes_backing_calls(void) {
   br_allocator allocator;
   br_atomic_bool start;
   test_mutex_allocator_thread thread;
-  pthread_t threads[THREAD_COUNT];
+  br_thread threads[THREAD_COUNT];
 
   backing.backing = br_allocator_heap();
   br_atomic_init(&backing.inside, 0);
@@ -115,26 +112,24 @@ static void test_mutex_allocator_serializes_backing_calls(void) {
   thread.iterations = ITERATIONS;
 
   for (i32 i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_create(&threads[(usize)i], NULL, test_mutex_allocator_worker, &thread) == 0);
+    assert(br_thread_create(&threads[(usize)i], test_mutex_allocator_worker, &thread) ==
+           BR_STATUS_OK);
   }
 
   br_atomic_store_explicit(&start, true, BR_ATOMIC_RELEASE);
 
   for (i32 i = 0; i < THREAD_COUNT; ++i) {
-    assert(pthread_join(threads[(usize)i], NULL) == 0);
+    assert(br_thread_join(&threads[(usize)i], NULL) == BR_STATUS_OK);
   }
 
   assert(br_atomic_load_explicit(&backing.inside, BR_ATOMIC_ACQUIRE) == 0);
   assert(br_atomic_load_explicit(&backing.calls, BR_ATOMIC_ACQUIRE) ==
          THREAD_COUNT * ITERATIONS * 2);
 }
-#endif
 
 int main(void) {
   test_mutex_allocator_default_backing();
   test_mutex_allocator_forwards_reset();
-#if !defined(_WIN32)
   test_mutex_allocator_serializes_backing_calls();
-#endif
   return 0;
 }
