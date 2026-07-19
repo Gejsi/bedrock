@@ -8,7 +8,8 @@ BR_EXTERN_C_BEGIN
 /*
 Portable low-level memory helpers: a thin, standard-C-typed layer over the C
 library memory routines. All helpers take `void *`/`size_t` and are header-only
-because each is a single wrapper over `<string.h>`.
+because each is a single wrapper over `<string.h>`. Pointer-arithmetic and
+runtime-layout helpers are deliberately out of scope for this module.
 */
 
 /*
