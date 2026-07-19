@@ -36,12 +36,9 @@ jobs:
       - uses: actions/checkout@v4
       - run: make MODE=${{ matrix.mode }} test
 
-  # First real Windows exercise of the codebase; non-blocking until proven
-  # green, then this job should lose continue-on-error.
   test-windows:
-    name: windows (debug, informational)
+    name: windows (debug)
     runs-on: windows-latest
-    continue-on-error: true
     defaults:
       run:
         shell: msys2 {0}
