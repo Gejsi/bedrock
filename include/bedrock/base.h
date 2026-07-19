@@ -32,7 +32,8 @@ typedef enum br_status {
   BR_STATUS_SHORT_BUFFER,
   BR_STATUS_BUFFER_FULL,
   BR_STATUS_NO_PROGRESS,
-  BR_STATUS_INVALID_ENCODING
+  BR_STATUS_INVALID_ENCODING,
+  BR_STATUS_OUT_OF_RANGE
 } br_status;
 
 static inline bool br_is_power_of_two_size(size_t value) {

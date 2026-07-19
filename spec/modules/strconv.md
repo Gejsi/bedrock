@@ -193,6 +193,10 @@ into the reserved tail; advance length by `result.count`.
   witness; see `tracking/odin-suspected-bugs.md`.
 - Typed `br_float_format` enum + `_f32`/`_f64` pairs replace Odin's fmt byte +
   int bit_size.
+- Float format emits a sign only for negative values; Odin's `generic_ftoa`
+  always emits a leading `+` for positives. Bedrock's `-`-only output matches
+  Go/C and the parse round-trip contract (`format` output re-parses to the same
+  value without a stray leading `+`).
 - Locale independence stated as a property (deviation from C `strtod`, not Odin).
 - No `Append*` family; quote/unquote deferred; f16 excluded.
 - Algorithm: fixed-buffer decimal; Bedrock DECLINES Rust's Eisel-Lemire/Grisu3

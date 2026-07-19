@@ -478,3 +478,23 @@ Current Bedrock files:
 | duration round/truncate helpers | `planned` | none | Small self-contained helpers, but not needed for sync timeout wiring. |
 | stopwatch helpers | `planned` | none | Not needed for sync timeouts. |
 | datetime/timezone/RFC3339/ISO8601 | `planned` | none | Larger independent slices; do not pull into timeout work. |
+
+## `core/strconv`
+
+Current label: `adapted`
+
+Current Bedrock files:
+- `include/bedrock/strconv.h` (module umbrella)
+- `include/bedrock/strconv/strconv.h`
+- `src/strconv/internal.h`, `src/strconv/decimal.c`, `src/strconv/parse.c`,
+  `src/strconv/format.c`
+- `tests/test_strconv.c`, `tests/data/{testfp,atof1k,ftoa1k}.txt`,
+  `tests/data/LICENSE-go`
+
+| Odin area | Status | Bedrock coverage | Notes |
+| --- | --- | --- | --- |
+| decimal engine (`strconv/decimal`) | `adapted` | `src/strconv/decimal.c` | Fixed `[384]`-digit multiprecision decimal ported from Odin's `decimal` + `generic_float`, parameterized by `br__float_info` (f32/f64). No bignum/heap/tables. |
+| int parse (`atoi`/`parse_int`/`parse_uint`) | `adapted` | `parse.c` | Strict `br_parse_i64`/`_u64` + `_prefix`; base 0/2..36; i32/u32 narrowing wrappers. Deviations: strict-by-default; base 2..36 superset over Odin's `assert(base<=16)`; base-0 recognizes `0x`/`0o`/`0b` only (Odin's `0d`/`0z` dropped); no underscore separators; bad base returns `INVALID_ARGUMENT` (no panic); overflow saturates with `OUT_OF_RANGE`; `br_parse_u64` rejects a sign. |
+| float parse (`parse_f64`/`parse_f32`) | `adapted` | `parse.c`, `decimal.c` | Native f32 rounding via `decimal_to_float_bits(&d,&br__f32_info)` — NOT f64-then-narrow (fixes Odin's double-rounding bug, `tracking/odin-suspected-bugs.md`); verified by the `1.00000017881393432617187499` -> `0x3f800001` witness. Case-insensitive inf/infinity/nan. |
+| int/bool/float format (`generic_ftoa`, `write_*`) | `adapted` | `format.c` | int (all bases), bool, and f32/f64 in shortest/decimal/exponent/general. Deviations: typed `br_float_format` enum + `_f32`/`_f64` pairs (not fmt byte + bit_size); never-truncate (`SHORT_BUFFER`, count 0); negative prec in non-shortest is `INVALID_ARGUMENT`; `*_SHORTEST_MAX` macros are shortest-only, other modes size via `br_format_f*_bound` (clamped so a pathological prec cannot overflow). No leading `+` on positive values. |
+| `quote`/`unquote`, `Append*` family, f16 | `excluded`/`planned` | none | `Append*` dropped (into-buffer + builder cover it); quote/unquote deferred to the `ini` consumer; f16 excluded (no standard C type). Eisel-Lemire/Grisu3 fast paths deliberately declined for exact-shortest at minimal code cost. |

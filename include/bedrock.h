@@ -15,5 +15,6 @@
 #include <bedrock/encoding.h>
 #include <bedrock/path.h>
 #include <bedrock/math.h>
+#include <bedrock/strconv.h>
 
 #endif

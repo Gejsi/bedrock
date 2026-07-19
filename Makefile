@@ -159,6 +159,14 @@ $(BIN_DIR)/test_no_short_types: $(TEST_DIR)/test_no_short_types.c $(LIB_TARGET)
 	@mkdir -p $(dir $@)
 	$(CC) -DBEDROCK_NO_SHORT_TYPES $(CPPFLAGS) $(TEST_CFLAGS) $(DEPFLAGS) -MF $@.d -MT $@ $< $(LIB_TARGET) $(LDFLAGS) -o $@
 
+# The strconv test locates its vendored Paxson vectors through BR_TEST_DATA_DIR
+# (an absolute path, so the test binary finds them regardless of run directory)
+# and uses libm (ldexp/strtof/strtod) purely as a correctly-rounded test oracle.
+STRCONV_TEST_DATA_DIR := $(abspath $(TEST_DIR)/data)
+$(BIN_DIR)/test_strconv: $(TEST_DIR)/test_strconv.c $(LIB_TARGET)
+	@mkdir -p $(dir $@)
+	$(CC) -DBR_TEST_DATA_DIR='"$(STRCONV_TEST_DATA_DIR)"' $(CPPFLAGS) $(TEST_CFLAGS) $(DEPFLAGS) -MF $@.d -MT $@ $< $(LIB_TARGET) $(LDFLAGS) -lm -o $@
+
 test: $(TEST_BINS)
 	@set -e; \
 	for test_bin in $(TEST_BINS); do \
