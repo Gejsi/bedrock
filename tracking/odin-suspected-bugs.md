@@ -2,6 +2,9 @@
 
 Concise notes for issues found while porting Odin code to Bedrock.
 
+All four issues below were verified still present in upstream Odin at
+`2c25fb9` (July 19, 2026).
+
 ## `core/mem` stack allocator resize
 
 - File: `core/mem/allocators.odin`

@@ -6,8 +6,11 @@ describing it with vague labels.
 The comparison target is the Odin checkout currently pinned in
 `upstream/odin/` on July 19, 2026 (`2c25fb9`).
 
-Note: the statuses below were last audited against the April 13, 2026 pin
-(`ecbb204`). A delta review against the current pin is pending.
+Note: the `ecbb204..2c25fb9` delta was audited on July 19, 2026. The only
+substantive divergence found: Odin's `Dynamic_Arena` now supports per-request
+alignment (Bedrock fix queued). Odin's virtual `reserve` also gained an
+optional address hint (not exposed in Bedrock yet; intentional for now). All
+other changes were annotations, docs, or dropped Haiku/Essence backends.
 
 ## Status Legend
 
