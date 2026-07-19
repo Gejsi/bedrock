@@ -7,3 +7,6 @@
 [submodule "upstream/go"]
 	path = upstream/go
 	url = https://github.com/golang/go
+[submodule "upstream/zig"]
+	path = upstream/zig
+	url = https://codeberg.org/ziglang/zig
