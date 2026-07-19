@@ -187,6 +187,63 @@ br_string_view_list_result
 br_string_split_after_n(br_string_view s, br_string_view sep, ptrdiff_t n, br_allocator allocator);
 
 /*
+Allocation-free split iterator.
+
+`br_string_split_iter` is a caller-owned cursor advanced by
+`br_string_split_iter_next`. Each call writes the next field through `out` and
+returns true; at the end it returns false and leaves `out` unmodified, so
+callers must check the return before reading `out`.
+
+The iterator yields exactly the sequence `br_string_split` would produce for the
+same `(s, sep)`, element for element -- the allocation-free form of the split
+list. It KEEPS the trailing empty field and yields one empty field when
+iterating an empty input against a non-empty separator, deviating from Odin's
+`split_iterator` (which drops the trailing empty). Callers wanting empties
+skipped use `br_string_fields`. An empty separator walks one UTF-8 rune per step.
+
+`br_string_split_after_iter_next` keeps each field's trailing separator,
+mirroring `br_string_split_after`.
+*/
+typedef struct br_string_split_iter {
+  br_string_view rest;
+  br_string_view sep;
+  bool done;
+} br_string_split_iter;
+
+static inline br_string_split_iter br_string_split_iter_make(br_string_view s, br_string_view sep) {
+  br_string_split_iter it;
+
+  it.rest = s;
+  it.sep = sep;
+  it.done = false;
+  return it;
+}
+
+bool br_string_split_iter_next(br_string_split_iter *it, br_string_view *out);
+bool br_string_split_after_iter_next(br_string_split_iter *it, br_string_view *out);
+
+/*
+Allocation-free fields iterator.
+
+`br_string_fields_iter` is a caller-owned cursor advanced by
+`br_string_fields_iter_next`, yielding each ASCII-whitespace-separated field in
+order. It never yields empty fields, matching `br_string_fields`. Returns false
+and leaves `out` unmodified once the input is exhausted.
+*/
+typedef struct br_string_fields_iter {
+  br_string_view rest;
+} br_string_fields_iter;
+
+static inline br_string_fields_iter br_string_fields_iter_make(br_string_view s) {
+  br_string_fields_iter it;
+
+  it.rest = s;
+  return it;
+}
+
+bool br_string_fields_iter_next(br_string_fields_iter *it, br_string_view *out);
+
+/*
 Replace up to `n` occurrences of `old_string` with `new_string`.
 
 If no rewrite is needed, `allocated` will be false and `value` will alias the

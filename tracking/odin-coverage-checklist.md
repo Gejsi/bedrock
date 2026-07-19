@@ -146,7 +146,7 @@ Current Bedrock files:
 | `bytes.Reader` `io` adapters | `adapted` | `bytes/reader.h`, `bytes/reader.c` | Exposed as a generic stream with read/read_at/seek/size/query support. |
 | predicate / proc-based scans and trims | `planned` | none | `index_proc`, `trim_left_proc`, etc. not started. |
 | trim cutset / trim_space / trim_null | `planned` | none | Not started. |
-| split iterators / split_multi / fields | `planned` | none | Not started. |
+| split iterators / split_multi / fields | `adapted` | `strings.h`, `strings.c`, `bytes.h`, `bytes.c` | Allocation-free split iterator landed as a caller-owned cursor struct (`br_*_split_iter` + `_next` / `_split_after_iter_next`), plus a strings fields iterator. The iterator yields the split LIST element-for-element (keeps trailing empties and yields one empty field for empty-input-with-separator) — a documented deviation from Odin's `split_iterator`, which drops the trailing empty; `fields`/the fields iterator are the skip-empties path. `split_multi` not started. |
 | partition / alias helpers | `planned` | none | Not started. |
 | reverse / scrub / expand_tabs / justify | `excluded` | none | Struck July 19, 2026 pre-port (see cut list): niche text-processing surface. |
 

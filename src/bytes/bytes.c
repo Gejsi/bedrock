@@ -667,6 +667,61 @@ br_bytes_split_after_n(br_bytes_view s, br_bytes_view sep, isize n, br_allocator
   return br__bytes_split_impl(s, sep, sep.len, n, allocator);
 }
 
+/* Produce the next split field, matching br__bytes_split_impl element-for-element.
+   `sep_save` is 0 for split (drop the separator) or sep.len for split_after
+   (keep it on the field). Returns false once the final remainder has been
+   yielded, leaving `out` untouched. */
+static bool br__bytes_split_iter_step(br_bytes_split_iter *it, usize sep_save, br_bytes_view *out) {
+  if (it->done) {
+    return false;
+  }
+
+  if (it->sep.len == 0u) {
+    /* Empty separator: one rune per step; an empty remainder ends iteration. */
+    br_utf8_decode_result decoded;
+
+    if (it->rest.len == 0u) {
+      it->done = true;
+      return false;
+    }
+    decoded = br_utf8_decode(it->rest);
+    if (decoded.width == 0u) {
+      it->done = true;
+      return false;
+    }
+    *out = br_bytes_view_make(it->rest.data, decoded.width);
+    it->rest = br_bytes_view_make(it->rest.data + decoded.width, it->rest.len - decoded.width);
+    if (it->rest.len == 0u) {
+      it->done = true;
+    }
+    return true;
+  }
+
+  {
+    isize split_at = br_bytes_index(it->rest, it->sep);
+
+    if (split_at < 0) {
+      /* No more separators: emit the final remainder, then stop. */
+      *out = it->rest;
+      it->done = true;
+      return true;
+    }
+
+    *out = br_bytes_view_make(it->rest.data, (usize)split_at + sep_save);
+    it->rest = br_bytes_view_make(it->rest.data + (usize)split_at + it->sep.len,
+                                  it->rest.len - ((usize)split_at + it->sep.len));
+    return true;
+  }
+}
+
+bool br_bytes_split_iter_next(br_bytes_split_iter *it, br_bytes_view *out) {
+  return br__bytes_split_iter_step(it, 0u, out);
+}
+
+bool br_bytes_split_after_iter_next(br_bytes_split_iter *it, br_bytes_view *out) {
+  return br__bytes_split_iter_step(it, it->sep.len, out);
+}
+
 br_bytes_rewrite_result br_bytes_replace(br_bytes_view s,
                                          br_bytes_view old_bytes,
                                          br_bytes_view new_bytes,

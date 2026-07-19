@@ -407,6 +407,80 @@ br_string_view_list_result br_string_fields(br_string_view s, br_allocator alloc
   return br__string_view_list_result(parts, part_index, BR_STATUS_OK);
 }
 
+/* Produce the next split field, matching br__string_split_impl element-for-element.
+   `sep_save` is 0 for split or sep.len for split_after. Returns false once the
+   final remainder has been yielded, leaving `out` untouched. */
+static bool
+br__string_split_iter_step(br_string_split_iter *it, usize sep_save, br_string_view *out) {
+  if (it->done) {
+    return false;
+  }
+
+  if (it->sep.len == 0u) {
+    br_utf8_decode_result decoded;
+
+    if (it->rest.len == 0u) {
+      it->done = true;
+      return false;
+    }
+    decoded = br_utf8_decode(br_string_view_as_bytes(it->rest));
+    if (decoded.width == 0u) {
+      it->done = true;
+      return false;
+    }
+    *out = br_string_view_make(it->rest.data, decoded.width);
+    it->rest = br_string_view_make(it->rest.data + decoded.width, it->rest.len - decoded.width);
+    if (it->rest.len == 0u) {
+      it->done = true;
+    }
+    return true;
+  }
+
+  {
+    isize split_at = br_string_index(it->rest, it->sep);
+
+    if (split_at < 0) {
+      *out = it->rest;
+      it->done = true;
+      return true;
+    }
+
+    *out = br_string_view_make(it->rest.data, (usize)split_at + sep_save);
+    it->rest = br_string_view_make(it->rest.data + (usize)split_at + it->sep.len,
+                                   it->rest.len - ((usize)split_at + it->sep.len));
+    return true;
+  }
+}
+
+bool br_string_split_iter_next(br_string_split_iter *it, br_string_view *out) {
+  return br__string_split_iter_step(it, 0u, out);
+}
+
+bool br_string_split_after_iter_next(br_string_split_iter *it, br_string_view *out) {
+  return br__string_split_iter_step(it, it->sep.len, out);
+}
+
+bool br_string_fields_iter_next(br_string_fields_iter *it, br_string_view *out) {
+  usize i = 0u;
+  usize start;
+
+  while (i < it->rest.len && br__string_byte_is_ascii_space(it->rest.data[i])) {
+    i += 1u;
+  }
+  if (i >= it->rest.len) {
+    it->rest = br_string_view_make(it->rest.data + it->rest.len, 0u);
+    return false;
+  }
+
+  start = i;
+  while (i < it->rest.len && !br__string_byte_is_ascii_space(it->rest.data[i])) {
+    i += 1u;
+  }
+  *out = br_string_view_make(it->rest.data + start, i - start);
+  it->rest = br_string_view_make(it->rest.data + i, it->rest.len - i);
+  return true;
+}
+
 br_string_rewrite_result br_string_replace(br_string_view s,
                                            br_string_view old_string,
                                            br_string_view new_string,

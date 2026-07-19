@@ -359,6 +359,77 @@ static void test_bytes_fields(void) {
   assert(r.status == BR_STATUS_OUT_OF_MEMORY);
 }
 
+/* Assert the split iterator yields exactly the split-list elements for the same
+   (s, sep) -- the core "iterator is the allocation-free list" contract. */
+static void assert_split_iter_matches_list(br_bytes_view s, br_bytes_view sep) {
+  br_bytes_view_list_result list = br_bytes_split(s, sep, br_allocator_heap());
+  br_bytes_split_iter it = br_bytes_split_iter_make(s, sep);
+  br_bytes_view piece;
+  usize i = 0u;
+
+  assert(list.status == BR_STATUS_OK);
+  while (br_bytes_split_iter_next(&it, &piece)) {
+    assert(i < list.value.len);
+    assert(br_bytes_equal(piece, list.value.data[i]));
+    i += 1u;
+  }
+  assert(i == list.value.len);
+  assert(br_bytes_view_list_free(list.value, br_allocator_heap()) == BR_STATUS_OK);
+}
+
+static void test_bytes_split_iter(void) {
+  br_bytes_split_iter it;
+  br_bytes_view piece;
+
+  /* List-equivalence across the tricky cases, including trailing/empty. */
+  assert_split_iter_matches_list(BR_BYTES_LIT("a,b,c"), BR_BYTES_LIT(","));
+  assert_split_iter_matches_list(BR_BYTES_LIT("a,"), BR_BYTES_LIT(","));   /* trailing empty kept */
+  assert_split_iter_matches_list(BR_BYTES_LIT(",a"), BR_BYTES_LIT(","));   /* leading empty */
+  assert_split_iter_matches_list(BR_BYTES_LIT("a,,b"), BR_BYTES_LIT(",")); /* middle empty */
+  assert_split_iter_matches_list(BR_BYTES_LIT(""), BR_BYTES_LIT(","));     /* one empty field */
+  assert_split_iter_matches_list(BR_BYTES_LIT("no-sep"), BR_BYTES_LIT(","));
+
+  /* Empty input with a real separator yields exactly one empty field, then stops. */
+  it = br_bytes_split_iter_make(BR_BYTES_LIT(""), BR_BYTES_LIT(","));
+  assert(br_bytes_split_iter_next(&it, &piece));
+  assert(piece.len == 0u);
+  assert(!br_bytes_split_iter_next(&it, &piece));
+
+  /* next() leaves out untouched on false: sentinel must survive. */
+  {
+    br_bytes_view sentinel = BR_BYTES_LIT("SENTINEL");
+    piece = sentinel;
+    it = br_bytes_split_iter_make(BR_BYTES_LIT("x"), BR_BYTES_LIT(","));
+    assert(br_bytes_split_iter_next(&it, &piece));    /* "x" */
+    assert(!br_bytes_split_iter_next(&it, &piece));   /* end */
+    assert(br_bytes_equal(piece, BR_BYTES_LIT("x"))); /* unchanged from the last true */
+  }
+
+  /* split_after keeps the trailing separator on each piece. */
+  it = br_bytes_split_iter_make(BR_BYTES_LIT("a,b,"), BR_BYTES_LIT(","));
+  assert(br_bytes_split_after_iter_next(&it, &piece));
+  assert(br_bytes_equal(piece, BR_BYTES_LIT("a,")));
+  assert(br_bytes_split_after_iter_next(&it, &piece));
+  assert(br_bytes_equal(piece, BR_BYTES_LIT("b,")));
+  assert(br_bytes_split_after_iter_next(&it, &piece));
+  assert(br_bytes_equal(piece, BR_BYTES_LIT(""))); /* trailing empty after final sep */
+  assert(!br_bytes_split_after_iter_next(&it, &piece));
+
+  /* Empty separator walks one rune per step (U+00E9 is one 2-byte step). */
+  {
+    static const u8 input[] = {'a', 0xc3u, 0xa9u, 'b'};
+    it = br_bytes_split_iter_make(br_bytes_view_make(input, sizeof(input)),
+                                  br_bytes_view_make(NULL, 0u));
+    assert(br_bytes_split_iter_next(&it, &piece));
+    assert(br_bytes_equal(piece, BR_BYTES_LIT("a")));
+    assert(br_bytes_split_iter_next(&it, &piece));
+    assert(br_bytes_equal(piece, br_bytes_view_make(input + 1, 2u))); /* é */
+    assert(br_bytes_split_iter_next(&it, &piece));
+    assert(br_bytes_equal(piece, BR_BYTES_LIT("b")));
+    assert(!br_bytes_split_iter_next(&it, &piece));
+  }
+}
+
 int main(void) {
   test_bytes_compare_and_search();
   test_bytes_views();
@@ -368,5 +439,6 @@ int main(void) {
   test_bytes_case_conversion();
   test_bytes_trim();
   test_bytes_fields();
+  test_bytes_split_iter();
   return 0;
 }

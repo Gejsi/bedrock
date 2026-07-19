@@ -351,6 +351,75 @@ static void test_strings_prefix(void) {
   assert(br_string_equal(br_string_common_prefix(va, vb), br_string_view_make(a, 3u)));
 }
 
+static void assert_string_split_iter_matches_list(br_string_view s, br_string_view sep) {
+  br_string_view_list_result list = br_string_split(s, sep, br_allocator_heap());
+  br_string_split_iter it = br_string_split_iter_make(s, sep);
+  br_string_view piece;
+  usize i = 0u;
+
+  assert(list.status == BR_STATUS_OK);
+  while (br_string_split_iter_next(&it, &piece)) {
+    assert(i < list.value.len);
+    assert(br_string_equal(piece, list.value.data[i]));
+    i += 1u;
+  }
+  assert(i == list.value.len);
+  assert(br_string_view_list_free(list.value, br_allocator_heap()) == BR_STATUS_OK);
+}
+
+static void test_strings_split_iter(void) {
+  br_string_split_iter it;
+  br_string_view piece;
+
+  assert_string_split_iter_matches_list(BR_STR_LIT("a,b,c"), BR_STR_LIT(","));
+  assert_string_split_iter_matches_list(BR_STR_LIT("a,"), BR_STR_LIT(","));
+  assert_string_split_iter_matches_list(BR_STR_LIT(""), BR_STR_LIT(","));
+  assert_string_split_iter_matches_list(BR_STR_LIT("a,,b"), BR_STR_LIT(","));
+
+  /* split_after keeps the separator. */
+  it = br_string_split_iter_make(BR_STR_LIT("k=v;"), BR_STR_LIT(";"));
+  assert(br_string_split_after_iter_next(&it, &piece));
+  assert(br_string_equal(piece, BR_STR_LIT("k=v;")));
+  assert(br_string_split_after_iter_next(&it, &piece));
+  assert(br_string_equal(piece, BR_STR_LIT("")));
+  assert(!br_string_split_after_iter_next(&it, &piece));
+}
+
+static void test_strings_fields_iter(void) {
+  br_string_fields_iter it = br_string_fields_iter_make(BR_STR_LIT("  the quick\tbrown "));
+  br_string_view field;
+
+  assert(br_string_fields_iter_next(&it, &field));
+  assert(br_string_equal(field, BR_STR_LIT("the")));
+  assert(br_string_fields_iter_next(&it, &field));
+  assert(br_string_equal(field, BR_STR_LIT("quick")));
+  assert(br_string_fields_iter_next(&it, &field));
+  assert(br_string_equal(field, BR_STR_LIT("brown")));
+  assert(!br_string_fields_iter_next(&it, &field));
+
+  /* All-whitespace and empty input yield nothing (fields never emits empties). */
+  it = br_string_fields_iter_make(BR_STR_LIT("   "));
+  assert(!br_string_fields_iter_next(&it, &field));
+  it = br_string_fields_iter_make(BR_STR_LIT(""));
+  assert(!br_string_fields_iter_next(&it, &field));
+
+  /* The fields iterator visits the same fields as br_string_fields. */
+  {
+    br_string_view s = BR_STR_LIT("a b  c");
+    br_string_view_list_result list = br_string_fields(s, br_allocator_heap());
+    usize i = 0u;
+
+    it = br_string_fields_iter_make(s);
+    while (br_string_fields_iter_next(&it, &field)) {
+      assert(i < list.value.len);
+      assert(br_string_equal(field, list.value.data[i]));
+      i += 1u;
+    }
+    assert(i == list.value.len);
+    assert(br_string_view_list_free(list.value, br_allocator_heap()) == BR_STATUS_OK);
+  }
+}
+
 int main(void) {
   test_strings_compare_and_search();
   test_strings_views();
@@ -364,5 +433,7 @@ int main(void) {
   test_strings_fields();
   test_strings_cut_substring();
   test_strings_prefix();
+  test_strings_split_iter();
+  test_strings_fields_iter();
   return 0;
 }

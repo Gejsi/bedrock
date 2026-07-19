@@ -162,6 +162,43 @@ br_bytes_view_list_result
 br_bytes_split_after_n(br_bytes_view s, br_bytes_view sep, ptrdiff_t n, br_allocator allocator);
 
 /*
+Allocation-free split iterator.
+
+`br_bytes_split_iter` is a caller-owned cursor advanced by
+`br_bytes_split_iter_next`. Each call writes the next field through `out` and
+returns true; when the input is exhausted it returns false and leaves `out`
+unmodified, so callers must check the return before reading `out`.
+
+The iterator yields exactly the sequence `br_bytes_split` would produce for the
+same `(s, sep)`, element for element -- it is the allocation-free form of the
+split list. In particular it KEEPS the trailing empty field (`"a,"` split on
+`","` yields `"a"` then `""`) and iterating an empty input against a non-empty
+separator yields one empty field. This deviates from Odin's `split_iterator`,
+which drops the trailing empty; callers wanting empties skipped use
+`br_bytes_fields`. An empty separator walks one UTF-8 rune per step.
+
+`br_bytes_split_after_iter_next` is the same iterator except each field keeps
+its trailing separator, mirroring `br_bytes_split_after`.
+*/
+typedef struct br_bytes_split_iter {
+  br_bytes_view rest;
+  br_bytes_view sep;
+  bool done;
+} br_bytes_split_iter;
+
+static inline br_bytes_split_iter br_bytes_split_iter_make(br_bytes_view s, br_bytes_view sep) {
+  br_bytes_split_iter it;
+
+  it.rest = s;
+  it.sep = sep;
+  it.done = false;
+  return it;
+}
+
+bool br_bytes_split_iter_next(br_bytes_split_iter *it, br_bytes_view *out);
+bool br_bytes_split_after_iter_next(br_bytes_split_iter *it, br_bytes_view *out);
+
+/*
 Replace up to `n` occurrences of `old_bytes` with `new_bytes`.
 
 If no rewrite is needed, `allocated` will be false and `value` will alias the
