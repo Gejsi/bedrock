@@ -255,9 +255,12 @@ Bedrock now also has a VM-backed arena layer. The intended v1 shape is:
 - explicit allocator adapters and rewind markers
 
 A zeroed `br_virtual_arena` is a ready-to-use empty growing arena: the first
-allocation lazily initializes it with default commit/block sizes (8 MiB commit,
-1 MiB minimum block), exactly as if `br_virtual_arena_init_growing` had been
-called. Callers may prefill `flags`, `default_commit_size`, or
+allocation lazily initializes it with the default sizes, exactly as if
+`br_virtual_arena_init_growing` had been called. The defaults are 1 MiB
+minimum blocks with the commit quantum clamped to the block size, so a fully
+defaulted arena reserves 1 MiB of address space and commits at most 1 MiB up
+front (and committed-but-untouched pages cost no physical memory on
+overcommitting platforms). Callers may prefill `flags`, `default_commit_size`, or
 `minimum_block_size` on the zeroed struct first; those are honored on first use.
 Savepoints and temp scopes also work from the empty state: a mark or temp
 captured on a never-used arena rewinds or ends back to empty, freeing every
