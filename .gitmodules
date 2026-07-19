@@ -4,3 +4,6 @@
 [submodule "upstream/rust"]
 	path = upstream/rust
 	url = https://github.com/rust-lang/rust.git
+[submodule "upstream/go"]
+	path = upstream/go
+	url = https://github.com/golang/go

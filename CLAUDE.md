@@ -2,10 +2,12 @@
 
 Odin-inspired C11 library meant to replace the awkward, underspecified, or
 missing parts of the C standard library. `upstream/odin` (git submodule) is the
-API and semantics reference; `upstream/rust` (sparse checkout, `library/` only)
-is a secondary implementation reference (see ADR-0002). Other runtimes (Go,
-musl, glibc, ...) are fair implementation references too — the API contract
-stays Odin's.
+API and semantics reference; `upstream/rust` (sparse, `library/` only;
+ADR-0002) and `upstream/go` (sparse, `src/` only; ADR-0005) are pinned
+implementation references — Go is the design ancestor for the encodings,
+slashpath, io/bufio, utf8, and bits surfaces and the source of their canonical
+test vectors. Other runtimes (musl, glibc, ...) are fair references too — the
+API contract stays Odin's.
 
 ## Read first
 
