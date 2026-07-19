@@ -3,5 +3,6 @@
 
 #include <bedrock/encoding/encoding.h>
 #include <bedrock/encoding/hex.h>
+#include <bedrock/encoding/endian.h>
 
 #endif

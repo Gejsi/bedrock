@@ -11,5 +11,6 @@
 #include <bedrock/bufio.h>
 #include <bedrock/sync.h>
 #include <bedrock/time.h>
+#include <bedrock/encoding.h>
 
 #endif
