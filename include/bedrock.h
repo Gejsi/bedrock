@@ -16,5 +16,6 @@
 #include <bedrock/path.h>
 #include <bedrock/math.h>
 #include <bedrock/strconv.h>
+#include <bedrock/rand.h>
 
 #endif
