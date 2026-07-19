@@ -249,7 +249,7 @@ Current Bedrock files:
 Summary:
 - `io` now exists as a real foundational module.
 - Bedrock now follows Odin's single-stream direction more closely than before.
-- The next growth area is further `bufio` expansion and scanner/lookahead work.
+- The next growth area is further `bufio` expansion and scanner work.
 
 ## `core/bufio`
 
@@ -259,21 +259,19 @@ Why this label:
 - Bedrock now has the main buffered reader and writer types plus a combined
   read-writer adapter.
 - The core buffered operations are present and tested.
-- Odin still has additional `bufio` surfaces like lookahead readers and
-  scanners that Bedrock has not started.
+- Odin still has additional `bufio` surfaces like the scanner that Bedrock has
+  not started. (The standalone lookahead reader was cut July 19, 2026 in favor
+  of `bufio.Reader`'s peek; see the cut-list decisions log.)
 
 Current Bedrock files:
 - `include/bedrock/bufio/common.h`
-- `include/bedrock/bufio/lookahead_reader.h`
 - `include/bedrock/bufio/reader.h`
 - `include/bedrock/bufio/writer.h`
 - `include/bedrock/bufio/read_writer.h`
-- `src/bufio/lookahead_reader.c`
 - `src/bufio/reader.c`
 - `src/bufio/writer.c`
 - `src/bufio/read_writer.c`
 - `tests/test_bufio.c`
-- `tests/test_bufio_lookahead.c`
 
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
@@ -290,7 +288,7 @@ Current Bedrock files:
 | `bufio.Writer` stream adapter | `adapted` | `bufio/writer.h`, `bufio/writer.c` | Exposed as a generic write/flush stream. |
 | `bufio.Writer` `read_from` | `adapted` | `bufio/writer.h`, `bufio/writer.c`, `test_bufio.c` | Landed; Bedrock currently always stages through the buffer because generic streams do not expose Odin's `read_from` specialization hook. |
 | `bufio.Read_Writer` | `adapted` | `bufio/read_writer.h`, `bufio/read_writer.c`, `test_bufio.c` | Landed as a tiny combined adapter. |
-| `lookahead_reader` | `adapted` | `bufio/lookahead_reader.h`, `bufio/lookahead_reader.c`, `test_bufio_lookahead.c` | Landed with explicit allocator-backed init options; exact-size semantics and EOF normalization match Odin. |
+| `lookahead_reader` | `cut` | none | Cut July 19, 2026 (cut-list decisions log): `bufio.Reader`'s peek/buffered/discard covers the peek story, and the wave-3 parser research confirmed no planned parser consumes a standalone lookahead reader. No external consumers at removal. |
 | `scanner` | `planned` | none | Not started. |
 
 Summary:
