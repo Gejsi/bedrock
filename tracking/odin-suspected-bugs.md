@@ -22,6 +22,14 @@ early termination or data loss). Internal list-vs-iterator inconsistency only.
 Bedrock's split iterator keeps trailing empties, matching its own list and
 Go's SplitSeq.
 
+Footnote (context-dependent, not a numbered bug): Odin's `thread_windows.odin`
+creates threads with raw `CreateThread` (:70) rather than `_beginthreadex`.
+For code that calls per-thread-state CRT functions (errno, strtok, locale)
+that risks CRT state corruption or per-thread CRT block leaks; Odin's own
+runtime may sidestep libc enough for this to be benign there, but a C library
+cannot — Bedrock's thread port must use `_beginthreadex` on the Windows path
+and deliberately not copy this.
+
 ## `core/mem` check_zero_ptr reads out of bounds
 
 - File: `core/mem/mem.odin`
