@@ -206,3 +206,21 @@ and deliberately not copy this.
 - Bedrock: `br_parse_f32` rounds natively at f32 precision through the shared
   parameterized decimal engine (never f64-then-narrow), gated by the Paxson
   f32 vectors (`spec/modules/strconv.md`).
+
+## `core/time/rfc3339` fractional seconds truncated to hundredths
+
+- File: `core/time/rfc3339/rfc3339.odin`
+- Area: timestamp parse, fractional-second component
+- Issue: the parser consumes only TWO fractional digits (hundredths),
+  computing nanoseconds as `10_000_000 * hundredths`; further fractional
+  digits in the input are silently dropped. Independently confirmed at source
+  by two reviewers during the Bedrock rfc3339 design (July 19, 2026).
+- Expected: RFC 3339 permits arbitrary fractional precision
+  (`time-secfrac = "." 1*DIGIT`); a nanosecond-resolution DateTime should
+  parse up to nine digits.
+- Effect: valid timestamps silently lose precision — ".123456789" parses as
+  ".12" with no error reported. Data-loss conformance defect, not memory
+  safety.
+- Bedrock: `br_rfc3339_parse` reads up to nine fractional digits into the
+  nanosecond field and accepts-but-ignores digits beyond nanosecond
+  resolution (documented), per `spec/modules/time.md`.
