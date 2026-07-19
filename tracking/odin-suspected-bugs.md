@@ -5,6 +5,22 @@ Concise notes for issues found while porting Odin code to Bedrock.
 All issues below were verified present in upstream Odin at `2c25fb9`
 (July 19, 2026).
 
+## `core/unicode/utf8` encode of out-of-range runes
+
+- File: `core/unicode/utf8/utf8.odin`
+- Area: `encode_rune`
+- Issue: for `i > 0x10ffff` the proc replaces `r` with U+FFFD but then sizes
+  the encoding using the ORIGINAL `i` (`if i <= 1<<16-1`), so it takes the
+  4-byte branch and emits `F0 8F BF BD`.
+- Expected: dispatch on the replaced rune (U+FFFD fits 3 bytes: `EF BF BD`).
+  Go's `AppendRune` gets this right via fallthrough into the 3-byte case; the
+  fallthrough semantics were lost in the port. Surrogates are unaffected
+  (they are <= 0xFFFF and take the 3-byte branch).
+- Effect: encoding any rune above U+10FFFF produces an invalid UTF-8 sequence
+  (F0 requires a second byte >= 0x90) that the package's own decoder rejects.
+- Bedrock: `br_utf8_encode` validates first and encodes the replacement rune,
+  emitting `EF BF BD`; locked by `tests/test_utf8.c`.
+
 ## `core/encoding/hex` decode leak on invalid input
 
 - File: `core/encoding/hex/hex.odin`
