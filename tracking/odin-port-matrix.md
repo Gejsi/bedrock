@@ -42,7 +42,8 @@ parser wave (csv/ini/scanner) are queued behind core completion.
 | `core/crypto/*` | exclude v1 | Large and security-sensitive. |
 | `core/compress/*` | exclude v1 | Valuable, but not core bootstrap material. |
 | `core/image/*` | exclude v1 | Large and specialized. |
-| `base/runtime`, `base/builtin`, `base/intrinsics` | exclude | Compiler/runtime substrate, not library surface. |
+| `base/runtime`, `base/builtin`, `base/intrinsics`, `base/sanitizer` | exclude | Compiler/runtime substrate, not library surface (`sanitizer` is Odin's ASan/TSan annotation bindings; C code talks to sanitizers directly via compiler flags, as Bedrock's build modes already do). |
+| `vendor/*` (raylib, sdl, stb, ...) | exclude | Third-party library bindings, not stdlib surface — a C consumer uses those libraries directly. Never port material. |
 | `core/c/libc` | reference only | Useful as compatibility/reference material, not the main target. |
 
 ## Complete core/ enumeration (July 19, 2026)
