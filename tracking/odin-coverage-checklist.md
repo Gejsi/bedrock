@@ -404,6 +404,19 @@ Current Bedrock files:
 | `path/slashpath` | `adapted` | `path/slashpath.h`, `src/path/slashpath.c` | Full surface (clean/dir/base/ext/name/split/split_elements/join/match). Deviations per spec/modules/path.md: rewrite-result aliasing (no clone when already clean, improving on Odin's Lazy_Buffer), match follows Go's malformed-pattern validation that Odin's port dropped (suspected upstream bug, verification pending), match errors are BR_STATUS_INVALID_ARGUMENT. Test suite ports Go's path vectors including all 56 match tests; upstream Odin has none. |
 | `path/filepath` | `excluded` | none | Not requested; `br_path_` stays reserved. |
 
+## `core/math`
+
+Current label: `bits v1`
+
+Current Bedrock files:
+- `include/bedrock/math.h` (module umbrella)
+- `include/bedrock/math/bits.h`, `src/math/bits.c`
+- `tests/test_bits.c`
+
+| Odin area | Status | Bedrock coverage | Notes |
+| --- | --- | --- | --- |
+| `math/bits` | `adapted` | `math/bits.h`, `src/math/bits.c` | Full fixed-width surface (counts/scans/bit_width/rotate/reverse/byteswap/power-of-two/add-sub-mul-div/bitfields) on the three-tier scheme (C23 stdbit.h, compiler builtins, portable fallback) with a force-fallback differential harness. Deviations per spec/modules/math.md: total zero-input contracts (clz/ctz(0) = width), no standalone log2, bool carries, div returns a status and never panics, no u128/word-size variants, byte-order conversion lives in encoding/endian. The differential harness caught a signed-overflow UB in the portable ctz on its first run (fixed; recorded in the spec). |
+
 ## `core/time`
 
 Current Bedrock files:
