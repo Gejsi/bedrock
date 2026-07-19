@@ -88,7 +88,8 @@ typedef enum br_status {
   BR_STATUS_SHORT_WRITE,
   BR_STATUS_SHORT_BUFFER,
   BR_STATUS_BUFFER_FULL,
-  BR_STATUS_NO_PROGRESS
+  BR_STATUS_NO_PROGRESS,
+  BR_STATUS_INVALID_ENCODING
 } br_status;
 
 static inline bool br_is_power_of_two_size(size_t value) {
@@ -3171,6 +3172,453 @@ them as scoped block macros because C has no equivalent built-in construct.
 
 #endif
 
+/* ==== bedrock/encoding.h ==== */
+#ifndef BEDROCK_ENCODING_H
+#define BEDROCK_ENCODING_H
+
+/* ==== bedrock/encoding/encoding.h ==== */
+#ifndef BEDROCK_ENCODING_ENCODING_H
+#define BEDROCK_ENCODING_ENCODING_H
+
+
+BR_EXTERN_C_BEGIN
+
+/*
+Result of an allocating decode.
+
+`value` is owned by the caller and must be freed with `br_bytes_free`. On any
+failure it is empty (`{NULL, 0}`); decoders that allocate before detecting a
+fault free that scratch buffer before returning, so a non-OK status never hands
+back a live allocation.
+
+`error_offset` is the index of the first offending input byte when `status` is
+`BR_STATUS_INVALID_ENCODING`, the count of input bytes consumed before the input
+ran out when `BR_STATUS_UNEXPECTED_EOF`, and `0` (meaningless) otherwise.
+*/
+typedef struct br_decode_result {
+  br_bytes value;
+  size_t error_offset;
+  br_status status;
+} br_decode_result;
+
+/*
+Result of an into-buffer or to-stream decode.
+
+`count` is the number of bytes written to the destination buffer or writer.
+`error_offset` follows the same convention as `br_decode_result`.
+*/
+typedef struct br_decode_into_result {
+  size_t count;
+  size_t error_offset;
+  br_status status;
+} br_decode_into_result;
+
+BR_EXTERN_C_END
+
+#endif
+
+/* ==== bedrock/encoding/hex.h ==== */
+#ifndef BEDROCK_ENCODING_HEX_H
+#define BEDROCK_ENCODING_HEX_H
+
+
+BR_EXTERN_C_BEGIN
+
+/*
+Letter case for hex encoding. Decoding is always case-insensitive.
+*/
+typedef enum br_hex_case { BR_HEX_LOWER = 0, BR_HEX_UPPER } br_hex_case;
+
+/*
+Number of encoded bytes produced for `src_len` input bytes (`src_len * 2`).
+*/
+static inline size_t br_hex_encoded_len(size_t src_len) {
+  return src_len * 2u;
+}
+
+/*
+Number of decoded bytes produced by a well-formed `encoded_len`-byte input
+(`encoded_len / 2`). Odd inputs are malformed; the decoders report that.
+*/
+static inline size_t br_hex_decoded_len(size_t encoded_len) {
+  return encoded_len / 2u;
+}
+
+/*
+Encode `src` as a hex sequence into a freshly allocated buffer.
+
+The returned `value` is owned by the caller and must be freed with
+`br_bytes_free`. Encoding cannot fail on content; only `BR_STATUS_OUT_OF_MEMORY`
+(allocation failure) is possible. Empty input yields empty owned bytes with
+`BR_STATUS_OK`.
+*/
+br_bytes_result br_hex_encode(br_bytes_view src, br_hex_case letter_case, br_allocator allocator);
+
+/*
+Encode `src` as a hex sequence into the caller buffer `dst` of capacity
+`dst_cap`.
+
+Returns the number of bytes written in `count`. `BR_STATUS_SHORT_BUFFER` if
+`dst_cap` is smaller than `br_hex_encoded_len(src.len)`; `BR_STATUS_INVALID_ARGUMENT`
+if `dst` is NULL while output is required.
+*/
+br_io_result
+br_hex_encode_into(br_bytes_view src, br_hex_case letter_case, uint8_t *dst, size_t dst_cap);
+
+/*
+Encode `src` as a hex sequence to the writer `w`.
+
+Returns the number of bytes written in `count`. Propagates the writer's status
+on a short or failed write.
+*/
+br_io_result br_hex_encode_to_writer(br_bytes_view src, br_hex_case letter_case, br_writer w);
+
+/*
+Decode the hex sequence `src` into a freshly allocated buffer.
+
+The returned `value` is owned by the caller and must be freed with
+`br_bytes_free`. Decoding is case-insensitive. Odd-length input is malformed:
+`BR_STATUS_INVALID_ENCODING` with `error_offset = src.len - 1`. Any byte outside
+`[0-9a-fA-F]` yields `BR_STATUS_INVALID_ENCODING` with `error_offset` at that
+byte's index. On any failure the scratch buffer is freed before returning, so
+`value` is always empty when `status` is not `BR_STATUS_OK` (this fixes Odin's
+decode-leak wart).
+*/
+br_decode_result br_hex_decode(br_bytes_view src, br_allocator allocator);
+
+/*
+Decode the hex sequence `src` into the caller buffer `dst` of capacity
+`dst_cap`.
+
+Returns the number of bytes written in `count`. Malformed input is reported the
+same way as `br_hex_decode` (odd length, or a bad byte, both
+`BR_STATUS_INVALID_ENCODING` with `error_offset`). `BR_STATUS_SHORT_BUFFER` if
+`dst_cap` is smaller than `br_hex_decoded_len(src.len)`;
+`BR_STATUS_INVALID_ARGUMENT` if `dst` is NULL while output is required.
+*/
+br_decode_into_result br_hex_decode_into(br_bytes_view src, uint8_t *dst, size_t dst_cap);
+
+/*
+Decode one byte from a two-character hex sequence, optionally prefixed with
+`0x` or `0X`, e.g. `"23"`, `"0x23"`, or `"0X23"` all decode to `0x23`.
+
+Returns the decoded byte in `value`. `BR_STATUS_INVALID_ENCODING` if, after
+stripping any prefix, the input is not exactly two `[0-9a-fA-F]` characters.
+*/
+br_io_byte_result br_hex_decode_sequence(br_bytes_view seq);
+
+BR_EXTERN_C_END
+
+#endif
+
+/* ==== bedrock/encoding/endian.h ==== */
+#ifndef BEDROCK_ENCODING_ENDIAN_H
+#define BEDROCK_ENCODING_ENDIAN_H
+
+#include <string.h>
+
+
+BR_EXTERN_C_BEGIN
+
+/*
+Fixed-width integer and float get/put with explicit byte order.
+
+Integer paths assemble and disassemble values with shifts over individual
+bytes, so they are agnostic to the host's endianness and never perform a wide
+unaligned load -- there are no strict-aliasing or alignment concerns by
+construction. Each byte is widened to the result type before it is shifted, so
+the high byte never overflows a signed `int`. Float paths bit-cast through
+`memcpy`, the portable, strict-aliasing-clean way to reinterpret between a
+float and its bit pattern.
+
+No `f16`: C11 has no `_Float16`, so 16-bit float support is deferred behind a
+future feature gate (see spec/modules/encoding.md).
+
+Each width offers four entry points, e.g. for `u16`:
+- `br_endian_get_u16` / `br_endian_put_u16` -- bounds-checked over a
+  `br_bytes_view` / `br_bytes`; return false when the buffer is too small (or a
+  required pointer is NULL) without reading or writing any bytes.
+- `br_endian_get_u16_unchecked` / `br_endian_put_u16_unchecked` -- fast paths
+  over a raw pointer; the caller guarantees at least the width in bytes.
+*/
+
+BR_STATIC_ASSERT(sizeof(float) == 4, "br_endian f32 paths require a 32-bit float");
+BR_STATIC_ASSERT(sizeof(double) == 8, "br_endian f64 paths require a 64-bit double");
+
+typedef enum br_byte_order { BR_BYTE_ORDER_LITTLE = 0, BR_BYTE_ORDER_BIG } br_byte_order;
+
+static inline br_byte_order br_byte_order_native(void) {
+  uint16_t probe = 1u;
+  uint8_t first;
+
+  memcpy(&first, &probe, sizeof(first));
+  return first != 0 ? BR_BYTE_ORDER_LITTLE : BR_BYTE_ORDER_BIG;
+}
+
+/* --- Unchecked get: caller guarantees the pointer spans at least the width. */
+
+static inline uint16_t br_endian_get_u16_unchecked(const uint8_t *p, br_byte_order order) {
+  if (order == BR_BYTE_ORDER_LITTLE) {
+    return (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
+  }
+  return (uint16_t)((uint16_t)p[1] | ((uint16_t)p[0] << 8));
+}
+
+static inline uint32_t br_endian_get_u32_unchecked(const uint8_t *p, br_byte_order order) {
+  if (order == BR_BYTE_ORDER_LITTLE) {
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+  }
+  return (uint32_t)p[3] | ((uint32_t)p[2] << 8) | ((uint32_t)p[1] << 16) | ((uint32_t)p[0] << 24);
+}
+
+static inline uint64_t br_endian_get_u64_unchecked(const uint8_t *p, br_byte_order order) {
+  if (order == BR_BYTE_ORDER_LITTLE) {
+    return (uint64_t)p[0] | ((uint64_t)p[1] << 8) | ((uint64_t)p[2] << 16) |
+           ((uint64_t)p[3] << 24) | ((uint64_t)p[4] << 32) | ((uint64_t)p[5] << 40) |
+           ((uint64_t)p[6] << 48) | ((uint64_t)p[7] << 56);
+  }
+  return (uint64_t)p[7] | ((uint64_t)p[6] << 8) | ((uint64_t)p[5] << 16) | ((uint64_t)p[4] << 24) |
+         ((uint64_t)p[3] << 32) | ((uint64_t)p[2] << 40) | ((uint64_t)p[1] << 48) |
+         ((uint64_t)p[0] << 56);
+}
+
+static inline int16_t br_endian_get_i16_unchecked(const uint8_t *p, br_byte_order order) {
+  return (int16_t)br_endian_get_u16_unchecked(p, order);
+}
+
+static inline int32_t br_endian_get_i32_unchecked(const uint8_t *p, br_byte_order order) {
+  return (int32_t)br_endian_get_u32_unchecked(p, order);
+}
+
+static inline int64_t br_endian_get_i64_unchecked(const uint8_t *p, br_byte_order order) {
+  return (int64_t)br_endian_get_u64_unchecked(p, order);
+}
+
+static inline float br_endian_get_f32_unchecked(const uint8_t *p, br_byte_order order) {
+  uint32_t raw = br_endian_get_u32_unchecked(p, order);
+  float value;
+
+  memcpy(&value, &raw, sizeof(value));
+  return value;
+}
+
+static inline double br_endian_get_f64_unchecked(const uint8_t *p, br_byte_order order) {
+  uint64_t raw = br_endian_get_u64_unchecked(p, order);
+  double value;
+
+  memcpy(&value, &raw, sizeof(value));
+  return value;
+}
+
+/* --- Unchecked put: caller guarantees the pointer spans at least the width. */
+
+static inline void br_endian_put_u16_unchecked(uint8_t *p, br_byte_order order, uint16_t v) {
+  if (order == BR_BYTE_ORDER_LITTLE) {
+    p[0] = (uint8_t)(v & 0xFFu);
+    p[1] = (uint8_t)((v >> 8) & 0xFFu);
+  } else {
+    p[1] = (uint8_t)(v & 0xFFu);
+    p[0] = (uint8_t)((v >> 8) & 0xFFu);
+  }
+}
+
+static inline void br_endian_put_u32_unchecked(uint8_t *p, br_byte_order order, uint32_t v) {
+  if (order == BR_BYTE_ORDER_LITTLE) {
+    p[0] = (uint8_t)(v & 0xFFu);
+    p[1] = (uint8_t)((v >> 8) & 0xFFu);
+    p[2] = (uint8_t)((v >> 16) & 0xFFu);
+    p[3] = (uint8_t)((v >> 24) & 0xFFu);
+  } else {
+    p[3] = (uint8_t)(v & 0xFFu);
+    p[2] = (uint8_t)((v >> 8) & 0xFFu);
+    p[1] = (uint8_t)((v >> 16) & 0xFFu);
+    p[0] = (uint8_t)((v >> 24) & 0xFFu);
+  }
+}
+
+static inline void br_endian_put_u64_unchecked(uint8_t *p, br_byte_order order, uint64_t v) {
+  if (order == BR_BYTE_ORDER_LITTLE) {
+    p[0] = (uint8_t)(v & 0xFFu);
+    p[1] = (uint8_t)((v >> 8) & 0xFFu);
+    p[2] = (uint8_t)((v >> 16) & 0xFFu);
+    p[3] = (uint8_t)((v >> 24) & 0xFFu);
+    p[4] = (uint8_t)((v >> 32) & 0xFFu);
+    p[5] = (uint8_t)((v >> 40) & 0xFFu);
+    p[6] = (uint8_t)((v >> 48) & 0xFFu);
+    p[7] = (uint8_t)((v >> 56) & 0xFFu);
+  } else {
+    p[7] = (uint8_t)(v & 0xFFu);
+    p[6] = (uint8_t)((v >> 8) & 0xFFu);
+    p[5] = (uint8_t)((v >> 16) & 0xFFu);
+    p[4] = (uint8_t)((v >> 24) & 0xFFu);
+    p[3] = (uint8_t)((v >> 32) & 0xFFu);
+    p[2] = (uint8_t)((v >> 40) & 0xFFu);
+    p[1] = (uint8_t)((v >> 48) & 0xFFu);
+    p[0] = (uint8_t)((v >> 56) & 0xFFu);
+  }
+}
+
+static inline void br_endian_put_i16_unchecked(uint8_t *p, br_byte_order order, int16_t v) {
+  br_endian_put_u16_unchecked(p, order, (uint16_t)v);
+}
+
+static inline void br_endian_put_i32_unchecked(uint8_t *p, br_byte_order order, int32_t v) {
+  br_endian_put_u32_unchecked(p, order, (uint32_t)v);
+}
+
+static inline void br_endian_put_i64_unchecked(uint8_t *p, br_byte_order order, int64_t v) {
+  br_endian_put_u64_unchecked(p, order, (uint64_t)v);
+}
+
+static inline void br_endian_put_f32_unchecked(uint8_t *p, br_byte_order order, float v) {
+  uint32_t raw;
+
+  memcpy(&raw, &v, sizeof(raw));
+  br_endian_put_u32_unchecked(p, order, raw);
+}
+
+static inline void br_endian_put_f64_unchecked(uint8_t *p, br_byte_order order, double v) {
+  uint64_t raw;
+
+  memcpy(&raw, &v, sizeof(raw));
+  br_endian_put_u64_unchecked(p, order, raw);
+}
+
+/* --- Bounds-checked get over a view; false (no read) if fewer than N bytes. */
+
+static inline bool br_endian_get_u16(br_bytes_view b, br_byte_order order, uint16_t *out) {
+  if (out == NULL || b.data == NULL || b.len < 2u) {
+    return false;
+  }
+  *out = br_endian_get_u16_unchecked(b.data, order);
+  return true;
+}
+
+static inline bool br_endian_get_u32(br_bytes_view b, br_byte_order order, uint32_t *out) {
+  if (out == NULL || b.data == NULL || b.len < 4u) {
+    return false;
+  }
+  *out = br_endian_get_u32_unchecked(b.data, order);
+  return true;
+}
+
+static inline bool br_endian_get_u64(br_bytes_view b, br_byte_order order, uint64_t *out) {
+  if (out == NULL || b.data == NULL || b.len < 8u) {
+    return false;
+  }
+  *out = br_endian_get_u64_unchecked(b.data, order);
+  return true;
+}
+
+static inline bool br_endian_get_i16(br_bytes_view b, br_byte_order order, int16_t *out) {
+  uint16_t v;
+
+  if (out == NULL || !br_endian_get_u16(b, order, &v)) {
+    return false;
+  }
+  *out = (int16_t)v;
+  return true;
+}
+
+static inline bool br_endian_get_i32(br_bytes_view b, br_byte_order order, int32_t *out) {
+  uint32_t v;
+
+  if (out == NULL || !br_endian_get_u32(b, order, &v)) {
+    return false;
+  }
+  *out = (int32_t)v;
+  return true;
+}
+
+static inline bool br_endian_get_i64(br_bytes_view b, br_byte_order order, int64_t *out) {
+  uint64_t v;
+
+  if (out == NULL || !br_endian_get_u64(b, order, &v)) {
+    return false;
+  }
+  *out = (int64_t)v;
+  return true;
+}
+
+static inline bool br_endian_get_f32(br_bytes_view b, br_byte_order order, float *out) {
+  uint32_t v;
+
+  if (out == NULL || !br_endian_get_u32(b, order, &v)) {
+    return false;
+  }
+  memcpy(out, &v, sizeof(*out));
+  return true;
+}
+
+static inline bool br_endian_get_f64(br_bytes_view b, br_byte_order order, double *out) {
+  uint64_t v;
+
+  if (out == NULL || !br_endian_get_u64(b, order, &v)) {
+    return false;
+  }
+  memcpy(out, &v, sizeof(*out));
+  return true;
+}
+
+/* --- Bounds-checked put; false (no write) if the destination is too small. */
+
+static inline bool br_endian_put_u16(br_bytes dst, br_byte_order order, uint16_t v) {
+  if (dst.data == NULL || dst.len < 2u) {
+    return false;
+  }
+  br_endian_put_u16_unchecked(dst.data, order, v);
+  return true;
+}
+
+static inline bool br_endian_put_u32(br_bytes dst, br_byte_order order, uint32_t v) {
+  if (dst.data == NULL || dst.len < 4u) {
+    return false;
+  }
+  br_endian_put_u32_unchecked(dst.data, order, v);
+  return true;
+}
+
+static inline bool br_endian_put_u64(br_bytes dst, br_byte_order order, uint64_t v) {
+  if (dst.data == NULL || dst.len < 8u) {
+    return false;
+  }
+  br_endian_put_u64_unchecked(dst.data, order, v);
+  return true;
+}
+
+static inline bool br_endian_put_i16(br_bytes dst, br_byte_order order, int16_t v) {
+  return br_endian_put_u16(dst, order, (uint16_t)v);
+}
+
+static inline bool br_endian_put_i32(br_bytes dst, br_byte_order order, int32_t v) {
+  return br_endian_put_u32(dst, order, (uint32_t)v);
+}
+
+static inline bool br_endian_put_i64(br_bytes dst, br_byte_order order, int64_t v) {
+  return br_endian_put_u64(dst, order, (uint64_t)v);
+}
+
+static inline bool br_endian_put_f32(br_bytes dst, br_byte_order order, float v) {
+  uint32_t raw;
+
+  memcpy(&raw, &v, sizeof(raw));
+  return br_endian_put_u32(dst, order, raw);
+}
+
+static inline bool br_endian_put_f64(br_bytes dst, br_byte_order order, double v) {
+  uint64_t raw;
+
+  memcpy(&raw, &v, sizeof(raw));
+  return br_endian_put_u64(dst, order, raw);
+}
+
+BR_EXTERN_C_END
+
+#endif
+
+
+#endif
+
 
 #endif
 
@@ -5564,6 +6012,260 @@ static br_i64_result br__byte_reader_stream_proc(
 
 br_stream br_byte_reader_as_stream(br_byte_reader *reader) {
   return br_stream_make(reader, br__byte_reader_stream_proc);
+}
+
+/* ==== src/encoding/hex.c ==== */
+
+static const u8 br__hex_lower[16] = {
+  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+
+static const u8 br__hex_upper[16] = {
+  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+
+static const u8 *br__hex_table(br_hex_case letter_case) {
+  return letter_case == BR_HEX_UPPER ? br__hex_upper : br__hex_lower;
+}
+
+/* Map one hex character to its 0-15 nibble value; false if not [0-9a-fA-F]. */
+static bool br__hex_digit(u8 c, u8 *out) {
+  if (c >= '0' && c <= '9') {
+    *out = (u8)(c - '0');
+    return true;
+  }
+  if (c >= 'a' && c <= 'f') {
+    *out = (u8)(c - 'a' + 10);
+    return true;
+  }
+  if (c >= 'A' && c <= 'F') {
+    *out = (u8)(c - 'A' + 10);
+    return true;
+  }
+
+  return false;
+}
+
+static br_bytes_result br__bytes_result(void *data, usize len, br_status status) {
+  br_bytes_result result;
+
+  result.value = br_bytes_make(data, len);
+  result.status = status;
+  return result;
+}
+
+static br_decode_result br__decode_result(br_bytes value, usize error_offset, br_status status) {
+  br_decode_result result;
+
+  result.value = value;
+  result.error_offset = error_offset;
+  result.status = status;
+  return result;
+}
+
+static br_decode_into_result
+br__decode_into_result(usize count, usize error_offset, br_status status) {
+  br_decode_into_result result;
+
+  result.count = count;
+  result.error_offset = error_offset;
+  result.status = status;
+  return result;
+}
+
+br_bytes_result br_hex_encode(br_bytes_view src, br_hex_case letter_case, br_allocator allocator) {
+  const u8 *table = br__hex_table(letter_case);
+  br_alloc_result alloc;
+  u8 *dst;
+  usize out_len;
+
+  if (src.len == 0u) {
+    return br__bytes_result(NULL, 0u, BR_STATUS_OK);
+  }
+
+  /* out_len = src.len * 2; guard the (practically unreachable) overflow. */
+  if (src.len > SIZE_MAX / 2u) {
+    return br__bytes_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+  }
+  out_len = src.len * 2u;
+
+  alloc = br_allocator_alloc_uninit(allocator, out_len, 1u);
+  if (alloc.status != BR_STATUS_OK) {
+    return br__bytes_result(NULL, 0u, alloc.status);
+  }
+
+  dst = (u8 *)alloc.ptr;
+  for (usize i = 0u, j = 0u; i < src.len; i += 1u, j += 2u) {
+    u8 v = src.data[i];
+
+    dst[j] = table[v >> 4];
+    dst[j + 1u] = table[v & 0x0fu];
+  }
+
+  return br__bytes_result(dst, out_len, BR_STATUS_OK);
+}
+
+br_io_result
+br_hex_encode_into(br_bytes_view src, br_hex_case letter_case, u8 *dst, usize dst_cap) {
+  const u8 *table = br__hex_table(letter_case);
+  usize out_len;
+
+  /* out_len = src.len * 2; guard the (practically unreachable) overflow. */
+  if (src.len > SIZE_MAX / 2u) {
+    return br_io_result_make(0u, BR_STATUS_SHORT_BUFFER);
+  }
+  out_len = src.len * 2u;
+
+  if (out_len > 0u && dst == NULL) {
+    return br_io_result_make(0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+  if (dst_cap < out_len) {
+    return br_io_result_make(0u, BR_STATUS_SHORT_BUFFER);
+  }
+
+  for (usize i = 0u, j = 0u; i < src.len; i += 1u, j += 2u) {
+    u8 v = src.data[i];
+
+    dst[j] = table[v >> 4];
+    dst[j + 1u] = table[v & 0x0fu];
+  }
+
+  return br_io_result_make(out_len, BR_STATUS_OK);
+}
+
+br_io_result br_hex_encode_to_writer(br_bytes_view src, br_hex_case letter_case, br_writer w) {
+  const u8 *table = br__hex_table(letter_case);
+  u8 buffer[512];
+  usize buffered = 0u;
+  usize total = 0u;
+
+  for (usize i = 0u; i < src.len; i += 1u) {
+    u8 v = src.data[i];
+
+    buffer[buffered] = table[v >> 4];
+    buffer[buffered + 1u] = table[v & 0x0fu];
+    buffered += 2u;
+
+    if (buffered == sizeof(buffer)) {
+      br_io_result written = br_write_full(w, buffer, buffered);
+
+      total += written.count;
+      if (written.status != BR_STATUS_OK) {
+        return br_io_result_make(total, written.status);
+      }
+      buffered = 0u;
+    }
+  }
+
+  if (buffered > 0u) {
+    br_io_result written = br_write_full(w, buffer, buffered);
+
+    total += written.count;
+    if (written.status != BR_STATUS_OK) {
+      return br_io_result_make(total, written.status);
+    }
+  }
+
+  return br_io_result_make(total, BR_STATUS_OK);
+}
+
+br_decode_result br_hex_decode(br_bytes_view src, br_allocator allocator) {
+  br_alloc_result alloc;
+  u8 *dst;
+  usize out_len;
+
+  /* Length parity is a structural property, so it is checked before allocating.
+     This also keeps the odd-length path off the allocate-then-fail branch. */
+  if ((src.len & 1u) != 0u) {
+    return br__decode_result(br_bytes_make(NULL, 0u), src.len - 1u, BR_STATUS_INVALID_ENCODING);
+  }
+
+  out_len = src.len / 2u;
+  if (out_len == 0u) {
+    return br__decode_result(br_bytes_make(NULL, 0u), 0u, BR_STATUS_OK);
+  }
+
+  alloc = br_allocator_alloc_uninit(allocator, out_len, 1u);
+  if (alloc.status != BR_STATUS_OK) {
+    return br__decode_result(br_bytes_make(NULL, 0u), 0u, alloc.status);
+  }
+  dst = (u8 *)alloc.ptr;
+
+  for (usize i = 0u, j = 0u; j < src.len; i += 1u, j += 2u) {
+    u8 hi;
+    u8 lo;
+
+    /* Free before returning any failure: this fixes Odin's decode leak, where
+       the destination buffer is abandoned on an invalid byte. */
+    if (!br__hex_digit(src.data[j], &hi)) {
+      br_allocator_free(allocator, dst, out_len);
+      return br__decode_result(br_bytes_make(NULL, 0u), j, BR_STATUS_INVALID_ENCODING);
+    }
+    if (!br__hex_digit(src.data[j + 1u], &lo)) {
+      br_allocator_free(allocator, dst, out_len);
+      return br__decode_result(br_bytes_make(NULL, 0u), j + 1u, BR_STATUS_INVALID_ENCODING);
+    }
+
+    dst[i] = (u8)((hi << 4) | lo);
+  }
+
+  return br__decode_result(br_bytes_make(dst, out_len), 0u, BR_STATUS_OK);
+}
+
+br_decode_into_result br_hex_decode_into(br_bytes_view src, u8 *dst, usize dst_cap) {
+  usize out_len;
+
+  /* Parity is checked first so odd-length input classifies as INVALID_ENCODING
+     identically to br_hex_decode, independent of the caller's buffer state. */
+  if ((src.len & 1u) != 0u) {
+    return br__decode_into_result(0u, src.len - 1u, BR_STATUS_INVALID_ENCODING);
+  }
+
+  out_len = src.len / 2u;
+
+  if (out_len > 0u && dst == NULL) {
+    return br__decode_into_result(0u, 0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+  if (dst_cap < out_len) {
+    return br__decode_into_result(0u, 0u, BR_STATUS_SHORT_BUFFER);
+  }
+
+  for (usize i = 0u, j = 0u; j < src.len; i += 1u, j += 2u) {
+    u8 hi;
+    u8 lo;
+
+    /* On a malformed byte the caller's buffer holds only partial scratch, so
+       count reports 0: no valid output was produced (mirrors the allocating
+       decode returning an empty value). error_offset locates the fault. */
+    if (!br__hex_digit(src.data[j], &hi)) {
+      return br__decode_into_result(0u, j, BR_STATUS_INVALID_ENCODING);
+    }
+    if (!br__hex_digit(src.data[j + 1u], &lo)) {
+      return br__decode_into_result(0u, j + 1u, BR_STATUS_INVALID_ENCODING);
+    }
+
+    dst[i] = (u8)((hi << 4) | lo);
+  }
+
+  return br__decode_into_result(out_len, 0u, BR_STATUS_OK);
+}
+
+br_io_byte_result br_hex_decode_sequence(br_bytes_view seq) {
+  u8 hi;
+  u8 lo;
+
+  /* Strip an optional "0x"/"0X" prefix (seq is a by-value view). */
+  if (seq.len >= 2u && seq.data[0] == '0' && (seq.data[1] == 'x' || seq.data[1] == 'X')) {
+    seq.data += 2;
+    seq.len -= 2u;
+  }
+
+  if (seq.len != 2u) {
+    return br_io_byte_result_make(0u, BR_STATUS_INVALID_ENCODING);
+  }
+  if (!br__hex_digit(seq.data[0], &hi) || !br__hex_digit(seq.data[1], &lo)) {
+    return br_io_byte_result_make(0u, BR_STATUS_INVALID_ENCODING);
+  }
+
+  return br_io_byte_result_make((u8)((hi << 4) | lo), BR_STATUS_OK);
 }
 
 /* ==== src/io/io.c ==== */
@@ -10291,7 +10993,16 @@ static br_status br__virtual_block_create(usize committed,
     Bedrock keeps overflow protection as a trailing guard page past the usable
     payload. This stays close to Odin's intent while avoiding exposing the guard
     page itself as part of `block.reserved`.
+
+    The guard page must be committed before it is protected: Windows'
+    VirtualProtect only operates on committed pages, while POSIX mprotect also
+    accepts reserved-only mappings. The page is never touched afterwards, so
+    committing it costs address space only on overcommitting platforms.
     */
+    if (br_vm_commit((u8 *)(void *)platform_block + payload_limit, page_size) != BR_STATUS_OK) {
+      br__vm_platform_memory_free(platform_block);
+      return BR_STATUS_OUT_OF_MEMORY;
+    }
     if (!br_vm_protect(
           (u8 *)(void *)platform_block + payload_limit, page_size, BR_VM_PROTECT_NONE)) {
       br__vm_platform_memory_free(platform_block);
