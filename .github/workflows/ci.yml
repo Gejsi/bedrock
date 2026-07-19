@@ -53,11 +53,15 @@ jobs:
           update: false
           install: make
           pacboy: clang:p
-      - run: make MODE=debug test
+      - run: make -k MODE=debug test
 
   format:
     name: clang-format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Pin clang-format: the .clang-format config uses 21+ options
+      # (BinPackParameters: OnePerLine), and formatting differs across major
+      # versions, so the runner's default binary is not a reliable gate.
+      - run: pipx install clang-format==22.1.8
       - run: make check-format
