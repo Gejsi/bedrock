@@ -12,6 +12,37 @@ feature — but in Odin the flag is passed by no call site and the `protect`
 return is ignored, so it can never manifest. Bedrock's overflow protection is
 the reachable, error-checked completion of that dormant path.
 
+Footnote (quirk, not a numbered bug): `core/strings` `_split_iterator`
+(strings.odin:1072) ends with `ok = res != ""`, dropping a single TRAILING
+empty field, while the `_split` LIST (:882) always keeps it —
+`split("a,", ",")` is `["a", ""]` but iterating `"a,"` yields only `"a"`.
+Middle empties are unaffected (the empty-check sits only in the
+separator-not-found branch, so `"a,,b"` still iterates `a`, `""`, `b` with no
+early termination or data loss). Internal list-vs-iterator inconsistency only.
+Bedrock's split iterator keeps trailing empties, matching its own list and
+Go's SplitSeq.
+
+## `core/path/slashpath` match under-reports malformed patterns
+
+- File: `core/path/slashpath/match.odin`
+- Area: `match_chunk` early return plus `match` missing trailing validation
+- Issue: `match_chunk` returns immediately when the name is exhausted
+  (match.odin:106-108) instead of continuing to validate the chunk's syntax
+  (Go keeps a `failed` flag and still runs `getEsc`, match.go:122-192); and
+  `match` lacks Go's post-loop that validates the remaining pattern via
+  `matchChunk(chunk, "")` (match.go:79-84).
+- Expected: malformed patterns report a syntax error regardless of whether the
+  name happens to be consumed first.
+- Effect: `match("a[", "a")` returns `(false, .None)` where Go returns
+  `(false, ErrBadPattern)`; same for a lone trailing `\` against an empty name
+  and for `"a/b["`. A spec-conformance gap (missing error), not memory safety.
+- Bedrock: the slashpath port follows Go (validates chunks to completion and
+  checks the trailing pattern) and documents the deviation in
+  `spec/modules/path.md`; Go's 56 match vectors pass, including the
+  ErrBadPattern rows.
+
+
+
 ## `core/unicode/utf8` encode of out-of-range runes
 
 - File: `core/unicode/utf8/utf8.odin`
