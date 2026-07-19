@@ -37,6 +37,10 @@ API contract stays Odin's.
   `spec/modules/*.md` and `tracking/odin-coverage-checklist.md` in the same
   commit as the code
 - Suspected upstream Odin bugs go in `tracking/odin-suspected-bugs.md`
+- File-local `static` helpers carry THEIR OWN module prefix (`br__hex_result`
+  in hex.c, never a borrowed `br__bytes_result`): the dist amalgamation folds
+  every source into one translation unit, so identical static names across
+  files are redefinition errors there even though separate TUs accept them
 - Keep docs small and focused; never grow a single giant planning file
 
 ## Team workflow (agent teammates)
