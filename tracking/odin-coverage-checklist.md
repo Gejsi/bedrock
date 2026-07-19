@@ -83,7 +83,7 @@ Current Bedrock files:
 | small stack allocator | `cut` | none | Cut July 19, 2026 (cut-list decisions log): redundant with `stack`, the canonical LIFO allocator; the tiny-header size delta was an Odin micro-optimization, not a use case. No external consumers at removal. |
 | dynamic arena allocator | `adapted` | `dynamic_arena.h`, `dynamic_arena.c` | Landed with Odin-style block cycling, separate block/array allocators, out-band allocations, reset/free-all split, reallocate-on-resize behavior, and per-request alignment (`max(minimum_alignment, request)`, floored on the out-band path too); Bedrock keeps the generic allocator adapter on alloc/free/resize/reset only, so there are no query-feature/query-info modes yet. |
 | buddy allocator | `adapted` | `buddy_allocator.h`, `buddy_allocator.c` | Landed with Odin-style in-place buddy block splitting/coalescing, fixed power-of-two backing storage, and fixed-alignment allocations; Bedrock reports init/pointer misuse as statuses and the generic adapter keeps Bedrock's alloc/free/resize/reset ABI instead of Odin's query modes. |
-| compat allocator | `adapted` (KEEP: FFI adapter) | `compat_allocator.h`, `compat_allocator.c` | Ruled KEEP July 19, 2026 as the FFI/interop adapter: exposes a bedrock allocator through the sizeless-free malloc/free/realloc-style callbacks foreign C libraries (e.g. zlib's `zalloc`/`zfree`, sqlite's `sqlite3_mem_methods`) require, tracking each allocation's size/alignment in a header prefix so callers free/resize without passing `old_size`. Bedrock defaults unset parents to heap, has no generic query-feature/query-info surface yet, and explicitly shifts the payload if the wrapped header prefix grows during an in-place parent resize. |
+| compat allocator | `adapted` | `compat_allocator.h`, `compat_allocator.c` | Landed as a header-prefixed wrapper that tracks allocation size/alignment and hides parent old-size requirements from Bedrock callers. Bedrock defaults unset parents to heap, has no generic query-feature/query-info surface yet, and explicitly shifts the payload if the wrapped header prefix grows during an in-place parent resize. |
 | virtual memory API | `adapted` | `virtual.h`, `src/mem/virtual/*` | Reserve/commit/decommit/release/protect landed with an Odin-style `virtual/*` split: shared `virtual_platform`, shared BSD/macOS `virtual_posix`, per-OS Linux/Darwin/FreeBSD/NetBSD/OpenBSD files, Windows, and `other`. |
 | virtual growing/static arena core | `adapted` | `virtual_arena.h`, `src/mem/virtual/arena.c` | Growing and static arenas landed with allocator support, reset/destroy, mark/rewind, an embedded mutex matching Odin's `virtual.Arena`, and optional trailing guard-page overflow protection. Static arenas require explicit init; Bedrock intentionally does not adopt Odin's lazy static-init-on-first-alloc. |
 | tracking allocator | `adapted` | `tracking_allocator.h`, `tracking_allocator.c` | Landed with a dense live-entry list plus a private pointer index and an embedded mutex matching Odin's `Tracking_Allocator`; it still omits feature-query and source-location machinery. |
@@ -182,7 +182,7 @@ Current Bedrock files:
 | trim_prefix / trim_suffix | `done` | `strings.h`, `strings.c` | Implemented. |
 | `strings.Builder` core | `adapted` | `string_builder.h`, `string_builder.c` | Heap-backed and fixed-backing builder landed with write/pop operations. |
 | `strings.Reader` core | `adapted` | `string_reader.h`, `string_reader.c` | Byte and rune read/unread plus seek are implemented. |
-| ptr / cstring conversion helpers | `partial` | `strings.h`, `strings.c` | `br_string_clone_to_cstr` landed (allocates len+1, NUL-terminated; caller frees with size len+1 via the same allocator; interior NULs preserved, C-read stops at the first) as the FFI-interop outbound helper. The inbound direction already existed as `br_string_view_from_cstr`. `string_from_ptr` and other ptr helpers remain planned. |
+| ptr / cstring conversion helpers | `planned` | none | `string_from_ptr`, `clone_to_cstring`, etc. are not landed. |
 | contains_any / index_any / last_index / last_index_any / index_byte / last_index_byte | `done` | `strings.h`, `strings.c` | Implemented. |
 | prefix_length / common_prefix | `planned` | none | Not landed. |
 | join / concatenate / count / repeat | `adapted` | `strings.h`, `strings.c` | Implemented as explicit allocating helpers plus substring counting. |
@@ -501,7 +501,13 @@ Current Bedrock files:
 - `src/time/time_unix.c`
 - `src/time/time_windows.c`
 - `src/time/time_other.c`
+- `include/bedrock/time/datetime.h`
+- `include/bedrock/time/rfc3339.h`
+- `src/time/datetime.c`
+- `src/time/rfc3339.c`
 - `tests/test_time.c`
+- `tests/test_datetime.c`
+- `tests/test_rfc3339.c`
 
 | Odin feature/file | Status | Bedrock files | Notes |
 | --- | --- | --- | --- |
@@ -511,7 +517,10 @@ Current Bedrock files:
 | duration conversion helpers | `adapted` | `src/time/time.c` | Nanoseconds plus floating micro/milli/second/minute/hour conversions landed. |
 | duration round/truncate helpers | `planned` | none | Small self-contained helpers, but not needed for sync timeout wiring. |
 | stopwatch helpers | `planned` | none | Not needed for sync timeouts. |
-| datetime/timezone/RFC3339/ISO8601 | `planned` | none | Larger independent slices; do not pull into timeout work. |
+| civil datetime slice | `adapted` | `time/datetime.h`, `src/time/datetime.c` | Landed: `br_date`/`br_time_of_day`/`br_datetime`/`br_delta`/`br_ordinal`, date<->ordinal (Reingold-Dershowitz), `is_leap_year`, the validate family, `from_components`, `add_delta`/`subtract`. NO timezone field (a `br_datetime` is always naive/civil; RFC 3339 offsets are carried by the rfc3339 layer). The ordinal accumulation uses the 400-year-cycle form (146097 days per 400 years) in pure int64 — no 128-bit path — and the year bounds (`BR_DATETIME_MIN/MAX_YEAR = ±25000000000000000`) are set to the widest at which every intermediate term stays in int64 with margin. That is deliberately a hair inside Odin's i64-saturating constants (a deviation): still astronomically beyond `br_time`'s reachable ~1677..2262 window and any real calendar, and it keeps the calendar core portable with no `__int128`/MSVC split. Deferred within the slice: `ordinal_to_datetime`, `day_of_week`, `last_day_of_month`, `year_range`, `add_days_to_date`, gcd/lcm. |
+| epoch bridge (datetime <-> Unix ns) | `adapted` | `time/datetime.h`, `src/time/datetime.c` | `br_datetime_to_time` returns a `{br_time, br_status}` result: `br_time`'s int64-ns window spans civil years ~1677..2262, so a datetime outside it returns `BR_STATUS_OUT_OF_RANGE` via an overflow-safe bounds check (compares against the int64 limits BEFORE multiplying, never a post-multiply wrap; UBSan-clean at the exact INT64_MIN/MAX instants). `br_time_to_datetime` is total. |
+| RFC 3339 parse/format | `adapted` | `time/rfc3339.h`, `src/time/rfc3339.c` | Landed against `br_time`, no timezone database (fixed integer-minute offsets). Deviations from Odin: strict `br_rfc3339_parse` + permissive `br_rfc3339_parse_prefix` split (strconv model); liberal separators in (`T`/`t`/space, `Z`/`z`) and strict uppercase out; fractional 1..9 digits into nanoseconds (Odin reads only 2 — bug #13, filed); leap second accepted only in the `minute==59 && second==60` form, smeared to `:59.999999999` with an `is_leap_second` flag (any other `:60` -> `INVALID_ENCODING`); offset normalized to UTC and preserved; `br_rfc3339_format` cannot range-fail (every `br_time` is a 4-digit year), only `SHORT_BUFFER`, never truncates, emits nanoseconds only when nonzero with trailing zeros trimmed. Round-trip text asymmetry for `:60` is intentional and documented (instant preserved, text not). |
+| timezone / ISO-8601 | `excluded` | none | Struck July 19, 2026 (see `tracking/cut-list.md`): no IANA/TZif database, no ISO-8601 beyond RFC 3339. |
 
 ## `core/strconv`
 
