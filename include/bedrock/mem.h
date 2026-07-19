@@ -1,6 +1,7 @@
 #ifndef BEDROCK_MEM_H
 #define BEDROCK_MEM_H
 
+#include <bedrock/mem/mem.h>
 #include <bedrock/mem/alloc.h>
 #include <bedrock/mem/arena.h>
 #include <bedrock/mem/compat_allocator.h>
