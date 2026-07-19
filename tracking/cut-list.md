@@ -155,6 +155,27 @@ external demand, judged per item.
   smell, but portable-vs-VM is a legitimate split (no syscalls vs huge
   reserves). Keep both; note the overlap.
 
+## Sync extended primitives (demand-audited July 19, 2026)
+
+Audited with the same steelman-keep-first, living-idiom-vs-relic method as the
+allocators, plus the decisive in-repo consumer grep (all seven ARE exercised by
+test_sync.c — unlike the niche allocators, none is consumer-less).
+
+| Primitive | Rec | Confidence | One-line reason |
+| --- | --- | --- | --- |
+| Wait_Group | KEEP | high | canonical fan-out/fan-in (Go); pairs with br_thread |
+| Once | KEEP | high | universal lazy-init idiom — Go/Rust/pthread all ship it |
+| Parker | KEEP | high | Rust's core block primitive; composed-upon; carries the parker-timeout bug fix |
+| Barrier | KEEP | med-high | Rust ships it; br_barrier is portable where pthread_barrier does not exist (absent on macOS, empirically verified) |
+| One_Shot_Event | KEEP | med | common one-way latch/broadcast pattern; futex-backed |
+| Auto_Reset_Event | KEEP | med | Win32-idiom but landed/tested/small; the swing item — first to DEMOTE if the sync surface is ever trimmed |
+| Ticket_Mutex | DEMOTE | med | fairness is real-but-niche; no mainstream stdlib ships a fair mutex; keep as the documented specialist mutex, out of the default mental model |
+
+Net: five keeps, two demote-class. The extended sync surface is mostly living
+idioms with in-repo consumers; the genuinely dead weight in the library sits on
+the allocator side (see the summary table above), where three candidates have
+zero consumers AND a superseding Bedrock alternative.
+
 ## Roadmap "do not port on spec"
 
 - **TLSF allocator** (deferred in the port matrix): if buddy is only
@@ -291,6 +312,7 @@ boundary.
 | niche-allocator cut executions | ON HOLD | 2026-07-19 | landed allocators stay in the tree; a use-case audit (steelman-the-keep-first) runs before any cut ruling |
 | containers + sort redesign chapter | ORDERED LAST | 2026-07-19 | containers are the hardest, highest-caveat C surface — the chapter closes the port; nothing jumps it into an earlier slot |
 | sync extended primitives | AUDIT ORDERED | 2026-07-19 | per-primitive living-idiom-vs-relic audit (ticket mutex, auto-reset event, one-shot event, public parker, barrier) before any trim ruling |
+| demand audit (allocators + sync) | COMPLETE | 2026-07-19 | steelman-first evidence table recorded above: allocator side 3 CUT + 1 DEMOTE + lookahead CUT; sync side 5 KEEP + 2 DEMOTE-class. Execution rulings still pending. |
 | small_stack | | | |
 | compat_allocator | | | |
 | rollback_stack | | | |
