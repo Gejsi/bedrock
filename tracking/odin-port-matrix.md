@@ -6,6 +6,10 @@ need redesign, and which ones should stay out of scope.
 Detailed status for the currently active module ports lives in
 `tracking/odin-coverage-checklist.md`.
 
+Priority (July 19, 2026, maintainer): complete and audit the landed core
+modules before expanding new module families. Encodings base64/varint and the
+parser wave (csv/ini/scanner) are queued behind core completion.
+
 | Odin package | Decision | Notes |
 | --- | --- | --- |
 | `core/unicode/utf8` | partial v1 | Self-contained UTF-8 encode/decode/validate/count foundation landed without vendor dependencies; higher Unicode tables and case folding are still separate work. |
@@ -21,6 +25,7 @@ Detailed status for the currently active module ports lives in
 | `core/encoding/csv` | v1 | Reasonable parser target. |
 | `core/encoding/ini` | v1 | Reasonable parser target. |
 | `core/path/slashpath` | v1 | Good portable path layer. |
+| `core/path/filepath` | research | OS-path layer (maintainer request July 19, 2026). Scoped brief pending: lexical Windows/POSIX path handling is the likely v1; filesystem-touching procs wait behind a future os seam. Owns the reserved `br_path_` prefix. |
 | `core/time` | partial v1 | Minimal duration/time/tick/sleep foundation landed to unblock sync timeouts. After the July 19, 2026 pre-port scrutiny: only the minimal datetime slice rfc3339 needs remains in scope; stopwatch is deferred on demand; timezone, iso8601, and TSC/perf are struck (see `tracking/cut-list.md`). |
 | `core/time/rfc3339` | v1 | Useful focused formatter/parser; ports with only the minimal datetime slice it transitively needs (fixed-offset timestamps, no timezone database). |
 | `core/math/bits` | v1 | Mostly portability shims and bit helpers. |

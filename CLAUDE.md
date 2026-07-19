@@ -25,6 +25,9 @@ API contract stays Odin's.
 - `make format` before committing; CI enforces `make check-format`
 - Sources and tests are auto-discovered (`src/**/*.c`, `tests/*.c`); new files
   need no Makefile edits
+- The build toolchain is C + make ONLY: host tools live in `tools/*.c` and are
+  compiled by the Makefile. Never introduce script-language build dependencies
+  (python, shell beyond POSIX make recipes, etc.) — maintainer directive
 
 ## Conventions
 
