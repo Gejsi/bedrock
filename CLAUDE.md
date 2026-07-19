@@ -50,6 +50,11 @@ API contract stays Odin's.
 - Follow Odin semantics; record every intentional deviation in the module's
   `spec/modules/*.md` and `tracking/odin-coverage-checklist.md` in the same
   commit as the code
+- Research briefs and API designs ALWAYS compare against the reference
+  ecosystems — Odin (the contract), Go and Rust (pinned in `upstream/`), and
+  where relevant glibc/musl or the C standard itself — stating what each does
+  and which model Bedrock follows and why. "Checked X: not applicable because
+  Y" counts; silence does not
 - Suspected upstream Odin bugs go in `tracking/odin-suspected-bugs.md`
 - File-local `static` helpers carry THEIR OWN module prefix (`br__hex_result`
   in hex.c, never a borrowed `br__bytes_result`): any unity or amalgamated
