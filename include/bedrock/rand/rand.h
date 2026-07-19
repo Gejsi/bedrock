@@ -7,8 +7,9 @@ BR_EXTERN_C_BEGIN
 
 /*
 Explicit-state, non-cryptographic pseudo-random number generation: PCG64 with
-the DXSM output permutation, producing the same stream as Go v2's
-`math/rand/v2` PCG for a given seed.
+the DXSM output permutation. A given seed produces one well-specified stream,
+identical on every platform and endianness (the state is pure `uint64_t`
+arithmetic), so seeded runs are exactly reproducible.
 
 NOT cryptographically secure: PCG is fast and statistically strong but
 predictable from observed output. For keys, tokens, or nonces, draw from the OS
