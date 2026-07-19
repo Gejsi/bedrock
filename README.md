@@ -73,13 +73,16 @@ bedrock does not promise a stable ABI across versions.
 
 | Module | What it gives you |
 | --- | --- |
-| `mem` | allocator interface, arenas (fixed, growing, virtual-memory), scratch/stack/buddy/tracking allocators, low-level helpers |
-| `strings` / `bytes` | views vs owned data, search/split/trim/case/fields, builders, readers, allocation-free iterators |
-| `unicode` | UTF-8 encode/decode/validate, rune counting |
+| `mem` | allocator interface, arenas (fixed, growing, virtual-memory), scratch/stack/buddy/tracking allocators, an adapter for foreign sizeless-free allocator callbacks, low-level helpers |
+| `strings` / `bytes` | views vs owned data, search/split/trim/case/fields, builders (with number writing), readers, allocation-free iterators, C-string interop (`clone_to_cstr`) |
+| `unicode` | strict UTF-8 encode/decode/validate, rune counting; lossless WTF-8 ↔ WTF-16 transcode for OS strings |
 | `io` / `bufio` | generic stream interface, buffered readers and writers |
-| `sync` | futex-backed mutexes, rw/recursive locks, condvars, semaphores, wait groups, once, parker — all zero-value ready |
-| `time` | monotonic ticks, sleep, durations |
-| `encoding` | hex, byte-order (endian) conversion |
+| `sync` | futex-backed mutexes, rw/recursive locks, condvars, semaphores, wait groups, barriers, once, parker — all zero-value ready |
+| `thread` | create/join/detach/yield over OS threads; double-join, self-join, and detach misuse return status codes instead of undefined behavior |
+| `time` | monotonic ticks, sleep, durations; civil dates and RFC 3339 timestamps with an overflow-safe epoch bridge |
+| `strconv` | locale-free number parsing and formatting (`br_parse_i64`, `br_format_f64`, ...): strict by default, exact float round-trip |
+| `rand` | seedable PCG64 generator (zero-value ready), unbiased bounded draws, shuffle, OS entropy (`br_rand_entropy_fill`) |
+| `encoding` | hex, base64 (std/url, padded/strict), LEB128 varints, byte-order (endian) conversion |
 | `path` | lexical slash-path handling (clean, join, split, glob match) |
 | `math` | bit operations: clz/ctz/popcount, rotates, carries, wide multiply, checked divide |
 
@@ -98,10 +101,13 @@ compile only the `src/` subdirectories you need plus their dependencies:
 | `mem` (arenas + core allocators) | (none beyond `base`) |
 | `mem` (`mutex_allocator`, `tracking_allocator`) | `sync` |
 | `sync` | `time` |
+| `thread` | `sync` |
 | `bytes` + `unicode` (compile together) | `mem`, `io` |
 | `io` | `unicode` |
-| `strings` | `unicode`, `io` |
+| `strings` | `unicode`, `io`, `mem` |
 | `bufio` | `bytes`, `io`, `mem`, `strings` |
+| `strconv` | `strings`, `bytes` |
+| `rand` | `math` |
 | `encoding` | `bytes`, `io` |
 | `path` | `strings`, `unicode` |
 | `math` | (none beyond `base`) |
