@@ -49,5 +49,15 @@ avoids concurrent build and commit races in one working tree.
   fresh session can reconstruct project state from the repo alone.
 - If a session dies, a new lead re-seeds the task list from `tracking/` and
   respawns teammates.
+- A teammate that goes unresponsive mid-task gets its uncommitted work
+  CHECKPOINT-COMMITTED on its worktree branch by the lead, and the task is
+  reassigned; the successor continues from the checkpoint in its OWN worktree
+  (cherry-pick or reset onto the checkpoint's branch — never rebase a stale
+  checkpoint across an advanced main, which drags stale file states along;
+  twice-confirmed hazard).
+- A teammate RESUMING after any gap must re-read its task from the board
+  (ownership and status) before acting — a takeover may have completed the
+  work in the interim, and a stale branch or a duplicate delivery must be
+  stood down, not merged.
 - Updating the Odin pin invalidates checklist statuses until a delta review
   runs; pin bumps therefore come with a scout task to audit the diff.
