@@ -167,17 +167,25 @@ static br_status br__virtual_block_create(usize committed,
 
     The guard page must be committed before it is protected: Windows'
     VirtualProtect only operates on committed pages, while POSIX mprotect also
-    accepts reserved-only mappings. The page is never touched afterwards, so
-    committing it costs address space only on overcommitting platforms.
+    accepts reserved-only mappings. The page is never written after protection,
+    so on POSIX the commit-then-protect-NONE sequence faults in no physical
+    page; on Windows the MEM_COMMIT still charges roughly one page against the
+    system commit limit, not merely address space.
     */
     if (br_vm_commit((u8 *)(void *)platform_block + payload_limit, page_size) != BR_STATUS_OK) {
       br__vm_platform_memory_free(platform_block);
       return BR_STATUS_OUT_OF_MEMORY;
     }
+    /*
+    The guard page is reserved and now committed, so a failure to re-protect it
+    is a runtime failure on valid state, not an absent capability: report
+    INVALID_STATE rather than NOT_SUPPORTED (which would wrongly imply the
+    platform cannot do guard pages at all).
+    */
     if (!br_vm_protect(
           (u8 *)(void *)platform_block + payload_limit, page_size, BR_VM_PROTECT_NONE)) {
       br__vm_platform_memory_free(platform_block);
-      return BR_STATUS_NOT_SUPPORTED;
+      return BR_STATUS_INVALID_STATE;
     }
   }
 

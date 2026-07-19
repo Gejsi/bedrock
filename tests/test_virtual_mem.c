@@ -5,6 +5,9 @@
 
 #if !defined(_WIN32)
 #include <pthread.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #endif
 
 static void test_vm_reserve_commit_release(void) {
@@ -360,6 +363,76 @@ static void test_virtual_arena_overflow_protection(void) {
 }
 
 #if !defined(_WIN32)
+/*
+Prove the overflow-protection guard page actually faults on an out-of-bounds
+write, not just that the arena's bookkeeping refuses over-allocation. A forked
+child writes the last valid payload byte (must succeed) and then one byte into
+the trailing guard page (must fault). The child calls `_exit(0)` -- the
+underscore form, to skip atexit/sanitizer teardown -- right after the guard
+write, so if the guard did NOT fault the child exits cleanly with 0 and the
+parent's "did not exit 0" assertion fails. The parent therefore only needs to
+confirm the child did not exit 0 (a fatal signal, or a sanitizer abort from the
+intercepted fault), which keeps a single test green under debug, sanitize, and
+thread-sanitize without excluding it from any mode.
+*/
+static void test_virtual_arena_guard_page_faults(void) {
+  br_virtual_arena arena;
+  br_alloc_result full;
+  usize page_size = br_vm_page_size();
+  usize reserved;
+  pid_t child;
+  int status;
+
+  if (page_size == 0u) {
+    return;
+  }
+
+  reserved = page_size * 2u;
+
+  br_virtual_arena_init(&arena);
+  arena.flags = BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION;
+  arena.default_commit_size = page_size;
+  assert(br_virtual_arena_init_static(&arena, reserved, page_size) == BR_STATUS_OK);
+
+  full = br_virtual_arena_alloc_uninit(&arena, reserved, 1u);
+  assert(full.status == BR_STATUS_OK);
+  assert(full.ptr != NULL);
+
+  child = fork();
+  assert(child >= 0);
+  if (child == 0) {
+    volatile u8 *payload = (volatile u8 *)full.ptr;
+
+    /*
+    Restore default fault handlers so the EXPECTED guard fault kills the child
+    cleanly instead of triggering the sanitizer's SEGV/BUS reporter, which would
+    dump an alarming (but benign) diagnostic into every sanitize log. This only
+    suppresses the report for this deliberately-provoked fault; the not-exit-0
+    assertion below still proves the guard blocked the write. No-op under
+    debug/thread-sanitize, where no such handler is installed.
+    */
+    signal(SIGSEGV, SIG_DFL);
+    signal(SIGBUS, SIG_DFL);
+
+    /* Last valid byte must be writable; this proves the fault below is the guard. */
+    payload[reserved - 1u] = 0x5au;
+    /* First byte past the payload is the PROT_NONE guard page: this must fault. */
+    payload[reserved] = 0x5au;
+    /* Only reached if the guard did NOT fault (the broken case). */
+    _exit(0);
+  }
+
+  assert(waitpid(child, &status, 0) == child);
+  /*
+  Any non-zero outcome proves the guard blocked the write: a fatal signal
+  (SIGSEGV/SIGBUS) on most runs, or a non-zero exit from a sanitizer that
+  intercepted the fault. A clean exit 0 means the guard failed to protect.
+  */
+  assert(!(WIFEXITED(status) && WEXITSTATUS(status) == 0));
+
+  br_virtual_arena_destroy(&arena);
+}
+
 #define TEST_VIRTUAL_ARENA_THREAD_COUNT 4u
 #define TEST_VIRTUAL_ARENA_ITERATIONS 128u
 #define TEST_VIRTUAL_ARENA_ALLOC_SIZE 16u
@@ -447,6 +520,7 @@ int main(void) {
   test_virtual_arena_lazy_temp();
   test_virtual_arena_overflow_protection();
 #if !defined(_WIN32)
+  test_virtual_arena_guard_page_faults();
   test_virtual_arena_serializes_allocations();
 #endif
   return 0;
