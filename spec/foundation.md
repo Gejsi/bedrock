@@ -93,7 +93,8 @@ following policy:
 
 The default mental model should be:
 
-- pass `br_allocator *` into constructors, builders, and container init
+- pass `br_allocator` by value into constructors, builders, and container init
+  (the struct is two pointers; this matches the shipped ABI)
 - pass a `br_arena *` when the lifetime is region-based
 - pass a user state pointer when callbacks need extra context
 
