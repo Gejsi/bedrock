@@ -28,9 +28,8 @@ module provides only the endianness-agnostic `byteswap` primitive.
 `br_bits_clz_uN(0)` returns N; `br_bits_ctz_uN(0)` returns N; `br_bits_popcount`
 and `br_bits_count_zeros` are naturally defined. Implementations MUST guard the
 builtin tier because `__builtin_clz(0)`/`ctz(0)` are undefined behavior and
-silent. This matches C23 `<stdbit.h>` semantics. (Odin's `log2(0)` returns
-`max(T)`; Bedrock's `br_bits_log2_uN(0)` likewise returns all-ones/max,
-documented.)
+silent. This matches C23 `<stdbit.h>` semantics. (Odin's `log2(0)` returns a silent
+`max(T)` sentinel; Bedrock drops standalone log2 entirely — see the API notes.)
 
 ## Three-tier intrinsic strategy (approved)
 
@@ -71,12 +70,13 @@ int br_bits_clz_u32(uint32_t x);          /* leading zeros; 32 if x==0 */
 int br_bits_ctz_u32(uint32_t x);          /* trailing zeros; 32 if x==0 */
 int br_bits_popcount_u32(uint32_t x);     /* set bits */
 int br_bits_count_zeros_u32(uint32_t x);  /* width - popcount */
-int br_bits_len_u32(uint32_t x);          /* min bits to represent; 0 if x==0 */
-uint32_t br_bits_log2_u32(uint32_t x);    /* leading-bit index; UINT32_MAX if x==0 */
+int br_bits_bit_width_u32(uint32_t x);    /* min bits to represent; 0 if x==0 (C23 stdc_bit_width) */
+/* floor(log2 x) == br_bits_bit_width_uN(x) - 1 for x > 0. No standalone log2:
+   Odin's log2(0)=max(T) sentinel is a footgun; bit_width is total and honest. */
 
 /* Bit rearrangement. */
-uint32_t br_bits_rotl_u32(uint32_t x, unsigned k);
-uint32_t br_bits_rotr_u32(uint32_t x, unsigned k);
+uint32_t br_bits_rotate_left_u32(uint32_t x, unsigned k);   /* k taken mod 32 */
+uint32_t br_bits_rotate_right_u32(uint32_t x, unsigned k);
 uint32_t br_bits_reverse_u32(uint32_t x);   /* reverse bit order */
 uint16_t br_bits_byteswap_u16(uint16_t x);  /* also u32/u64; endianness-agnostic */
 
@@ -84,11 +84,11 @@ uint16_t br_bits_byteswap_u16(uint16_t x);  /* also u32/u64; endianness-agnostic
 bool br_bits_is_power_of_two_u32(uint32_t x);   /* signed variants too: _i32 etc. */
 
 /* Multi-word arithmetic. */
-typedef struct br_bits_add_u32_result { uint32_t sum, carry_out; } br_bits_add_u32_result;
-typedef struct br_bits_sub_u32_result { uint32_t diff, borrow_out; } br_bits_sub_u32_result;
-typedef struct br_bits_mul_u32_result { uint32_t hi, lo; } br_bits_mul_u32_result;
-br_bits_add_u32_result br_bits_add_u32(uint32_t x, uint32_t y, uint32_t carry_in);
-br_bits_sub_u32_result br_bits_sub_u32(uint32_t x, uint32_t y, uint32_t borrow_in);
+typedef struct br_bits_add_u32_result { uint32_t sum;  bool carry_out;  } br_bits_add_u32_result;
+typedef struct br_bits_sub_u32_result { uint32_t diff; bool borrow_out; } br_bits_sub_u32_result;
+typedef struct br_bits_mul_u32_result { uint32_t hi, lo; } br_bits_mul_u32_result; /* (hi,lo) as Odin/Go */
+br_bits_add_u32_result br_bits_add_u32(uint32_t x, uint32_t y, bool carry_in);
+br_bits_sub_u32_result br_bits_sub_u32(uint32_t x, uint32_t y, bool borrow_in);
 br_bits_mul_u32_result br_bits_mul_u32(uint32_t x, uint32_t y);   /* u64 path may use __int128 when available */
 br_bits_div_u32_result br_bits_div_u32(uint32_t hi, uint32_t lo, uint32_t y);
 
@@ -101,7 +101,7 @@ uint32_t br_bits_field_insert_u32(uint32_t base, uint32_t insert, unsigned offse
 Bitfield contract: `offset + bits <= width` is the caller's responsibility;
 out-of-range values are unchecked, like C shift operands.
 
-Widths provided: clz/ctz/popcount/count_zeros/len/log2/rotl/rotr/reverse for
+Widths provided: clz/ctz/popcount/count_zeros/bit_width/rotate/reverse for
 u8,u16,u32,u64; byteswap for u16,u32,u64; is_power_of_two for u8..u64 + i8..i64;
 add/sub/mul/div for u32,u64; field_extract/insert for u8..u64 and i8..i64.
 
@@ -119,6 +119,13 @@ add/sub/mul/div for u32,u64; field_extract/insert for u8..u64 and i8..i64.
 - div returns `{quo, rem, status}` instead of panicking/asserting; the u32/u64
   error paths are unified.
 - clz/ctz/popcount are total (defined at 0); Odin exposes the raw intrinsic.
+- No standalone log2: Odin's `log2(0) = max(T)` silent sentinel is dropped as a
+  footgun. Use total `bit_width` (0 -> 0); floor-log2 is `bit_width(x) - 1` for
+  x > 0.
+- Odin/Go's `len` is named `bit_width` (clearer in C; matches C23
+  `stdc_bit_width` exactly, including the 0 -> 0 case).
+- add/sub carry/borrow in/out are `bool` (Rust idiom), not integer 0/1
+  (Odin/Go).
 - Byte-order helpers (from_be/to_le) are NOT re-exposed here — see
   encoding/endian.
 
@@ -126,7 +133,9 @@ add/sub/mul/div for u32,u64; field_extract/insert for u8..u64 and i8..i64.
 
 Differential-test the portable fallback against the builtin tier: exhaustive
 for u8/u16, random sweep for u32/u64, on every count/scan/reverse/byteswap.
-Property tests: popcount + count_zeros == width; rotl(rotr(x,k),k) == x;
-reverse(reverse(x)) == x; div reconstructs (quo*y + rem == (hi:lo)) when status
-OK; div by 0 and overflow return INVALID_ARGUMENT. Fuzz div/mul/add/sub for
+Property tests: popcount + count_zeros == width;
+rotate_left(rotate_right(x,k),k) == x; reverse(reverse(x)) == x;
+bit_width(x) - 1 == index of highest set bit for x > 0; div reconstructs
+(quo*y + rem == (hi:lo)) when status OK; div by 0 and overflow return
+INVALID_ARGUMENT. Fuzz div/mul/add/sub for
 wraparound correctness.
