@@ -11,7 +11,7 @@ BR_EXTERN_C_BEGIN
 typedef struct br_dynamic_arena {
   size_t block_size;
   size_t out_band_size;
-  size_t alignment;
+  size_t minimum_alignment;
   void **unused_blocks;
   size_t unused_count;
   size_t unused_cap;
@@ -33,8 +33,10 @@ Bedrock keeps Odin's dynamic arena behavior close, with these intentional
 C-side adaptations:
 - explicit `block_allocator` and `array_allocator` default to heap allocators
   when passed unset, instead of using Odin's ambient context allocator
-- direct allocation calls use the arena's configured alignment rather than a
-  per-request alignment parameter, matching Odin's fixed-alignment design
+- the direct allocation entry points (`br_dynamic_arena_alloc` and friends)
+  allocate at the arena's `minimum_alignment`; per-request alignment is honored
+  through the generic allocator adapter, where the effective alignment is
+  `max(minimum_alignment, request)`
 - the generic allocator adapter targets Bedrock's alloc/free/resize/reset ABI;
   `FREE` reports not-supported and `RESET` maps to `free_all`
 - block cycling preserves the current block if acquiring the next block fails,
@@ -46,7 +48,7 @@ br_status br_dynamic_arena_init(br_dynamic_arena *arena,
                                 br_allocator array_allocator,
                                 size_t block_size,
                                 size_t out_band_size,
-                                size_t alignment);
+                                size_t minimum_alignment);
 void br_dynamic_arena_destroy(br_dynamic_arena *arena);
 
 void br_dynamic_arena_reset(br_dynamic_arena *arena);

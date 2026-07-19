@@ -168,13 +168,24 @@ Bedrock now also has a dynamic arena close to Odin's current shape.
   arena blocks
 - direct resize is reallocate-and-copy because the arena keeps no per-allocation
   metadata
+- all allocations honor per-request alignment: the effective alignment is
+  `max(minimum_alignment, request)`, applied on the in-block path via
+  align-forward with margin accounting and on the out-band path by flooring the
+  backing allocation, matching Odin's `minimum_alignment` model
 
 Important Bedrock-specific deviations from Odin for now:
 
 - explicit `block_allocator` and `array_allocator` default to heap allocators
   when unset, instead of using Odin's ambient context allocator
-- direct allocation calls use the arena's configured alignment rather than a
-  per-request alignment parameter
+- the direct allocation entry points (`br_dynamic_arena_alloc` and friends) keep
+  their fixed signatures and allocate at `minimum_alignment`; a larger
+  per-request alignment is supplied through the generic allocator adapter
+- Bedrock floors the out-band path by `minimum_alignment` as well, where Odin's
+  out-band path forwards the raw request alignment (see
+  `tracking/odin-suspected-bugs.md`)
+- when a block reused from the free list was allocated for a smaller alignment,
+  Bedrock re-aligns within the obtained block instead of assuming a zero margin,
+  so an over-aligned request never returns an under-aligned pointer
 - the generic allocator adapter currently targets Bedrock's alloc/free/resize/reset
   ABI, so `FREE` is not supported and `RESET` maps to `free_all`
 - block cycling preserves the current block if acquiring the next block fails,
