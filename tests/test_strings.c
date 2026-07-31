@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdio.h>
 
 #include <bedrock.h>
 
@@ -54,6 +55,41 @@ static void test_strings_views(void) {
                          BR_STR_LIT("bar")));
   assert(br_string_equal(br_string_trim_suffix(BR_STR_LIT("foobar"), BR_STR_LIT("bar")),
                          BR_STR_LIT("foo")));
+}
+
+static void test_strings_printf_interop(void) {
+  char out[64];
+  br_string_view view = BR_STR_LIT("hello");
+  br_string_view empty = {0};
+  br_string_result owned;
+  br_string_view owned_view;
+  br_string_builder builder = {0};
+  br_string_view builder_view;
+  int count;
+
+  count = snprintf(out, sizeof(out), "view=" BR_SV_FMT, BR_SV_ARG(view));
+  assert(count == 10);
+  assert(strcmp(out, "view=hello") == 0);
+
+  count = snprintf(out, sizeof(out), "[" BR_SV_FMT "]", BR_SV_ARG(empty));
+  assert(count == 2);
+  assert(strcmp(out, "[]") == 0);
+
+  owned = br_string_clone(BR_STR_LIT("owned"), br_allocator_heap());
+  assert(owned.status == BR_STATUS_OK);
+  owned_view = br_string_view_from_string(owned.value);
+  count = snprintf(out, sizeof(out), "value=" BR_SV_FMT, BR_SV_ARG(owned_view));
+  assert(count == 11);
+  assert(strcmp(out, "value=owned") == 0);
+  assert(br_string_free(owned.value, br_allocator_heap()) == BR_STATUS_OK);
+
+  br_string_builder_init(&builder, br_allocator_heap());
+  assert(br_string_builder_write(&builder, BR_STR_LIT("built")).status == BR_STATUS_OK);
+  builder_view = br_string_builder_view(&builder);
+  count = snprintf(out, sizeof(out), "builder=" BR_SV_FMT, BR_SV_ARG(builder_view));
+  assert(count == 13);
+  assert(strcmp(out, "builder=built") == 0);
+  br_string_builder_destroy(&builder);
 }
 
 static void test_strings_utf8_helpers(void) {
@@ -455,6 +491,7 @@ static void test_strings_fields_iter(void) {
 int main(void) {
   test_strings_compare_and_search();
   test_strings_views();
+  test_strings_printf_interop();
   test_strings_utf8_helpers();
   test_strings_clone();
   test_strings_clone_to_cstr();

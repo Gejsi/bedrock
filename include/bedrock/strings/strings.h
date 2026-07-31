@@ -39,6 +39,25 @@ typedef struct br_string_rewrite_result {
 
 #define BR_STR_LIT(s) br_string_view_make((s), sizeof(s) - 1u)
 
+static inline const char *br__string_view_printf_data(br_string_view string) {
+  return string.data != NULL ? string.data : "";
+}
+
+/*
+Adapt a string view to the standard printf-family `%.*s` conversion:
+
+  printf("value=" BR_SV_FMT "\n", BR_SV_ARG(view));
+
+`BR_SV_ARG` evaluates `view` twice. Pass a stable, side-effect-free value,
+normally a local variable. The C printf precision argument is an int, so the
+view length must not exceed INT_MAX. `%s` also stops at an embedded NUL; use a
+length-aware writer such as fwrite when every byte must be preserved.
+
+A zero-value view is supported and prints as an empty string.
+*/
+#define BR_SV_FMT "%.*s"
+#define BR_SV_ARG(view) (int)((view).len), br__string_view_printf_data((view))
+
 static inline br_string br_string_make(void *data, size_t len) {
   br_string string;
 

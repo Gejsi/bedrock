@@ -74,7 +74,7 @@ bedrock does not promise a stable ABI across versions.
 | Module | What it gives you |
 | --- | --- |
 | `mem` | allocator interface, arenas (fixed, growing, virtual-memory), scratch/stack/buddy/tracking allocators, an adapter for foreign sizeless-free allocator callbacks, low-level helpers |
-| `strings` / `bytes` | views vs owned data, search/split/trim/case/fields, builders (with number writing), readers, allocation-free iterators, C-string interop (`clone_to_cstr`) |
+| `strings` / `bytes` | views vs owned data, search/split/trim/case/fields, builders (with number writing), readers, allocation-free iterators, C-string interop (`clone_to_cstr`, `BR_SV_FMT` / `BR_SV_ARG`) |
 | `unicode` | strict UTF-8 encode/decode/validate, rune counting; lossless WTF-8 ↔ WTF-16 transcode for OS strings |
 | `io` / `bufio` | generic stream interface, buffered readers and writers |
 | `sync` | futex-backed mutexes, rw/recursive locks, condvars, semaphores, wait groups, barriers, once, parker — all zero-value ready |

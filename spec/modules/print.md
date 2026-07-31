@@ -1,5 +1,11 @@
 # Print
 
+> Status: deferred July 31, 2026. The concrete string-view interoperability
+> need landed independently as `BR_SV_FMT` / `BR_SV_ARG` in the strings module,
+> for use with the standard C printf family. Keep this design as research; do
+> not implement it until real consumer call sites demonstrate a need for
+> printf-style composition directly into a Bedrock builder.
+
 `printf`-family formatting composed over the strconv leaves: familiar `%`-verbs,
 locale-free by construction, format string checked by the compiler. Named
 `print` (the composer verb over the leaves) — `fmt` is the excluded reflection
@@ -96,17 +102,18 @@ trip the positional-desync below) and does NOT wrap `<inttypes.h>` (no gain over
 ## The view idiom (the cstr-grievance fix)
 
 ```c
-#define BR_SV_ARG(sv) (int)((sv).len), (const char *)((sv).data)
-/* br_builder_printf(b, "path=%.*s port=%d\n", BR_SV_ARG(path), port); */
+printf("path=" BR_SV_FMT " port=%d\n", BR_SV_ARG(path), port);
 ```
 
-`%.*s` + `BR_SV_ARG` is the blessed way to print a `br_string_view` — no cstr
-conversion, FULL compiler checking (the `.*` precision pulls an int the attribute
-validates; the pointer is checked as `char*`). `%s` stays `const char*`. The
-`(int)` cast lives INSIDE `BR_SV_ARG` (silences `-Wconversion`). NOT a custom
-specifier — see the positional-desync rule. A view longer than `INT_MAX` can't
-use `%.*s` (the standard `%.*s` limitation; a >2 GB path/log value isn't real —
-documented).
+`BR_SV_FMT` (`%.*s`) + `BR_SV_ARG` is the landed way to print a
+`br_string_view` — no cstr conversion, FULL compiler checking (the `.*`
+precision pulls an int the attribute validates; the pointer is checked as
+`char*`). `%s` stays `const char*`. The `(int)` cast lives INSIDE
+`BR_SV_ARG` (silences `-Wconversion`). NOT a custom specifier — see the
+positional-desync rule. `BR_SV_ARG` evaluates its stable view argument twice and
+supports a zero-value view. A view longer than `INT_MAX` can't use `%.*s` (the
+standard `%.*s` limitation); views containing embedded NULs use a length-aware
+writer when every byte must be preserved.
 
 ### Why the specifier set is closed (the positional-desync mechanism)
 
