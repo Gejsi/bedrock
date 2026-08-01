@@ -55,7 +55,19 @@ br_status br_bufio_writer_init_with_buffer(br_bufio_writer *writer,
   return BR_STATUS_OK;
 }
 
-void br_bufio_writer_destroy(br_bufio_writer *writer) {
+br_status br_bufio_writer_destroy(br_bufio_writer *writer) {
+  br_status status;
+
+  if (writer == NULL) {
+    return BR_STATUS_OK;
+  }
+
+  status = br_bufio_writer_flush(writer);
+  br_bufio_writer_discard(writer);
+  return status;
+}
+
+void br_bufio_writer_discard(br_bufio_writer *writer) {
   if (writer == NULL) {
     return;
   }
@@ -331,8 +343,8 @@ static br_i64_result br__bufio_writer_stream_proc(
       io_result = br_bufio_writer_write(writer, data, data_len);
       return br_i64_result_make((i64)io_result.count, io_result.status);
     case BR_IO_MODE_DESTROY:
-      br_bufio_writer_destroy(writer);
-      return br_i64_result_make(0, BR_STATUS_OK);
+      status = br_bufio_writer_destroy(writer);
+      return br_i64_result_make(0, status);
     case BR_IO_MODE_QUERY:
       modes = br_io_mode_bit(BR_IO_MODE_FLUSH) | br_io_mode_bit(BR_IO_MODE_WRITE) |
               br_io_mode_bit(BR_IO_MODE_DESTROY);

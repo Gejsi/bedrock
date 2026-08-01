@@ -39,7 +39,25 @@ br_status br_bufio_writer_init_with_buffer(br_bufio_writer *writer,
                                            br_stream sink,
                                            void *buffer,
                                            size_t buffer_len);
-void br_bufio_writer_destroy(br_bufio_writer *writer);
+
+/*
+Flush pending bytes, release owned storage, and clear the writer.
+
+The writer is cleared even when flushing fails, so a failure means buffered
+bytes may have been lost. The underlying sink is not destroyed.
+*/
+br_status br_bufio_writer_destroy(br_bufio_writer *writer);
+
+/*
+Discard buffered bytes and any sticky error, release owned storage, and clear
+the writer without performing sink I/O. The underlying sink is not destroyed.
+*/
+void br_bufio_writer_discard(br_bufio_writer *writer);
+
+/*
+Discard buffered bytes and any sticky error, then reuse the existing storage
+with `sink`. The underlying sink is not flushed or destroyed.
+*/
 void br_bufio_writer_reset(br_bufio_writer *writer, br_stream sink);
 
 size_t br_bufio_writer_size(const br_bufio_writer *writer);
