@@ -7,6 +7,37 @@ static br_bytes_view bv(const char *s) {
   return br_bytes_view_make(s, strlen(s));
 }
 
+typedef struct test_base64_writer {
+  u8 data[8];
+  usize len;
+  usize max_accept;
+  usize calls;
+  br_status status;
+} test_base64_writer;
+
+static br_i64_result test_base64_writer_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  test_base64_writer *writer = (test_base64_writer *)context;
+  usize count;
+
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
+
+  switch (mode) {
+    case BR_IO_MODE_WRITE:
+      count = br_min_size(data_len, writer->max_accept);
+      count = br_min_size(count, BR_ARRAY_COUNT(writer->data) - writer->len);
+      memcpy(writer->data + writer->len, data, count);
+      writer->len += count;
+      writer->calls += 1u;
+      return br_i64_result_make((i64)count, writer->status);
+    case BR_IO_MODE_QUERY:
+      return br_stream_query_utility(br_io_mode_bit(BR_IO_MODE_WRITE));
+    default:
+      return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+  }
+}
+
 /* RFC 4648 section 10 test vectors: input -> standard-alphabet padded output. */
 static void test_rfc4648_vectors(void) {
   static const struct {
@@ -172,6 +203,86 @@ static void test_error_reports_partial_output(void) {
   assert(buf[3] == 0xa5u);
 }
 
+static void test_decode_to_writer_standard(void) {
+  enum { GROUP_COUNT = 129, ENCODED_LEN = GROUP_COUNT * 4, DECODED_LEN = GROUP_COUNT * 3 };
+  u8 encoded[ENCODED_LEN];
+  br_byte_buffer sink;
+  br_bytes_view decoded;
+  br_decode_into_result result;
+  usize i;
+
+  /* 129 quanta force one full 384-byte flush followed by a final flush. */
+  for (i = 0u; i < GROUP_COUNT; ++i) {
+    memcpy(encoded + i * 4u, "QUJD", 4u);
+  }
+
+  br_byte_buffer_init(&sink, br_allocator_heap());
+  result = br_base64_decode_to_writer(
+    br_base64_std(), br_bytes_view_make(encoded, sizeof(encoded)), br_byte_buffer_as_writer(&sink));
+  assert(result.status == BR_STATUS_OK);
+  assert(result.count == DECODED_LEN);
+  assert(result.error_offset == 0u);
+
+  decoded = br_byte_buffer_view(&sink);
+  assert(decoded.len == DECODED_LEN);
+  for (i = 0u; i < decoded.len; i += 3u) {
+    assert(memcmp(decoded.data + i, "ABC", 3u) == 0);
+  }
+  br_byte_buffer_destroy(&sink);
+}
+
+static void test_decode_to_writer_raw_url(void) {
+  static const u8 expected[] = {0xfbu, 0xffu};
+  br_byte_buffer sink;
+  br_decode_into_result result;
+
+  br_byte_buffer_init(&sink, br_allocator_heap());
+  result =
+    br_base64_decode_to_writer(br_base64_raw_url(), bv("-_8"), br_byte_buffer_as_writer(&sink));
+  assert(result.status == BR_STATUS_OK);
+  assert(result.count == sizeof(expected));
+  assert(result.error_offset == 0u);
+  assert(
+    br_bytes_equal(br_byte_buffer_view(&sink), br_bytes_view_make(expected, sizeof(expected))));
+  br_byte_buffer_destroy(&sink);
+}
+
+static void test_decode_to_writer_malformed_input(void) {
+  test_base64_writer sink;
+  br_decode_into_result result;
+
+  memset(&sink, 0, sizeof(sink));
+  sink.max_accept = BR_ARRAY_COUNT(sink.data);
+  sink.status = BR_STATUS_OK;
+
+  /* The valid first quantum remains buffered when the next quantum fails. */
+  result = br_base64_decode_to_writer(
+    br_base64_std(), bv("QUJD!A=="), br_stream_make(&sink, test_base64_writer_proc));
+  assert(result.status == BR_STATUS_INVALID_ENCODING);
+  assert(result.count == 0u);
+  assert(result.error_offset == 4u);
+  assert(sink.calls == 0u);
+  assert(sink.len == 0u);
+}
+
+static void test_decode_to_writer_short_write(void) {
+  test_base64_writer sink;
+  br_decode_into_result result;
+
+  memset(&sink, 0, sizeof(sink));
+  sink.max_accept = 2u;
+  sink.status = BR_STATUS_SHORT_WRITE;
+
+  result = br_base64_decode_to_writer(
+    br_base64_std(), bv("Zm9vYmFy"), br_stream_make(&sink, test_base64_writer_proc));
+  assert(result.status == BR_STATUS_SHORT_WRITE);
+  assert(result.count == 2u);
+  assert(result.error_offset == 0u);
+  assert(sink.calls == 1u);
+  assert(sink.len == 2u);
+  assert(memcmp(sink.data, "fo", 2u) == 0);
+}
+
 /* Undersized dst -> SHORT_BUFFER, count 0, nothing written (never truncates). */
 static void test_short_buffer(void) {
   uint8_t small[2];
@@ -246,6 +357,10 @@ int main(void) {
   test_structural_length();
   test_strict_vs_lenient();
   test_error_reports_partial_output();
+  test_decode_to_writer_standard();
+  test_decode_to_writer_raw_url();
+  test_decode_to_writer_malformed_input();
+  test_decode_to_writer_short_write();
   test_short_buffer();
   test_encoded_length_overflow();
   test_allocating_and_free_on_error();
