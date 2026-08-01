@@ -101,6 +101,9 @@ br_bufio_reader_slice_result br_bufio_reader_read_slice(br_bufio_reader *reader,
 /*
 Read until `delim` is found and return an owned byte slice. The allocation is
 exactly `value.len` bytes and can be released with `br_bytes_free`.
+
+If the source ends after yielding bytes but before `delim`, `value` contains
+that final unterminated record and the status is `BR_STATUS_EOF`.
 */
 br_bytes_result
 br_bufio_reader_read_bytes(br_bufio_reader *reader, uint8_t delim, br_allocator allocator);
@@ -108,6 +111,9 @@ br_bufio_reader_read_bytes(br_bufio_reader *reader, uint8_t delim, br_allocator 
 /*
 Read until `delim` is found and return an owned string. The allocation is
 exactly `value.len` bytes and can be released with `br_string_free`.
+
+If the source ends after yielding bytes but before `delim`, `value` contains
+that final unterminated record and the status is `BR_STATUS_EOF`.
 */
 br_string_result
 br_bufio_reader_read_string(br_bufio_reader *reader, uint8_t delim, br_allocator allocator);

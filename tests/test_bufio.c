@@ -287,6 +287,12 @@ static void test_bufio_reader_runes_and_lines(void) {
   assert(memcmp(bytes_result.value.data, "alpha\n", 6u) == 0);
   assert(br_bytes_free(bytes_result.value, br_allocator_heap()) == BR_STATUS_OK);
 
+  bytes_result = br_bufio_reader_read_bytes(&line_reader, (u8)'\n', br_allocator_heap());
+  assert(bytes_result.status == BR_STATUS_EOF);
+  assert(bytes_result.value.len == 4u);
+  assert(memcmp(bytes_result.value.data, "beta", 4u) == 0);
+  assert(br_bytes_free(bytes_result.value, br_allocator_heap()) == BR_STATUS_OK);
+
   br_byte_reader_init(&string_source, BR_BYTES_LIT("unterminated"));
   assert(br_bufio_reader_init_with_buffer(&string_reader,
                                           br_byte_reader_as_stream(&string_source),
