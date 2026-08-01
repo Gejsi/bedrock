@@ -178,12 +178,12 @@ the substrate because it is unavailable on some supported systems, including
 macOS.
 
 Linux and macOS run the full debug, release, ASan/UBSan, and TSan CI matrix.
-Windows runs a debug CI job. The FreeBSD, OpenBSD, and NetBSD branches are
-implemented against their native pthread declarations but still require target
-CI before Bedrock can claim the same verification level for them. In
-particular, FreeBSD and OpenBSD expose thread naming through `<pthread_np.h>`,
-while NetBSD declares its differently shaped `pthread_setname_np` in
-`<pthread.h>`.
+Windows runs debug and release CI jobs. The FreeBSD, OpenBSD, and NetBSD
+branches are implemented against their native pthread declarations but still
+require target CI before Bedrock can claim the same verification level for
+them. In particular, FreeBSD and OpenBSD expose thread naming through
+`<pthread_np.h>`, while NetBSD declares its differently shaped
+`pthread_setname_np` in `<pthread.h>`.
 
 ## Deliberate exclusions
 

@@ -6,50 +6,58 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BASE_CFLAGS: -std=c11 -Werror
+
 # The upstream/ submodules are reference material only; the build never reads
 # them, so all jobs check out without submodules.
 
 jobs:
   test-linux:
-    name: linux (${{ matrix.mode }})
+    name: linux (${{ matrix.compiler }}, ${{ matrix.mode }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
+        compiler: [clang, gcc]
         mode: [debug, release, sanitize, thread-sanitize]
+        exclude:
+          - compiler: gcc
+            mode: sanitize
+          - compiler: gcc
+            mode: thread-sanitize
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Recent Ubuntu kernels ship ASLR entropy that breaks ASan/TSan mappings.
       - name: Lower ASLR entropy for sanitizers
         if: matrix.mode == 'sanitize' || matrix.mode == 'thread-sanitize'
         run: sudo sysctl -w vm.mmap_rnd_bits=28
-      - run: make MODE=${{ matrix.mode }} test
-
-  test-linux-gcc:
-    name: linux (gcc, ${{ matrix.mode }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        mode: [debug, release]
-    steps:
-      - uses: actions/checkout@v4
-      - run: make CC=gcc BASE_CFLAGS="-std=c11 -Werror" MODE=${{ matrix.mode }} test
+      - run: make CC=${{ matrix.compiler }} MODE=${{ matrix.mode }} test
 
   test-macos:
-    name: macos (${{ matrix.mode }})
+    name: macos (clang, ${{ matrix.mode }})
     runs-on: macos-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         mode: [debug, release, sanitize, thread-sanitize]
     steps:
-      - uses: actions/checkout@v4
-      - run: make MODE=${{ matrix.mode }} test
+      - uses: actions/checkout@v7
+      - run: make CC=clang MODE=${{ matrix.mode }} test
 
   test-windows:
-    name: windows (${{ matrix.mode }})
+    name: windows (clang, ${{ matrix.mode }})
     runs-on: windows-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -58,31 +66,33 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: msys2/setup-msys2@v2
         with:
           msystem: CLANG64
           update: false
           install: make
           pacboy: clang:p
-      - run: make -k MODE=${{ matrix.mode }} test
+      - run: make -k CC=clang MODE=${{ matrix.mode }} test
 
   test-c-standard:
-    name: c standard (${{ matrix.standard }})
+    name: c standard (${{ matrix.standard }}, clang)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        standard: [c11, c17, c23]
+        standard: [c17, c23]
     steps:
-      - uses: actions/checkout@v4
-      - run: make BASE_CFLAGS="-std=${{ matrix.standard }} -Werror" MODE=debug test
+      - uses: actions/checkout@v7
+      - run: make CC=clang BASE_CFLAGS="-std=${{ matrix.standard }} -Werror" MODE=debug test
 
   format:
     name: clang-format
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Pin clang-format: the .clang-format config uses 21+ options
       # (BinPackParameters: OnePerLine), and formatting differs across major
       # versions, so the runner's default binary is not a reliable gate.
