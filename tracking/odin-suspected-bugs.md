@@ -2,33 +2,39 @@
 
 Concise notes for issues found while porting Odin code to Bedrock.
 
-All issues below were verified present in upstream Odin at `2c25fb9`
-(July 19, 2026).
+All source-level implementation issues below are present in upstream Odin at
+`2c25fb9` (July 19, 2026). An independent review on August 2, 2026 classified
+the 17 claims as 12 confirmed, 4 partial, 0 refuted, and 1 not executable on
+the available macOS host. "Partial" means the implementation issue exists but
+the original consequence or scope was overstated.
 
 Footnote (dormant, not a numbered bug): Odin's `Memory_Block_Flag.Overflow_Protection`
 path would VirtualProtect an uncommitted page on Windows
 (`virtual.odin:90-108`), the same defect Bedrock fixed in its own guard-page
-feature — but in Odin the flag is passed by no call site and the `protect`
-return is ignored, so it can never manifest. Bedrock's overflow protection is
-the reachable, error-checked completion of that dormant path.
+feature. No in-tree Odin caller passes the flag, so the defect is dormant in
+Odin's own call graph, but `memory_block_alloc` is public and external callers
+can request it. The `protect` result is ignored. This was source-verified and
+target-checked, but not executed on Windows. Bedrock's overflow protection is
+the reachable, error-checked completion of that path.
 
 Footnote (quirk, not a numbered bug): `core/strings` `_split_iterator`
 (strings.odin:1072) ends with `ok = res != ""`, dropping a single TRAILING
 empty field, while the `_split` LIST (:882) always keeps it —
 `split("a,", ",")` is `["a", ""]` but iterating `"a,"` yields only `"a"`.
-Middle empties are unaffected (the empty-check sits only in the
-separator-not-found branch, so `"a,,b"` still iterates `a`, `""`, `b` with no
-early termination or data loss). Internal list-vs-iterator inconsistency only.
-Bedrock's split iterator keeps trailing empties, matching its own list and
-Go's SplitSeq.
+It also drops an empty input's sole field, and the shared helper affects the
+split-after and line iterator variants. Middle empties are unaffected (the
+empty-check sits only in the separator-not-found branch, so `"a,,b"` still
+iterates `a`, `""`, `b` with no early termination or data loss). Internal
+list-vs-iterator inconsistency only. Bedrock's split iterator keeps trailing
+empties, matching its own list and Go's SplitSeq.
 
 Footnote (context-dependent, not a numbered bug): Odin's `thread_windows.odin`
 creates threads with raw `CreateThread` (:70) rather than `_beginthreadex`.
-For code that calls per-thread-state CRT functions (errno, strtok, locale)
-that risks CRT state corruption or per-thread CRT block leaks; Odin's own
-runtime may sidestep libc enough for this to be benign there, but a C library
-cannot — Bedrock's thread port must use `_beginthreadex` on the Windows path
-and deliberately not copy this.
+When embedding CRT-dependent C code, `_beginthreadex` is the conservative
+interoperability choice. The Odin implementation fact was source-verified and
+target-checked, but no concrete Odin runtime failure or universal CRT
+leak/corruption consequence was established on the available macOS host.
+Bedrock's thread port deliberately uses `_beginthreadex` on Windows.
 
 ## `core/mem` check_zero_ptr reads out of bounds
 
@@ -36,14 +42,13 @@ and deliberately not copy this.
 - Area: `check_zero_ptr`, word-alignment path (:292-310)
 - Issue: the prologue loop `for b in start..<start_aligned` (:296) reads the
   range `[start, start_aligned)` with no clamp to `end`. For a small unaligned
-  length that does not reach the next `align_of(uintptr)` boundary (canonical
-  repro: len=3 at an odd address), `align_forward` rounds `start_aligned` PAST
-  `end`, so the prologue reads up to `align_of(uintptr) - 1` (7) bytes beyond
-  the caller's buffer. In the same repro `end_aligned` also rounds below
-  `start`, adding a 1-byte under-read in the epilogue. The `{1,2,4,8}`
-  fast-path switch hides the most common small sizes, but 3/5/6/7 (any small
-  non-power-of-two length) at a sufficiently unaligned address reach the
-  broken path.
+  length that does not reach the next `align_of(uintptr)` boundary,
+  `align_forward` rounds `start_aligned` past `end`. With an 8-byte word, a
+  3-byte range at alignment residue 1 reads 4 bytes past `end`; the epilogue
+  also starts 1 byte before `start`. The failing residues satisfy
+  `0 < start % 8 < 8-len`: residues 1-4 for length 3, 1-2 for length 5, and 1
+  for length 6. Length 7 stays in bounds. The `{1,2,4,8}` fast-path switch
+  hides the most common small sizes.
 - Expected: the word-alignment strategy is only valid when the region spans an
   aligned word; small regions need a clamped or plain byte loop.
 - Effect: out-of-bounds read on both sides of the buffer — can fault against a
@@ -118,24 +123,25 @@ and deliberately not copy this.
 - Expected: re-align the bump pointer against the block actually obtained and
   recompute the margin after cycling.
 - Effect: an allocation whose alignment exceeds the reused block's original
-  alignment can return an under-aligned pointer (undefined behavior; potential
-  fault for over-aligned types). Reachable via reset followed by a
-  larger-alignment allocation; latent because most callers use one uniform
-  alignment.
+  alignment can return a pointer that violates the requested alignment. Using
+  that pointer for an over-aligned typed access can then be invalid. Reachable
+  via reset followed by a larger-alignment allocation; latent because most
+  callers use one uniform alignment.
 - Bedrock: re-aligns against the obtained block and re-checks the margin after
   cycling; returns a correctly aligned pointer or `BR_STATUS_OUT_OF_MEMORY`,
   never an under-aligned pointer (`src/mem/dynamic_arena.c`, documented
   in-code).
 
-## `core/encoding/hex` decode leak on invalid input
+## `core/encoding/hex` decode returns an allocation on invalid input
 
 - File: `core/encoding/hex/hex.odin`
 - Area: `decode`
 - Issue: `dst` is allocated before the parse loop; on an invalid character the
   proc returns `(dst, false)` without freeing it.
 - Expected: free `dst` before returning failure, as base64's `decode` does.
-- Effect: every failed decode leaks the allocation unless the caller frees a
-  buffer it was just told is invalid.
+- Effect: an invalid digit in an even-length input returns a non-nil partial
+  allocation with `ok=false`, so callers must still free it. The allocation is
+  not unconditionally lost, and odd-length failures allocate nothing.
 - Bedrock: pilot port frees on error and offers caller-buffer decoding.
 
 ## `core/encoding/base64` dead decode parameter
@@ -173,7 +179,10 @@ and deliberately not copy this.
 - Area: `Atomic_Recursive_Mutex.owner`
 - Issue: `owner` is a plain `int`, but `atomic_recursive_mutex_lock` reads it before acquiring the inner mutex while unlock writes it before releasing the inner mutex.
 - Expected: the pre-lock ownership check should use atomic load/store or another synchronization mechanism.
-- Effect: concurrent lock/unlock can race on `owner`; practical failures include stale same-owner reads causing a thread to skip the inner mutex and violate mutual exclusion.
+- Effect: concurrent lock/unlock has unsynchronized conflicting accesses to
+  `owner`, so the implementation does not establish a valid ownership check.
+  A stale-read mutual-exclusion failure is a possible consequence, not an
+  observed one.
 - Bedrock: stores `owner` as an atomic thread id.
 
 ## `core/sync` parker timeout state
@@ -207,25 +216,27 @@ and deliberately not copy this.
   parameterized decimal engine (never f64-then-narrow), gated by the Paxson
   f32 vectors (`spec/modules/strconv.md`).
 
-## `core/time/rfc3339` fractional seconds truncated to hundredths
+## `core/time` RFC 3339 parser accepts exactly two fractional digits
 
-- File: `core/time/rfc3339/rfc3339.odin`
+- File: `core/time/rfc3339.odin`
 - Area: timestamp parse, fractional-second component
-- Issue: the parser consumes only TWO fractional digits (hundredths),
-  computing nanoseconds as `10_000_000 * hundredths`; further fractional
-  digits in the input are silently dropped. Independently confirmed at source
-  by two reviewers during the Bedrock rfc3339 design (July 19, 2026).
+- Issue: the parser consumes exactly TWO fractional digits (hundredths),
+  computing nanoseconds as `10_000_000 * hundredths`. A one-digit fraction
+  fails. For a longer valid fraction, it returns a prefix parse with
+  `consumed` stopping after the first two digits rather than consuming the
+  complete timestamp.
 - Expected: RFC 3339 permits arbitrary fractional precision
   (`time-secfrac = "." 1*DIGIT`); a nanosecond-resolution DateTime should
   parse up to nine digits.
-- Effect: valid timestamps silently lose precision — ".123456789" parses as
-  ".12" with no error reported. Data-loss conformance defect, not memory
-  safety.
+- Effect: callers that require a complete timestamp must compare `consumed`
+  with the input length. A caller that ignores short consumption can accept
+  only the `.12` prefix of `.123456789`; the parser itself does not silently
+  consume and discard the remaining digits.
 - Bedrock: `br_rfc3339_parse` reads up to nine fractional digits into the
   nanosecond field and accepts-but-ignores digits beyond nanosecond
   resolution (documented), per `spec/modules/time.md`.
 
-## `core/bytes` buffer self-append use-after-free
+## `core/bytes` buffer self-append uses a stale aliased source
 
 - File: `core/bytes/buffer.odin`
 - Area: `_buffer_grow` plus `buffer_write` (:108-135, :166-172)
@@ -235,10 +246,10 @@ and deliberately not copy this.
   source still points into the freed allocation.
 - Expected: detect a source slice that aliases `b.buf` and rebase it after
   compaction/reallocation, or preserve the source before growing.
-- Effect: heap use-after-free on a natural self-append operation. Confirmed
-  with AddressSanitizer using a 64-byte buffer after consuming one byte; the
-  63-byte unread view is invalidated by the growth reallocation and then read
-  by `copy`.
+- Effect: a natural self-append can read a stale source after compaction or
+  reallocation. With a 64-byte buffer after consuming one byte, the 63-byte
+  unread view is invalidated by growth and the observed appended bytes are
+  incorrect.
 - Bedrock: `br_byte_buffer_write` detects views into its own allocation,
   validates that they refer to initialized bytes, and rebases unread views
   after compaction or reallocation. The self-append case is covered by
