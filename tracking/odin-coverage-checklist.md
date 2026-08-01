@@ -25,7 +25,7 @@ annotations, docs, or dropped Haiku/Essence backends.
 
 ## `core/mem`
 
-Current label: `partial v1`
+Current label: `substantial partial port`
 
 Why this label:
 - Bedrock now has the allocator contract, the first fixed, scratch, stack,
@@ -208,7 +208,7 @@ Summary:
 
 ## `core/io`
 
-Current label: `partial v1`
+Current label: `foundational slice complete`
 
 Why this label:
 - Bedrock now has a minimal generic IO layer built around a single stream proc,
@@ -301,7 +301,7 @@ Summary:
 
 ## `core/bufio`
 
-Current label: `partial v1`
+Current label: `core reader/writer complete`
 
 Why this label:
 - Bedrock now has the main buffered reader and writer types plus a combined
@@ -346,7 +346,7 @@ Summary:
 
 ## `core/sync`
 
-Current label: `partial v1`
+Current label: `core primitives complete; backend verification pending`
 
 Why this label:
 - Bedrock now has the core blocking synchronization primitives and a useful
@@ -463,7 +463,7 @@ Summary:
 
 ## `core/encoding`
 
-Current label: `v1 core encoding set`
+Current label: `core encoding set`
 
 Current Bedrock files:
 - `include/bedrock/encoding.h` (module umbrella)
@@ -483,7 +483,7 @@ Current Bedrock files:
 
 ## `core/path`
 
-Current label: `slashpath v1`
+Current label: `slashpath complete`
 
 Current Bedrock files:
 - `include/bedrock/path.h` (module umbrella)
@@ -493,11 +493,11 @@ Current Bedrock files:
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
 | `path/slashpath` | `adapted` | `path/slashpath.h`, `src/path/slashpath.c` | Full surface (clean/dir/base/ext/name/split/split_elements/join/match). Deviations per spec/modules/path.md: rewrite-result aliasing (no clone when already clean, improving on Odin's Lazy_Buffer), match follows Go's malformed-pattern validation that Odin's port dropped (suspected upstream bug, verification pending), match errors are BR_STATUS_INVALID_ARGUMENT. Test suite ports Go's path vectors including all 56 match tests; upstream Odin has none. |
-| `path/filepath` | `deferred` | none | Deferred until the approved `os` v1 surface lands; `br_path_` stays reserved. |
+| `path/filepath` | `deferred` | none | Deferred until filesystem path-operation semantics settle; `br_path_` stays reserved. |
 
 ## `core/math`
 
-Current label: `bits v1`
+Current label: `bits complete`
 
 Current Bedrock files:
 - `include/bedrock/math.h` (module umbrella)
@@ -510,7 +510,7 @@ Current Bedrock files:
 
 ## `core/math/rand`
 
-Current label: `v1`
+Current label: `core generator complete`
 
 Landed as the standalone `rand` module (Odin groups it under `core/math`; Bedrock
 gives it its own `bedrock/rand.h`).
