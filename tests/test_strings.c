@@ -178,6 +178,7 @@ static void test_strings_split_helpers(void) {
   br_string_view_list_result split;
   br_string_view_list_result split_n;
   br_string_view_list_result split_after;
+  br_string_view_list_result split_after_n;
   br_string_view_list_result empty_split;
   br_string_view_list_result rune_split;
   br_string_view_list_result rune_split_n;
@@ -194,6 +195,10 @@ static void test_strings_split_helpers(void) {
     BR_STR_LIT("alpha,"),
     BR_STR_LIT("beta,"),
     BR_STR_LIT("gamma"),
+  };
+  const br_string_view expected_split_after_n[] = {
+    BR_STR_LIT("alpha,"),
+    BR_STR_LIT("beta,gamma"),
   };
   const br_string_view expected_rune_split[] = {
     BR_STR_LIT("a"),
@@ -227,6 +232,13 @@ static void test_strings_split_helpers(void) {
   assert_string_view_list_eq(
     split_after.value, expected_split_after, BR_ARRAY_COUNT(expected_split_after));
   assert(br_string_view_list_free(split_after.value, br_allocator_heap()) == BR_STATUS_OK);
+
+  split_after_n = br_string_split_after_n(
+    BR_STR_LIT("alpha,beta,gamma"), BR_STR_LIT(","), 2, br_allocator_heap());
+  assert(split_after_n.status == BR_STATUS_OK);
+  assert_string_view_list_eq(
+    split_after_n.value, expected_split_after_n, BR_ARRAY_COUNT(expected_split_after_n));
+  assert(br_string_view_list_free(split_after_n.value, br_allocator_heap()) == BR_STATUS_OK);
 
   empty_split = br_string_split_n(BR_STR_LIT("a,b,c"), BR_STR_LIT(","), 0, br_allocator_heap());
   assert(empty_split.status == BR_STATUS_OK);
