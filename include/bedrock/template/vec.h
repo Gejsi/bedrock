@@ -1,3 +1,5 @@
+#include <bedrock/mem/alloc.h>
+
 #ifndef BR_VEC_T
 #error "BR_VEC_T must be defined before including <bedrock/template/vec.h>"
 #endif

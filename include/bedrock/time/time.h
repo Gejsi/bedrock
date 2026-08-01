@@ -40,6 +40,11 @@ void br_sleep(br_duration duration);
 void br_yield(void);
 
 br_tick br_tick_now(void);
+
+/*
+Tick and time arithmetic saturates at BR_MIN_DURATION/BR_MAX_DURATION instead
+of wrapping. This keeps the status-free helpers defined at the int64 limits.
+*/
 br_tick br_tick_add(br_tick tick, br_duration duration);
 br_duration br_tick_diff(br_tick start, br_tick end);
 br_duration br_tick_since(br_tick start);

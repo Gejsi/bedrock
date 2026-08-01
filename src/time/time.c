@@ -1,12 +1,32 @@
 #include <bedrock/time/time.h>
 
+static i64 br__saturating_add_i64(i64 a, i64 b) {
+  if (b > 0 && a > INT64_MAX - b) {
+    return INT64_MAX;
+  }
+  if (b < 0 && a < INT64_MIN - b) {
+    return INT64_MIN;
+  }
+  return a + b;
+}
+
+static i64 br__saturating_sub_i64(i64 a, i64 b) {
+  if (b > 0 && a < INT64_MIN + b) {
+    return INT64_MIN;
+  }
+  if (b < 0 && a > INT64_MAX + b) {
+    return INT64_MAX;
+  }
+  return a - b;
+}
+
 br_tick br_tick_add(br_tick tick, br_duration duration) {
-  tick.nsec += duration;
+  tick.nsec = br__saturating_add_i64(tick.nsec, duration);
   return tick;
 }
 
 br_duration br_tick_diff(br_tick start, br_tick end) {
-  return end.nsec - start.nsec;
+  return br__saturating_sub_i64(end.nsec, start.nsec);
 }
 
 br_duration br_tick_since(br_tick start) {
@@ -26,7 +46,7 @@ br_duration br_tick_lap_time(br_tick *prev) {
 }
 
 br_duration br_time_diff(br_time start, br_time end) {
-  return end.nsec - start.nsec;
+  return br__saturating_sub_i64(end.nsec, start.nsec);
 }
 
 br_duration br_time_since(br_time start) {

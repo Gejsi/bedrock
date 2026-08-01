@@ -7,9 +7,9 @@ bases), booleans, and floats (f32/f64) through one shared decimal engine.
 
 | Facility | Bedrock surface | Status |
 | --- | --- | --- |
-| int parse/format, base 2-36 + base-0 infer | `br_parse_i64`/`_u64`, `br_format_i64`/`_u64` | planned |
-| bool parse/format | `br_parse_bool`, `br_format_bool` | planned |
-| float parse/format, f64 + f32 | `br_parse_f64`/`_f32`, `br_format_f64`/`_f32` | planned |
+| int parse/format, base 2-36 + base-0 infer | `br_parse_i64`/`_u64`, `br_format_i64`/`_u64` | landed |
+| bool parse/format | `br_parse_bool`, `br_format_bool` | landed |
+| float parse/format, f64 + f32 | `br_parse_f64`/`_f32`, `br_format_f64`/`_f32` | landed |
 
 Deferred: quote/unquote (to the `ini` consumer; `unquote_string` first when it
 lands). Excluded: a Go-style `Append*` family (the write-into-buffer form is the
@@ -117,12 +117,15 @@ br_io_result br_format_f32(float value, br_float_format fmt, int prec, uint8_t *
    which is bounded by a small constant. The other float modes are NOT: a huge-
    magnitude DECIMAL needs sign + up to 309 integral digits + '.' + prec — for
    those, size with the arithmetic bound function below. */
-#define BR_FORMAT_I64_MAX          20   /* -9223372036854775808 */
-#define BR_FORMAT_U64_MAX          20
+#define BR_FORMAT_I64_MAX          65   /* sign + 64 base-2 digits */
+#define BR_FORMAT_U64_MAX          64   /* 64 base-2 digits */
 #define BR_FORMAT_F64_SHORTEST_MAX 24
 #define BR_FORMAT_F32_SHORTEST_MAX 16
+#define BR_FORMAT_FLOAT_PRECISION_MAX 1048576
 
-/* Worst-case bytes for ANY (fmt, prec) — the honest bound for the non-shortest modes. */
+/* Worst-case bytes for every accepted (fmt, prec) — successful output never
+   exceeds this bound. Unsupported precision is clamped only to keep this
+   arithmetic helper total. */
 size_t br_format_f64_bound(br_float_format fmt, int prec);
 size_t br_format_f32_bound(br_float_format fmt, int prec);
 ```
@@ -130,7 +133,9 @@ size_t br_format_f32_bound(br_float_format fmt, int prec);
 - `prec` is IGNORED for `BR_FLOAT_SHORTEST` (it picks its own digit count) and is
   the fractional/significant count for the other modes (matching Go's
   FormatFloat prec; Bedrock uses the enum where Go/Odin use a fmt byte +
-  prec=-1 sentinel).
+  prec=-1 sentinel). GENERAL precision 0 means one significant digit. Negative
+  precision or precision above `BR_FORMAT_FLOAT_PRECISION_MAX` is
+  `BR_STATUS_INVALID_ARGUMENT` in non-shortest modes.
 - Undersized `dst` (including `dst == NULL` or `dst_cap == 0`) →
   `BR_STATUS_SHORT_BUFFER`, `count = 0`. NEVER a truncated number — a half-
   written "3." is worse than an error.

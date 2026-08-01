@@ -2,9 +2,9 @@
 
 This module exists to bring Bedrock close to Odin's `core/sync`.
 
-The current Bedrock implementation is a useful first slice, but it is not yet a
-close implementation-level port. The public surface is reasonably close; the
-backend structure is still materially different.
+The current Bedrock implementation covers the public blocking-primitives slice.
+Remaining work is primarily target verification and optional backend coverage,
+not a public-surface rewrite.
 
 ## Current Bedrock State
 
@@ -24,7 +24,7 @@ What is already landed:
 - `Recursive_Mutex`
 - `Cond`
 - `Sema`
-- guard/lock helper layer
+- generic lock/unlock helper layer; scoped guard macros are intentionally absent
 - `Wait_Group`
 - `Barrier`
 - `Once`
@@ -70,10 +70,11 @@ zero-value contract directly through package procedures.
 
 2. Backend coverage is still not parity-complete
 
-The shared atomic/futex primitive layer is now the only public primitive
-backend. Basic wait/wake source ports exist for Linux, Windows, Darwin,
-FreeBSD, NetBSD, and OpenBSD. Only the Linux path has been exercised locally in
-this repository. Haiku and WASM futex backends are still missing.
+The shared atomic/futex primitive layer is the only public primitive backend.
+Basic wait/wake source ports exist for Linux, Windows, Darwin, FreeBSD, NetBSD,
+and OpenBSD. Linux and Darwin have been exercised; the other backends still
+need target-specific verification. Haiku and WASM remain optional, unimplemented
+backends.
 
 3. Timeout pieces are now wired through the main primitive stack
 
@@ -84,17 +85,17 @@ public condition variables, public semaphores, and wait groups.
 Intentional deviation: Odin's current `wait_group_wait_with_timeout` passes the
 full duration into each condition-wait loop iteration. Bedrock tracks remaining
 duration so spurious wakeups do not restart the public wait-group timeout
-window.
+window. Atomic semaphore timeout retries use the same single-deadline rule.
+Backends chunk durations that exceed narrow native timeout representations
+instead of wrapping or returning an early timeout.
 
-4. Lower layers still missing after `atomic` / futex
+4. Intentional C and layout deviations
 
 Bedrock now has an initial `atomic` layer, native numeric thread IDs,
 `Atomic_Mutex`, `Atomic_RW_Mutex`, `Atomic_Recursive_Mutex`, `Atomic_Cond`,
-`Atomic_Sema`, public primitive wrappers, and several futex backends, but it
-still has no equivalents of:
-
-- Haiku / WASM `futex_*`
-- Odin's exact per-OS `primitives_*` split for thread ID functions
+`Atomic_Sema`, public primitive wrappers, and several futex backends.
+Thread-ID dispatch stays consolidated in `primitives.c`; matching Odin's exact
+per-OS file split was explicitly excluded as a capability-neutral layout goal.
 
 The current Bedrock atomic layer is intentionally C-shaped. It is implemented
 over C11 atomics and keeps C's compare-exchange `expected` pointer contract
@@ -122,8 +123,8 @@ CAS on the fast path, relaxed-load spinning, transition to `Waiting` only before
 sleeping, and another spin after wake. This is an implementation-level
 improvement, not a public API deviation.
 
-That is the main reason the current sync module should still be treated as a
-partial port, not as parity-complete.
+The module remains a partial port because optional target backends and
+`sync/chan` are not part of the landed slice.
 
 ## Odin File Map
 
@@ -158,7 +159,7 @@ The real comparison target is Odin's actual file tree:
 - later surface:
   - `chan/chan.odin`
 
-Bedrock should eventually look closer to this shape:
+Bedrock uses the following responsibility split:
 
 ```text
 include/bedrock/sync/
@@ -179,39 +180,27 @@ src/sync/
   futex_freebsd.c
   futex_netbsd.c
   futex_openbsd.c
-  futex_haiku.c
-  futex_wasm.c
   futex_other.c
   extended.c
 ```
 
-That does not mean every file must be a literal transliteration, but the
-responsibility split should be close.
+Haiku and WASM would receive dedicated futex files only if those targets are
+adopted.
 
-## Recommended Rewrite Order
+## Remaining Work
 
-1. Verify and finish the remaining backend layer
+1. Verify the remaining backend layer
 
 - target-test Windows, Darwin, FreeBSD, NetBSD, and OpenBSD futex backends
 - add Haiku / WASM only if Bedrock wants those targets
 - keep unsupported targets as compile-time failures instead of spinning on a
   fake futex
 
-2. Split thread ID primitives by Odin's OS tree
+2. Revisit `sync/chan` only with a concrete consumer. Benaphores and recursive
+   benaphores were deliberately excluded as redundant with the mutex/semaphore
+   surface.
 
-- Linux
-- Darwin
-- FreeBSD
-- NetBSD
-- OpenBSD
-- later Haiku / WASM if Bedrock wants those targets
-
-3. Add the next missing public pieces
-
-- benaphores / recursive benaphores
-- later `chan`
-
-## Why Sync Before Returning To Mem
+## What Sync Unlocked
 
 The sync rewrite was not a detour. It unlocked the thread-safe half of `mem`:
 
@@ -219,5 +208,5 @@ The sync rewrite was not a detour. It unlocked the thread-safe half of `mem`:
 - mutex in `tracking_allocator`
 - mutex in virtual arena
 
-Those pieces now use Bedrock's zero-value-ready sync primitives instead of
+Those landed pieces use Bedrock's zero-value-ready sync primitives instead of
 native pthread/Windows object storage.

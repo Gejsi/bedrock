@@ -2,6 +2,14 @@
 
 #include <bedrock.h>
 
+#ifdef br_guard
+#error "unsafe br_guard macro must not be exposed"
+#endif
+
+#ifdef br_shared_guard
+#error "unsafe br_shared_guard macro must not be exposed"
+#endif
+
 static void test_once_increment(void *ctx) {
   br_atomic_add_explicit((br_atomic_i32 *)ctx, 1, BR_ATOMIC_RELAXED);
 }
@@ -126,7 +134,7 @@ static int test_wait_group_worker(void *ctx) {
   test_wait_group_state *state = (test_wait_group_state *)ctx;
 
   br_atomic_add_explicit(state->counter, 1, BR_ATOMIC_RELAXED);
-  br_wait_group_done(state->wg);
+  assert(br_wait_group_done(state->wg) == BR_STATUS_OK);
   return 0;
 }
 
@@ -196,7 +204,7 @@ static int test_ticket_worker(void *ctx) {
   return 0;
 }
 
-static void test_sync_mutex_and_guard(void) {
+static void test_sync_mutex_and_generic_lock(void) {
   br_mutex mutex;
   br_status status;
   i32 value = 0;
@@ -204,9 +212,9 @@ static void test_sync_mutex_and_guard(void) {
   status = br_mutex_init(&mutex);
   assert(status == BR_STATUS_OK);
 
-  br_guard(&mutex) {
-    value = 7;
-  }
+  br_lock(&mutex);
+  value = 7;
+  br_unlock(&mutex);
 
   assert(value == 7);
   assert(br_mutex_try_lock(&mutex));
@@ -262,8 +270,8 @@ static void test_sync_zero_value_extended_primitives(void) {
   br_ticket_mutex ticket = {0};
   br_atomic_i32 count;
 
-  br_wait_group_add(&wg, 1);
-  br_wait_group_done(&wg);
+  assert(br_wait_group_add(&wg, 1) == BR_STATUS_OK);
+  assert(br_wait_group_done(&wg) == BR_STATUS_OK);
   br_wait_group_wait(&wg);
   br_wait_group_destroy(&wg);
 
@@ -446,7 +454,7 @@ static void test_sync_wait_group(void) {
   state.wg = &wg;
   state.counter = &counter;
 
-  br_wait_group_add(&wg, THREAD_COUNT);
+  assert(br_wait_group_add(&wg, THREAD_COUNT) == BR_STATUS_OK);
   for (i = 0; i < THREAD_COUNT; ++i) {
     assert(br_thread_create(&threads[(usize)i], test_wait_group_worker, &state) == BR_STATUS_OK);
   }
@@ -463,10 +471,29 @@ static void test_sync_wait_group(void) {
 static void test_sync_wait_group_with_timeout(void) {
   br_wait_group wg = BR_WAIT_GROUP_INIT;
 
-  br_wait_group_add(&wg, 1);
+  assert(br_wait_group_add(&wg, 1) == BR_STATUS_OK);
   assert(!br_wait_group_wait_with_timeout(&wg, 1 * BR_MILLISECOND));
-  br_wait_group_done(&wg);
+  assert(br_wait_group_done(&wg) == BR_STATUS_OK);
   assert(br_wait_group_wait_with_timeout(&wg, 1 * BR_MILLISECOND));
+  br_wait_group_destroy(&wg);
+}
+
+static void test_sync_wait_group_boundaries(void) {
+  br_wait_group wg = BR_WAIT_GROUP_INIT;
+
+  assert(br_wait_group_done(&wg) == BR_STATUS_INVALID_STATE);
+  assert(wg.counter == 0);
+  assert(br_wait_group_add(&wg, INT32_MIN) == BR_STATUS_INVALID_STATE);
+  assert(wg.counter == 0);
+
+  assert(br_wait_group_add(&wg, INT32_MAX) == BR_STATUS_OK);
+  assert(br_wait_group_add(&wg, 1) == BR_STATUS_OUT_OF_RANGE);
+  assert(wg.counter == INT32_MAX);
+  assert(br_wait_group_add(&wg, -INT32_MAX) == BR_STATUS_OK);
+  assert(wg.counter == 0);
+
+  assert(br_wait_group_add(NULL, 1) == BR_STATUS_INVALID_ARGUMENT);
+  assert(br_wait_group_done(NULL) == BR_STATUS_INVALID_ARGUMENT);
   br_wait_group_destroy(&wg);
 }
 
@@ -477,6 +504,16 @@ static void test_sync_sema_wait_with_timeout(void) {
   br_sema_post(&sema, 1u);
   assert(br_sema_wait_with_timeout(&sema, 1 * BR_MILLISECOND));
   assert(!br_sema_wait_with_timeout(&sema, 1 * BR_MILLISECOND));
+  br_sema_destroy(&sema);
+}
+
+static void test_sync_sema_saturates(void) {
+  br_sema sema = BR_SEMA_INIT(UINT32_MAX);
+
+  br_sema_post(&sema, 1u);
+  assert(br_atomic_load_explicit(&sema.impl.count, BR_ATOMIC_RELAXED) == UINT32_MAX);
+  br_sema_wait(&sema);
+  assert(br_atomic_load_explicit(&sema.impl.count, BR_ATOMIC_RELAXED) == UINT32_MAX - 1u);
   br_sema_destroy(&sema);
 }
 
@@ -711,7 +748,7 @@ static void test_sync_ticket_mutex(void) {
 }
 
 int main(void) {
-  test_sync_mutex_and_guard();
+  test_sync_mutex_and_generic_lock();
   test_sync_recursive_mutex();
   test_sync_zero_value_public_primitives();
   test_sync_zero_value_extended_primitives();
@@ -725,7 +762,9 @@ int main(void) {
   test_sync_rw_mutex();
   test_sync_wait_group();
   test_sync_wait_group_with_timeout();
+  test_sync_wait_group_boundaries();
   test_sync_sema_wait_with_timeout();
+  test_sync_sema_saturates();
   test_sync_barrier();
   test_sync_once_threads();
   test_sync_auto_reset_event_pre_signal();

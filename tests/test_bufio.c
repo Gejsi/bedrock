@@ -12,6 +12,103 @@ typedef struct test_bufio_short_sink {
   usize written;
 } test_bufio_short_sink;
 
+typedef struct test_bufio_data_error_reader {
+  usize reads;
+} test_bufio_data_error_reader;
+
+typedef struct test_bufio_strict_allocation {
+  void *ptr;
+  usize size;
+} test_bufio_strict_allocation;
+
+typedef struct test_bufio_strict_allocator {
+  test_bufio_strict_allocation allocations[8];
+  usize allocation_count;
+  usize size_errors;
+} test_bufio_strict_allocator;
+
+static br_alloc_result test_bufio_alloc_result(void *ptr, usize size, br_status status) {
+  br_alloc_result result;
+
+  result.ptr = ptr;
+  result.size = size;
+  result.status = status;
+  return result;
+}
+
+static usize test_bufio_strict_find(const test_bufio_strict_allocator *strict, const void *ptr) {
+  usize i;
+
+  for (i = 0u; i < strict->allocation_count; i += 1u) {
+    if (strict->allocations[i].ptr == ptr) {
+      return i;
+    }
+  }
+  return SIZE_MAX;
+}
+
+static br_alloc_result test_bufio_strict_allocator_proc(void *context,
+                                                        const br_alloc_request *request) {
+  test_bufio_strict_allocator *strict = (test_bufio_strict_allocator *)context;
+  br_alloc_result result;
+  usize index;
+
+  switch (request->op) {
+    case BR_ALLOC_OP_ALLOC:
+    case BR_ALLOC_OP_ALLOC_UNINIT:
+      result = br_allocator_call(br_allocator_heap(), request);
+      if (result.status != BR_STATUS_OK || result.ptr == NULL) {
+        return result;
+      }
+      if (strict->allocation_count == BR_ARRAY_COUNT(strict->allocations)) {
+        (void)br_allocator_free(br_allocator_heap(), result.ptr, result.size);
+        return test_bufio_alloc_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+      }
+      strict->allocations[strict->allocation_count].ptr = result.ptr;
+      strict->allocations[strict->allocation_count].size = result.size;
+      strict->allocation_count += 1u;
+      return result;
+
+    case BR_ALLOC_OP_RESIZE:
+    case BR_ALLOC_OP_RESIZE_UNINIT:
+    case BR_ALLOC_OP_FREE:
+      if (request->ptr == NULL) {
+        return br_allocator_call(br_allocator_heap(), request);
+      }
+      index = test_bufio_strict_find(strict, request->ptr);
+      if (index == SIZE_MAX || strict->allocations[index].size != request->old_size) {
+        strict->size_errors += 1u;
+        return test_bufio_alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+      }
+
+      result = br_allocator_call(br_allocator_heap(), request);
+      if (result.status != BR_STATUS_OK) {
+        return result;
+      }
+      if (request->op == BR_ALLOC_OP_FREE || request->size == 0u) {
+        strict->allocation_count -= 1u;
+        strict->allocations[index] = strict->allocations[strict->allocation_count];
+      } else {
+        strict->allocations[index].ptr = result.ptr;
+        strict->allocations[index].size = result.size;
+      }
+      return result;
+
+    case BR_ALLOC_OP_RESET:
+      return test_bufio_alloc_result(NULL, 0u, BR_STATUS_NOT_SUPPORTED);
+  }
+
+  return test_bufio_alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+}
+
+static br_allocator test_bufio_strict_allocator_make(test_bufio_strict_allocator *strict) {
+  br_allocator allocator;
+
+  allocator.fn = test_bufio_strict_allocator_proc;
+  allocator.ctx = strict;
+  return allocator;
+}
+
 static br_i64_result test_bufio_no_progress_reader_proc(
   void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
   test_bufio_no_progress_reader *reader;
@@ -50,6 +147,30 @@ static br_i64_result test_bufio_short_sink_proc(
       return br_i64_result_make((i64)count, BR_STATUS_OK);
     case BR_IO_MODE_QUERY:
       return br_stream_query_utility(br_io_mode_bit(BR_IO_MODE_WRITE));
+    default:
+      return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+  }
+}
+
+static br_i64_result test_bufio_data_error_reader_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  test_bufio_data_error_reader *reader;
+
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
+
+  reader = (test_bufio_data_error_reader *)context;
+  switch (mode) {
+    case BR_IO_MODE_READ:
+      reader->reads += 1u;
+      if (reader->reads == 1u) {
+        assert(data_len >= 3u);
+        memcpy(data, "abc", 3u);
+        return br_i64_result_make(3, BR_STATUS_INVALID_ENCODING);
+      }
+      return br_i64_result_make(0, BR_STATUS_EOF);
+    case BR_IO_MODE_QUERY:
+      return br_stream_query_utility(br_io_mode_bit(BR_IO_MODE_READ));
     default:
       return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
   }
@@ -197,6 +318,47 @@ static void test_bufio_reader_no_progress(void) {
   assert(source.reads == 2u);
 }
 
+static void test_bufio_owned_result_sizes(void) {
+  test_bufio_strict_allocator strict;
+  br_allocator allocator;
+  br_byte_reader source;
+  br_bufio_reader reader;
+  br_bytes_result bytes_result;
+  br_string_result string_result;
+  u8 backing[4];
+
+  memset(&strict, 0, sizeof(strict));
+  allocator = test_bufio_strict_allocator_make(&strict);
+
+  br_byte_reader_init(&source, BR_BYTES_LIT("x\n"));
+  assert(br_bufio_reader_init_with_buffer(
+           &reader, br_byte_reader_as_stream(&source), backing, BR_ARRAY_COUNT(backing)) ==
+         BR_STATUS_OK);
+  bytes_result = br_bufio_reader_read_bytes(&reader, (u8)'\n', allocator);
+  assert(bytes_result.status == BR_STATUS_OK);
+  assert(br_bytes_equal(br_bytes_view_from_bytes(bytes_result.value), BR_BYTES_LIT("x\n")));
+  assert(strict.allocation_count == 1u);
+  assert(strict.allocations[0].ptr == bytes_result.value.data);
+  assert(strict.allocations[0].size == bytes_result.value.len);
+  assert(br_bytes_free(bytes_result.value, allocator) == BR_STATUS_OK);
+  assert(strict.size_errors == 0u);
+  assert(strict.allocation_count == 0u);
+
+  br_byte_reader_init(&source, BR_BYTES_LIT("ok\n"));
+  assert(br_bufio_reader_init_with_buffer(
+           &reader, br_byte_reader_as_stream(&source), backing, BR_ARRAY_COUNT(backing)) ==
+         BR_STATUS_OK);
+  string_result = br_bufio_reader_read_string(&reader, (u8)'\n', allocator);
+  assert(string_result.status == BR_STATUS_OK);
+  assert(br_string_equal(br_string_view_from_string(string_result.value), BR_STR_LIT("ok\n")));
+  assert(strict.allocation_count == 1u);
+  assert(strict.allocations[0].ptr == string_result.value.data);
+  assert(strict.allocations[0].size == string_result.value.len);
+  assert(br_string_free(string_result.value, allocator) == BR_STATUS_OK);
+  assert(strict.size_errors == 0u);
+  assert(strict.allocation_count == 0u);
+}
+
 static void test_bufio_reader_write_to(void) {
   br_byte_reader source;
   br_bufio_reader reader;
@@ -204,6 +366,7 @@ static void test_bufio_reader_write_to(void) {
   br_bufio_reader_peek_result peek_result;
   br_i64_result write_result;
   br_bytes_view view;
+  test_bufio_data_error_reader data_error_source;
   test_bufio_short_sink short_sink;
   u8 backing[4];
 
@@ -239,10 +402,25 @@ static void test_bufio_reader_write_to(void) {
   assert(write_result.value == 1);
   assert(write_result.status == BR_STATUS_SHORT_WRITE);
   assert(short_sink.written == 1u);
+
+  memset(&data_error_source, 0, sizeof(data_error_source));
+  br_byte_buffer_init(&sink, br_allocator_heap());
+  assert(br_bufio_reader_init_with_buffer(
+           &reader,
+           br_stream_make(&data_error_source, test_bufio_data_error_reader_proc),
+           backing,
+           BR_ARRAY_COUNT(backing)) == BR_STATUS_OK);
+  write_result = br_bufio_reader_write_to(&reader, br_byte_buffer_as_stream(&sink));
+  assert(write_result.value == 3);
+  assert(write_result.status == BR_STATUS_INVALID_ENCODING);
+  assert(data_error_source.reads == 1u);
+  view = br_byte_buffer_view(&sink);
+  assert(br_bytes_equal(view, BR_BYTES_LIT("abc")));
+  br_byte_buffer_destroy(&sink);
 }
 
 static void test_bufio_writer_basic(void) {
-  static const u8 expected[] = {'a', 'b', 'c', 0xc3u, 0xa4u, '!'};
+  static const u8 expected[] = {'a', 'b', 'c', 0xc3u, 0xa4u, 0xefu, 0xbfu, 0xbdu, '!'};
   br_byte_buffer sink;
   br_bufio_writer writer;
   br_bufio_writer_io_result io_result;
@@ -265,6 +443,10 @@ static void test_bufio_writer_basic(void) {
 
   io_result = br_bufio_writer_write_rune(&writer, (br_rune)0x00e4);
   assert(io_result.count == 2u);
+  assert(io_result.status == BR_STATUS_OK);
+
+  io_result = br_bufio_writer_write_rune(&writer, BR_RUNE_EOF);
+  assert(io_result.count == 3u);
   assert(io_result.status == BR_STATUS_OK);
 
   io_result = br_bufio_writer_write_string(&writer, BR_STR_LIT("!"));
@@ -439,6 +621,7 @@ int main(void) {
   test_bufio_reader_basic();
   test_bufio_reader_runes_and_lines();
   test_bufio_reader_no_progress();
+  test_bufio_owned_result_sizes();
   test_bufio_reader_write_to();
   test_bufio_writer_basic();
   test_bufio_writer_read_from();

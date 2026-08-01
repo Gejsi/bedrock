@@ -289,6 +289,8 @@ br_status br_write_byte(br_stream stream, uint8_t value);
 /*
 Read and decode one UTF-8 rune from a generic stream.
 
+Successful short reads are accumulated until the expected UTF-8 width is
+available. A zero-byte successful read reports `BR_STATUS_NO_PROGRESS`.
 The reported width is the number of bytes consumed from the stream. For
 malformed multi-byte prefixes this may be larger than the decoder's logical
 replacement-rune width, because generic streams cannot necessarily unread or

@@ -517,7 +517,7 @@ br_bits_div_u64_result br_bits_div_u64(u64 hi, u64 lo, u64 y) {
     y <<= s;
     yn1 = y >> 32;
     yn0 = y & mask32;
-    un32 = (hi << s) | (lo >> (64u - s));
+    un32 = s == 0u ? hi : (hi << s) | (lo >> (64u - s));
     un10 = lo << s;
     un1 = un10 >> 32;
     un0 = un10 & mask32;
@@ -561,65 +561,111 @@ br_bits_div_u64_result br_bits_div_u64(u64 hi, u64 lo, u64 y) {
   ((BITS) >= (WIDTH) ? (TYPE) ~(TYPE)0 : (TYPE)(((TYPE)1 << (BITS)) - (TYPE)1))
 
 u8 br_bits_field_extract_u8(u8 value, unsigned offset, unsigned bits) {
+  if (bits == 0u) {
+    return 0u;
+  }
   return (u8)((value >> offset) & BR__BITS_UMASK(u8, bits, 8u));
 }
 u16 br_bits_field_extract_u16(u16 value, unsigned offset, unsigned bits) {
+  if (bits == 0u) {
+    return 0u;
+  }
   return (u16)((value >> offset) & BR__BITS_UMASK(u16, bits, 16u));
 }
 u32 br_bits_field_extract_u32(u32 value, unsigned offset, unsigned bits) {
+  if (bits == 0u) {
+    return 0u;
+  }
   return (value >> offset) & BR__BITS_UMASK(u32, bits, 32u);
 }
 u64 br_bits_field_extract_u64(u64 value, unsigned offset, unsigned bits) {
+  if (bits == 0u) {
+    return 0u;
+  }
   return (value >> offset) & BR__BITS_UMASK(u64, bits, 64u);
+}
+
+static i64 br__bits_signed_field_value(u64 field, unsigned bits) {
+  u64 sign;
+  u64 mask;
+  u64 magnitude;
+
+  if (bits == 0u) {
+    return 0;
+  }
+
+  sign = (u64)1u << (bits - 1u);
+  if ((field & sign) == 0u) {
+    return (i64)field;
+  }
+
+  mask = BR__BITS_UMASK(u64, bits, 64u);
+  magnitude = ((~field) & mask) + 1u;
+  if (magnitude == (u64)INT64_MAX + 1u) {
+    return INT64_MIN;
+  }
+  return -(i64)magnitude;
 }
 
 i8 br_bits_field_extract_i8(i8 value, unsigned offset, unsigned bits) {
   u8 field = br_bits_field_extract_u8((u8)value, offset, bits);
-  u8 sign = (u8)(bits == 0u ? 0u : (u8)1 << (bits - 1u));
-  return (i8)((u8)(field ^ sign) - sign);
+  return (i8)br__bits_signed_field_value((u64)field, bits);
 }
 i16 br_bits_field_extract_i16(i16 value, unsigned offset, unsigned bits) {
   u16 field = br_bits_field_extract_u16((u16)value, offset, bits);
-  u16 sign = (u16)(bits == 0u ? 0u : (u16)1 << (bits - 1u));
-  return (i16)((u16)(field ^ sign) - sign);
+  return (i16)br__bits_signed_field_value((u64)field, bits);
 }
 i32 br_bits_field_extract_i32(i32 value, unsigned offset, unsigned bits) {
   u32 field = br_bits_field_extract_u32((u32)value, offset, bits);
-  u32 sign = bits == 0u ? 0u : (u32)1 << (bits - 1u);
-  return (i32)((field ^ sign) - sign);
+  return (i32)br__bits_signed_field_value((u64)field, bits);
 }
 i64 br_bits_field_extract_i64(i64 value, unsigned offset, unsigned bits) {
   u64 field = br_bits_field_extract_u64((u64)value, offset, bits);
-  u64 sign = bits == 0u ? 0u : (u64)1 << (bits - 1u);
-  return (i64)((field ^ sign) - sign);
+  return br__bits_signed_field_value(field, bits);
 }
 
 u8 br_bits_field_insert_u8(u8 base, u8 insert, unsigned offset, unsigned bits) {
+  if (bits == 0u) {
+    return base;
+  }
   u8 mask = (u8)(BR__BITS_UMASK(u8, bits, 8u) << offset);
   return (u8)((base & (u8)~mask) | (((u8)(insert << offset)) & mask));
 }
 u16 br_bits_field_insert_u16(u16 base, u16 insert, unsigned offset, unsigned bits) {
+  if (bits == 0u) {
+    return base;
+  }
   u16 mask = (u16)(BR__BITS_UMASK(u16, bits, 16u) << offset);
   return (u16)((base & (u16)~mask) | (((u16)(insert << offset)) & mask));
 }
 u32 br_bits_field_insert_u32(u32 base, u32 insert, unsigned offset, unsigned bits) {
+  if (bits == 0u) {
+    return base;
+  }
   u32 mask = BR__BITS_UMASK(u32, bits, 32u) << offset;
   return (base & ~mask) | ((insert << offset) & mask);
 }
 u64 br_bits_field_insert_u64(u64 base, u64 insert, unsigned offset, unsigned bits) {
+  if (bits == 0u) {
+    return base;
+  }
   u64 mask = BR__BITS_UMASK(u64, bits, 64u) << offset;
   return (base & ~mask) | ((insert << offset) & mask);
 }
 
 i8 br_bits_field_insert_i8(i8 base, i8 insert, unsigned offset, unsigned bits) {
-  return (i8)br_bits_field_insert_u8((u8)base, (u8)insert, offset, bits);
+  u8 result = br_bits_field_insert_u8((u8)base, (u8)insert, offset, bits);
+  return (i8)br__bits_signed_field_value((u64)result, 8u);
 }
 i16 br_bits_field_insert_i16(i16 base, i16 insert, unsigned offset, unsigned bits) {
-  return (i16)br_bits_field_insert_u16((u16)base, (u16)insert, offset, bits);
+  u16 result = br_bits_field_insert_u16((u16)base, (u16)insert, offset, bits);
+  return (i16)br__bits_signed_field_value((u64)result, 16u);
 }
 i32 br_bits_field_insert_i32(i32 base, i32 insert, unsigned offset, unsigned bits) {
-  return (i32)br_bits_field_insert_u32((u32)base, (u32)insert, offset, bits);
+  u32 result = br_bits_field_insert_u32((u32)base, (u32)insert, offset, bits);
+  return (i32)br__bits_signed_field_value((u64)result, 32u);
 }
 i64 br_bits_field_insert_i64(i64 base, i64 insert, unsigned offset, unsigned bits) {
-  return (i64)br_bits_field_insert_u64((u64)base, (u64)insert, offset, bits);
+  u64 result = br_bits_field_insert_u64((u64)base, (u64)insert, offset, bits);
+  return br__bits_signed_field_value(result, 64u);
 }

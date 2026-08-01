@@ -16,13 +16,17 @@
 
 extern int futex(br_futex *futex, int op, u32 value, const void *timeout);
 
-static bool br__futex_duration_to_timespec(br_duration duration, struct timespec *timeout) {
+static bool
+br__futex_duration_to_timespec(br_duration duration, struct timespec *timeout, br_duration *chunk) {
+  const br_duration max_chunk = (br_duration)INT32_MAX * BR_SECOND;
+
   if (duration <= 0 || timeout == NULL) {
     return false;
   }
 
-  timeout->tv_sec = (time_t)(duration / BR_SECOND);
-  timeout->tv_nsec = (long)(duration % BR_SECOND);
+  *chunk = duration < max_chunk ? duration : max_chunk;
+  timeout->tv_sec = (time_t)(*chunk / BR_SECOND);
+  timeout->tv_nsec = (long)(*chunk % BR_SECOND);
   return true;
 }
 
@@ -45,28 +49,36 @@ bool br_futex_wait(br_futex *futex_word, u32 expected) {
 }
 
 bool br_futex_wait_with_timeout(br_futex *futex_word, u32 expected, br_duration duration) {
-  struct timespec timeout;
-  int rc;
-
   if (futex_word == NULL) {
     return false;
   }
   if (br_atomic_load_explicit(futex_word, BR_ATOMIC_ACQUIRE) != expected) {
     return true;
   }
-  if (!br__futex_duration_to_timespec(duration, &timeout)) {
-    return false;
-  }
+  for (;;) {
+    struct timespec timeout;
+    br_duration chunk;
+    int rc;
 
-  rc = futex(futex_word, BR__OPENBSD_FUTEX_WAIT_PRIVATE, expected, &timeout);
-  if (rc != -1) {
-    return true;
-  }
+    if (!br__futex_duration_to_timespec(duration, &timeout, &chunk)) {
+      return false;
+    }
 
-  if (errno == ETIMEDOUT) {
-    return false;
+    rc = futex(futex_word, BR__OPENBSD_FUTEX_WAIT_PRIVATE, expected, &timeout);
+    if (rc != -1) {
+      return true;
+    }
+    if (errno != ETIMEDOUT) {
+      return errno == EINTR || errno == EAGAIN;
+    }
+    if (duration <= chunk) {
+      return false;
+    }
+    duration -= chunk;
+    if (br_atomic_load_explicit(futex_word, BR_ATOMIC_ACQUIRE) != expected) {
+      return true;
+    }
   }
-  return errno == EINTR || errno == EAGAIN;
 }
 
 void br_futex_signal(br_futex *futex_word) {

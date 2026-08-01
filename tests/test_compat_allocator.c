@@ -140,6 +140,40 @@ static void test_compat_shifts_payload_when_alignment_grows(void) {
   }
 }
 
+static void test_compat_resize_survives_moving_parent(void) {
+  br_compat_allocator compat;
+  br_allocator allocator;
+  br_alloc_result original;
+  br_alloc_result resized;
+  usize i;
+
+  br_compat_allocator_init(&compat, br_allocator_heap());
+  allocator = br_compat_allocator_allocator(&compat);
+
+  original = br_allocator_alloc_uninit(allocator, 32u, 8u);
+  assert(original.status == BR_STATUS_OK);
+  for (i = 0u; i < original.size; ++i) {
+    ((u8 *)original.ptr)[i] = (u8)(i + 1u);
+  }
+
+  /*
+  The heap parent always returns a separately allocated block from resize and
+  releases the old one. Compat must not consult the old header afterwards.
+  */
+  resized = br_allocator_resize(allocator, original.ptr, 0u, 96u, 64u);
+  assert(resized.status == BR_STATUS_OK);
+  assert(resized.ptr != NULL);
+  assert(((uptr)resized.ptr % 64u) == 0u);
+  for (i = 0u; i < original.size; ++i) {
+    assert(((u8 *)resized.ptr)[i] == (u8)(i + 1u));
+  }
+  for (i = original.size; i < resized.size; ++i) {
+    assert(((u8 *)resized.ptr)[i] == 0u);
+  }
+
+  assert(br_allocator_free(allocator, resized.ptr, 0u) == BR_STATUS_OK);
+}
+
 static void test_compat_default_parent_uses_heap(void) {
   br_compat_allocator compat;
   br_allocator compat_allocator;
@@ -158,6 +192,7 @@ static void test_compat_default_parent_uses_heap(void) {
 int main(void) {
   test_compat_wraps_stack_resize_and_free();
   test_compat_shifts_payload_when_alignment_grows();
+  test_compat_resize_survives_moving_parent();
   test_compat_default_parent_uses_heap();
   return 0;
 }

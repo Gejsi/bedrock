@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <locale.h>
 #include <math.h>
 #include <stdio.h>
@@ -111,6 +112,22 @@ static void test_int_bases(void) {
   assert(br_parse_i64(sv("1"), 1).status == BR_STATUS_INVALID_ARGUMENT);
 }
 
+static void test_int_format_max_bounds(void) {
+  uint8_t signed_buf[BR_FORMAT_I64_MAX];
+  uint8_t unsigned_buf[BR_FORMAT_U64_MAX];
+  br_io_result r;
+
+  r = br_format_i64(INT64_MIN, 2, signed_buf, sizeof(signed_buf));
+  assert(r.status == BR_STATUS_OK && r.count == BR_FORMAT_I64_MAX);
+  assert(signed_buf[0] == '-');
+  assert(br_parse_i64((br_string_view){(const char *)signed_buf, r.count}, 2).value == INT64_MIN);
+
+  r = br_format_u64(UINT64_MAX, 2, unsigned_buf, sizeof(unsigned_buf));
+  assert(r.status == BR_STATUS_OK && r.count == BR_FORMAT_U64_MAX);
+  assert(br_parse_u64((br_string_view){(const char *)unsigned_buf, r.count}, 2).value ==
+         UINT64_MAX);
+}
+
 static void test_strict_vs_prefix(void) {
   assert(br_parse_i64(sv("12x"), 10).status == BR_STATUS_INVALID_ENCODING);
   {
@@ -177,13 +194,31 @@ static void test_float_specials(void) {
 
 static void test_format_buffer_and_prec(void) {
   uint8_t buf[512];
+  uint8_t sentinel[8];
   br_io_result r;
+  size_t bound;
+  size_t bound32;
+  uint8_t *large;
 
   /* never-truncate: undersized dst -> SHORT_BUFFER, count 0. */
   r = br_format_i64(12345, 10, buf, 3);
   assert(r.status == BR_STATUS_SHORT_BUFFER && r.count == 0u);
   r = br_format_i64(12345, 10, NULL, 0);
   assert(r.status == BR_STATUS_SHORT_BUFFER && r.count == 0u);
+
+  memset(sentinel, 0xa5, sizeof(sentinel));
+  r = br_format_f64(123.5, BR_FLOAT_DECIMAL, 3, sentinel, 3u);
+  assert(r.status == BR_STATUS_SHORT_BUFFER && r.count == 0u);
+  for (size_t i = 0u; i < sizeof(sentinel); i += 1u) {
+    assert(sentinel[i] == 0xa5u);
+  }
+
+  memset(sentinel, 0x5a, sizeof(sentinel));
+  r = br_format_f32(123.5f, BR_FLOAT_EXPONENT, 3, sentinel, 3u);
+  assert(r.status == BR_STATUS_SHORT_BUFFER && r.count == 0u);
+  for (size_t i = 0u; i < sizeof(sentinel); i += 1u) {
+    assert(sentinel[i] == 0x5au);
+  }
 
   /* negative prec in a non-shortest mode -> INVALID_ARGUMENT. */
   r = br_format_f64(1.5, BR_FLOAT_DECIMAL, -1, buf, sizeof(buf));
@@ -192,10 +227,46 @@ static void test_format_buffer_and_prec(void) {
   r = br_format_f64(1.5, BR_FLOAT_SHORTEST, -1, buf, sizeof(buf));
   assert(r.status == BR_STATUS_OK);
 
-  /* enormous prec must not crash/overflow; a small dst just gets SHORT_BUFFER. */
-  assert(br_format_f64_bound(BR_FLOAT_DECIMAL, INT32_MAX) < (size_t)-1 / 2u);
-  r = br_format_f64(1.0, BR_FLOAT_DECIMAL, 1000000, buf, sizeof(buf));
+  /* The largest accepted precision terminates, fits its bound, and remains
+     atomic when the destination is short. */
+  bound = br_format_f64_bound(BR_FLOAT_DECIMAL, BR_FORMAT_FLOAT_PRECISION_MAX);
+  large = (uint8_t *)malloc(bound);
+  assert(large != NULL);
+  r = br_format_f64(1.0, BR_FLOAT_DECIMAL, BR_FORMAT_FLOAT_PRECISION_MAX, large, bound);
+  assert(r.status == BR_STATUS_OK && r.count <= bound);
+  assert(r.count == (size_t)BR_FORMAT_FLOAT_PRECISION_MAX + 2u);
+  free(large);
+
+  bound32 = br_format_f32_bound(BR_FLOAT_EXPONENT, BR_FORMAT_FLOAT_PRECISION_MAX);
+  large = (uint8_t *)malloc(bound32);
+  assert(large != NULL);
+  r = br_format_f32(1.0f, BR_FLOAT_EXPONENT, BR_FORMAT_FLOAT_PRECISION_MAX, large, bound32);
+  assert(r.status == BR_STATUS_OK && r.count <= bound32);
+  assert(r.count == (size_t)BR_FORMAT_FLOAT_PRECISION_MAX + 6u);
+  free(large);
+
+  memset(sentinel, 0x3c, sizeof(sentinel));
+  r =
+    br_format_f64(1.0, BR_FLOAT_DECIMAL, BR_FORMAT_FLOAT_PRECISION_MAX, sentinel, sizeof(sentinel));
   assert(r.status == BR_STATUS_SHORT_BUFFER && r.count == 0u);
+  for (size_t i = 0u; i < sizeof(sentinel); i += 1u) {
+    assert(sentinel[i] == 0x3cu);
+  }
+
+  assert(br_format_f64_bound(BR_FLOAT_DECIMAL, INT_MAX) == bound);
+  r = br_format_f64(1.0, BR_FLOAT_DECIMAL, INT_MAX, sentinel, sizeof(sentinel));
+  assert(r.status == BR_STATUS_INVALID_ARGUMENT && r.count == 0u);
+  assert(br_format_f32_bound(BR_FLOAT_EXPONENT, INT_MAX) == bound32);
+  r = br_format_f32(1.0f, BR_FLOAT_EXPONENT, INT_MAX, sentinel, sizeof(sentinel));
+  assert(r.status == BR_STATUS_INVALID_ARGUMENT && r.count == 0u);
+  for (size_t i = 0u; i < sizeof(sentinel); i += 1u) {
+    assert(sentinel[i] == 0x3cu);
+  }
+
+  r = br_format_f64(8.0, BR_FLOAT_GENERAL, 0, buf, sizeof(buf));
+  assert(r.status == BR_STATUS_OK && r.count == 1u && buf[0] == '8');
+  r = br_format_f32(8.0f, BR_FLOAT_GENERAL, 0, buf, sizeof(buf));
+  assert(r.status == BR_STATUS_OK && r.count == 1u && buf[0] == '8');
 
   /* bad base -> INVALID_ARGUMENT. */
   r = br_format_i64(1, 37, buf, sizeof(buf));
@@ -382,6 +453,7 @@ int main(void) {
   test_int_parse_basic();
   test_int_overflow_saturates();
   test_int_bases();
+  test_int_format_max_bounds();
   test_strict_vs_prefix();
   test_i32_u32_narrowing();
   test_bool();

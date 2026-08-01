@@ -32,8 +32,9 @@ remaining roadmap (PORT/SKIP/DEFER).
 
 ## The framing fact
 
-`mem` is ~5,900 lines, roughly **half of all of `src/`**. Bedrock currently
-ships **13 allocators**. The daily-driver allocator experience Odin actually
+`mem` is roughly 4,900 of 17,000 tracked C source lines, about **29% of
+`src/`** as of August 1, 2026. Bedrock currently ships a broad allocator
+surface. The daily-driver allocator experience Odin actually
 optimizes for is: heap + a temp/scratch allocator + a tracking allocator in
 debug + arenas. Everything past that is a specialist tool competing for the
 same attention.
@@ -50,10 +51,10 @@ external demand, judged per item.
 | Candidate | One-liner | hdr+impl | rec | confidence |
 | --- | --- | --- | --- | --- |
 | small_stack | LIFO allocator with tiny headers; a micro-variant of `stack` | 307 | CUT | high |
-| compat_allocator | wraps a parent so you can free/resize without passing old_size | 277 | CUT | high (philosophy call) |
+| compat_allocator | wraps a parent so you can free/resize without passing old_size | 277 | KEEP | high (FFI adapter ruling) |
 | rollback_stack | stack allocator with savepoint rollback + oversized singletons | 683 | CUT | medium |
 | buddy_allocator | power-of-two buddy allocator over a fixed buffer | 474 | DEMOTE | medium |
-| lookahead_reader | reader that peeks N bytes ahead then consumes | 249 | DEMOTE | medium |
+| lookahead_reader | reader that peeks N bytes ahead then consumes | 249 | CUT | high (superseded by `bufio.Reader`) |
 | varint (LEB128) | variable-length integer encode/decode | pilot | KEEP (narrow) | medium |
 | scratch | temp/region allocator with backup + leak list | 507 | KEEP | high |
 | tracking_allocator | debug leak/double-free tracker | 887 | KEEP (debug-only) | high |
@@ -188,14 +189,12 @@ zero consumers AND a superseding Bedrock alternative.
 - **Odin `raw.odin` runtime-layout surface:** the matrix already says don't
   broadly port. Endorsed.
 
-## If the project takes the high-confidence cuts
+## Historical cut projection (superseded)
 
-Cutting small_stack + compat + rollback removes ~1,267 impl+hdr lines and ~375
-test lines, dropping the allocator count 13 -> 10 with zero capability a C dev
-would miss. Demoting buddy + lookahead from the core dist trims another ~723
-lines from the default surface while keeping them opt-in. That is the
-biggest readability/dist win available, concentrated in the module that is
-half the codebase.
+This was the projection before the decisions log resolved the candidates.
+Small-stack, rollback-stack, and lookahead were cut. Compat was retained because
+its sizeless-free adapter is required by common foreign allocator callback ABIs;
+the earlier claim that cutting it lost no capability is superseded.
 
 ## Pre-port scrutiny (roadmap, not-yet-ported)
 
@@ -204,7 +203,10 @@ strike it from the matrix now rather than port-then-cut. Sizes are Odin source
 lines @2c25fb9. Recommendations: PORT (worth it), DEFER (only on concrete
 demand), SKIP (strike from matrix).
 
-### Matrix v1 rows not yet ported
+### Historical matrix-v1 snapshot
+
+Slashpath and RFC3339 have since landed. This table preserves the pre-port
+recommendations; current status lives in the port matrix and coverage checklist.
 
 | Row | One-liner | Realistic user | Rec | Confidence |
 | --- | --- | --- | --- | --- |
@@ -234,7 +236,11 @@ Notes:
 - **TSC/perf SKIP:** per-arch asm, niche; `br_tick` already covers ordinary
   timing.
 
-### Checklist `planned` rows inside landed modules
+### Historical recommendations for then-planned checklist rows
+
+ASCII case conversion, cut/substring, fields, split iterators, common trims, and
+low-level memory helpers have since landed. The checklist is authoritative for
+current status; this table preserves the recommendation record.
 
 | Row | One-liner | Realistic user | Rec | Confidence |
 | --- | --- | --- | --- | --- |
@@ -318,7 +324,7 @@ boundary.
 | sync extended primitives | AUDIT ORDERED | 2026-07-19 | per-primitive living-idiom-vs-relic audit (ticket mutex, auto-reset event, one-shot event, public parker, barrier) before any trim ruling |
 | demand audit (allocators + sync) | COMPLETE | 2026-07-19 | steelman-first evidence table recorded above: allocator side 3 CUT + 1 DEMOTE + lookahead CUT; sync side 5 KEEP + 2 DEMOTE-class. Execution rulings still pending. |
 | small_stack, rollback_stack, lookahead_reader | CUT (RULED) | 2026-07-19 | the three clean cuts approved for execution — zero consumers, superseding alternative each; one removal commit per candidate |
-| compat_allocator | PENDING | 2026-07-19 | awaits the malloc/free-facade philosophy ruling |
+| compat_allocator | PENDING (superseded below) | 2026-07-19 | awaited the malloc/free-facade philosophy ruling |
 | compat_allocator | KEEP (interop reframe) | 2026-07-19 | the boundary audit resolved the pending condition: compat is the FFI adapter that lets a Bedrock allocator serve the sizeless-free callback ABI of the dominant C-library class (zlib, sqlite, stb, curl, FreeType); Lua's size-passing lua_Alloc is the minority that needs no adapter. Re-document with interop framing (adapter for foreign callbacks, not an internal convenience). |
 | small_stack | | | |
 | compat_allocator | | | |

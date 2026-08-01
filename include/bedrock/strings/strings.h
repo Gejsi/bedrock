@@ -343,7 +343,12 @@ br_string_view br_string_substring(br_string_view s, size_t rune_start, size_t r
 
 /*
 Return the length in bytes of the longest common prefix of `a` and `b`, not
-splitting a multibyte UTF-8 rune.
+splitting a valid multibyte UTF-8 rune in either operand.
+
+Both operands are decoded independently at each boundary. Malformed bytes use
+the UTF-8 decoder's one-byte replacement-rune width, and a prefix is extended
+only when both decoded widths and the corresponding bytes match. The result is
+therefore symmetric, including for malformed UTF-8.
 */
 size_t br_string_prefix_length(br_string_view a, br_string_view b);
 

@@ -1,12 +1,12 @@
+#define BR_VEC_T int
+#define BR_VEC_NAME br_test_int_vec
+#include <bedrock/template/vec.h>
+
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
 
 #include <bedrock.h>
-
-#define BR_VEC_T int
-#define BR_VEC_NAME br_test_int_vec
-#include <bedrock/template/vec.h>
 
 static void test_heap_allocator(void) {
   br_alloc_result alloc;

@@ -108,6 +108,8 @@ void br_atomic_cond_signal(br_atomic_cond *cond);
 void br_atomic_cond_broadcast(br_atomic_cond *cond);
 
 void br_atomic_sema_init(br_atomic_sema *sema, uint32_t count);
+
+/* Posting saturates the permit count at UINT32_MAX; permits never wrap away. */
 void br_atomic_sema_post(br_atomic_sema *sema, uint32_t count);
 void br_atomic_sema_wait(br_atomic_sema *sema);
 bool br_atomic_sema_wait_with_timeout(br_atomic_sema *sema, br_duration duration);

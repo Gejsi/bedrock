@@ -28,17 +28,10 @@
 #define br_try_shared_lock(lock_ptr) br_rw_mutex_try_shared_lock(lock_ptr)
 
 /*
-These `guard` helpers provide scoped locking; because C has no `defer`, Bedrock
-exposes them as scoped block macros.
+Bedrock intentionally does not provide a scoped guard macro. A for-loop macro
+cannot release a lock when control leaves its body through break, return, or
+goto. Use br_lock/br_unlock (or the typed functions) explicitly and release the
+lock on every control-flow path.
 */
-#define br_guard(lock_ptr)                                                                         \
-  for (bool BR_CONCAT(_br_guard_once_, __LINE__) = (br_lock((lock_ptr)), true);                    \
-       BR_CONCAT(_br_guard_once_, __LINE__);                                                       \
-       br_unlock((lock_ptr)), BR_CONCAT(_br_guard_once_, __LINE__) = false)
-
-#define br_shared_guard(lock_ptr)                                                                  \
-  for (bool BR_CONCAT(_br_shared_guard_once_, __LINE__) = (br_shared_lock((lock_ptr)), true);      \
-       BR_CONCAT(_br_shared_guard_once_, __LINE__);                                                \
-       br_shared_unlock((lock_ptr)), BR_CONCAT(_br_shared_guard_once_, __LINE__) = false)
 
 #endif

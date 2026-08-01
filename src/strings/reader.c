@@ -34,6 +34,15 @@ static br_string_reader_seek_result br__string_reader_seek_result(i64 offset, br
   return result;
 }
 
+static bool br__string_reader_add_offset(i64 base, i64 offset, i64 *absolute) {
+  if ((offset > 0 && base > INT64_MAX - offset) || (offset < 0 && base < INT64_MIN - offset)) {
+    return false;
+  }
+
+  *absolute = base + offset;
+  return true;
+}
+
 void br_string_reader_init(br_string_reader *reader, br_string_view source) {
   if (reader == NULL) {
     return;
@@ -205,16 +214,20 @@ br_string_reader_seek(br_string_reader *reader, i64 offset, br_seek_from whence)
     return br__string_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);
   }
 
-  reader->prev_rune = -1;
   switch (whence) {
     case BR_SEEK_FROM_START:
       absolute = offset;
       break;
     case BR_SEEK_FROM_CURRENT:
-      absolute = reader->index + offset;
+      if (!br__string_reader_add_offset(reader->index, offset, &absolute)) {
+        return br__string_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);
+      }
       break;
     case BR_SEEK_FROM_END:
-      absolute = (i64)reader->source.len + offset;
+      if ((uint64_t)reader->source.len > (uint64_t)INT64_MAX ||
+          !br__string_reader_add_offset((i64)reader->source.len, offset, &absolute)) {
+        return br__string_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);
+      }
       break;
     default:
       return br__string_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);
@@ -224,6 +237,7 @@ br_string_reader_seek(br_string_reader *reader, i64 offset, br_seek_from whence)
     return br__string_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);
   }
 
+  reader->prev_rune = -1;
   reader->index = absolute;
   return br__string_reader_seek_result(absolute, BR_STATUS_OK);
 }

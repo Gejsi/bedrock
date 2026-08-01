@@ -13,12 +13,12 @@ entropy source (`br_rand_entropy_fill`), never from the PRNG stream.
 
 | Facility | Surface | Status |
 | --- | --- | --- |
-| generator state + seeding | `br_rand`, `br_rand_seed`/`_seed_entropy` | planned |
-| raw draws | `br_rand_u64`/`_u32` | planned |
-| bounded draws (unbiased) | `br_rand_u64_below`/`_i64_between` | planned |
-| unit float | `br_rand_f64`/`_f32` (`[0,1)`) | planned |
-| shuffle | `br_rand_shuffle` (callback swap) | planned |
-| OS entropy | `br_rand_entropy_fill` (seed source; future uuid dep) | planned |
+| generator state + seeding | `br_rand`, `br_rand_seed`/`_seed_entropy` | landed |
+| raw draws | `br_rand_u64`/`_u32` | landed |
+| bounded draws (unbiased) | `br_rand_u64_below`/`_i64_between` | landed |
+| unit float | `br_rand_f64`/`_f32` (`[0,1)`) | landed |
+| shuffle | `br_rand_shuffle` (callback swap) | landed |
+| OS entropy | `br_rand_entropy_fill` (seed source; future uuid dep) | landed |
 
 Deferred: non-uniform distributions (normal/exponential/perm). Skipped: the
 distribution zoo (gamma/beta/pareto/weibull/von_mises/cauchy/laplace/zipf/...);

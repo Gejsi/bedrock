@@ -1,20 +1,20 @@
 # Encoding
 
-Odin-inspired byte<->text and integer<->bytes conversions. The pilot wave ports
-four Odin packages: `core/encoding/hex`, `core/encoding/base64`,
+Odin-inspired byte<->text and integer<->bytes conversions. The v1 set ports four
+Odin packages: `core/encoding/hex`, `core/encoding/base64`,
 `core/encoding/endian`, `core/encoding/varint`.
 
 ## Scope
 
 | Package | Bedrock header | Impl | Status |
 | --- | --- | --- | --- |
-| hex | encoding/hex.h | src/encoding/hex.c | planned |
-| base64 | encoding/base64.h | src/encoding/base64.c | planned |
-| endian | encoding/endian.h | (header-only) | planned |
-| varint (LEB128) | encoding/varint.h | src/encoding/varint.c | planned |
+| hex | encoding/hex.h | src/encoding/hex.c | landed |
+| base64 | encoding/base64.h | src/encoding/base64.c | landed |
+| endian | encoding/endian.h | (header-only) | landed |
+| varint (LEB128) | encoding/varint.h | src/encoding/varint.c | landed |
 
 Base32, CBOR, JSON, ASN.1, PEM, UUID, XML, CSV/INI, entity, hxa are out of
-pilot scope.
+the v1 encoding set.
 
 ## Conventions
 
@@ -33,11 +33,10 @@ pilot scope.
 
 ## Error Model
 
-`br_status` gains `BR_STATUS_INVALID_ENCODING` (appended to the end of the
-enum so existing values do not shift). It means "the encoded input data is
+`BR_STATUS_INVALID_ENCODING` means "the encoded input data is
 malformed" — distinct from `BR_STATUS_INVALID_ARGUMENT`, which stays reserved
-for caller misuse (a programmer bug, not corrupt data). The whole upcoming
-parser family (csv, ini, rfc3339) shares this status. Decode paths use:
+for caller misuse (a programmer bug, not corrupt data). RFC 3339 already shares
+this status, and future parser modules should do the same. Decode paths use:
 
 | Condition | Status |
 | --- | --- |
@@ -137,6 +136,12 @@ br_decode_into_result br_base64_decode_to_writer(br_base64_encoding enc, br_byte
                                                  br_writer w);
 ```
 
+`br_base64_encoded_len` saturates at `SIZE_MAX`; that value can also be an exact
+raw-encoding length. Encode operations distinguish the cases internally:
+allocating encode reports `OUT_OF_MEMORY`, into-buffer encode reports
+`SHORT_BUFFER`, and writer encode reports `OUT_OF_RANGE`, without reading an
+impossible view.
+
 Semantics:
 
 - `padded=true`: encode pads to a multiple of 4; decode requires
@@ -214,7 +219,7 @@ length; on error, how far it got). Empty/truncated buffer (continuation bit
 set, input ends) -> `UNEXPECTED_EOF`. Value exceeding the target width (an
 11th byte, or a 10th byte with bits beyond bit 63) -> `INVALID_ENCODING`.
 Stream variants (`br_uleb128_read(br_reader)` / `br_uleb128_write(br_writer, uint64_t)`)
-are a recommended follow-on, deferred out of the pilot.
+remain deferred follow-on helpers.
 
 ## Intentional deviations from Odin
 

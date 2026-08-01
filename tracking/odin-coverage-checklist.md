@@ -31,8 +31,8 @@ Why this label:
 - Bedrock now has the allocator contract, the first fixed, scratch, stack,
   and dynamic arenas/allocators, and the first cross-platform
   virtual-memory-backed arena implementation.
-- Odin `core/mem` is still much broader and includes specialized allocators,
-  synchronized wrappers, and TLSF work that Bedrock has not ported yet.
+- Odin `core/mem` is still broader and includes additional specialized
+  allocators and TLSF work. The mutex and tracking wrappers are already landed.
 
 Current Bedrock files:
 - `include/bedrock/mem/alloc.h`
@@ -81,7 +81,7 @@ Current Bedrock files:
 | scratch allocator | `adapted` | `scratch.h`, `scratch.c` | Landed with lazy default initialization, backup allocations, and last-allocation free/resize behavior close to Odin; Bedrock omits Odin's context logger warning path and uses explicit status returns. |
 | stack allocator | `adapted` | `stack.h`, `stack.c` | Landed with Odin-style buffered stack allocation, last-allocation free/resize, and double-free tolerance; Bedrock returns statuses instead of panics and documents the in-place resize check that differs from Odin's current source. |
 | small stack allocator | `cut` | none | Cut July 19, 2026 (cut-list decisions log): redundant with `stack`, the canonical LIFO allocator; the tiny-header size delta was an Odin micro-optimization, not a use case. No external consumers at removal. |
-| dynamic arena allocator | `adapted` | `dynamic_arena.h`, `dynamic_arena.c` | Landed with Odin-style block cycling, separate block/array allocators, out-band allocations, reset/free-all split, reallocate-on-resize behavior, and per-request alignment (`max(minimum_alignment, request)`, floored on the out-band path too); Bedrock keeps the generic allocator adapter on alloc/free/resize/reset only, so there are no query-feature/query-info modes yet. |
+| dynamic arena allocator | `adapted` | `dynamic_arena.h`, `dynamic_arena.c` | Landed with Odin-style block cycling, separate block/array allocators, out-band allocations, reset/free-all split, reallocate-on-resize behavior, and per-request alignment (`max(minimum_alignment, request)`, floored on the out-band path too). Out-band backing metadata is private while the public `void **` representation remains stable; failed backing frees retain ownership for retry, and generic `RESET` reports failure. Bedrock keeps the generic allocator adapter on alloc/free/resize/reset only, so there are no query-feature/query-info modes yet. |
 | buddy allocator | `adapted` | `buddy_allocator.h`, `buddy_allocator.c` | Landed with Odin-style in-place buddy block splitting/coalescing, fixed power-of-two backing storage, and fixed-alignment allocations; Bedrock reports init/pointer misuse as statuses and the generic adapter keeps Bedrock's alloc/free/resize/reset ABI instead of Odin's query modes. |
 | compat allocator | `adapted` | `compat_allocator.h`, `compat_allocator.c` | Landed as a header-prefixed wrapper that tracks allocation size/alignment and hides parent old-size requirements from Bedrock callers. Bedrock defaults unset parents to heap, has no generic query-feature/query-info surface yet, and explicitly shifts the payload if the wrapped header prefix grows during an in-place parent resize. |
 | virtual memory API | `adapted` | `virtual.h`, `src/mem/virtual/*` | Reserve/commit/decommit/release/protect landed with an Odin-style `virtual/*` split: shared `virtual_platform`, shared BSD/macOS `virtual_posix`, per-OS Linux/Darwin/FreeBSD/NetBSD/OpenBSD files, Windows, and `other`. |
@@ -130,8 +130,8 @@ Current Bedrock files:
 | join / concatenate / repeat | `adapted` | `bytes.h`, `bytes.c` | Implemented as explicit allocating helpers. |
 | split / split_n / split_after / split_after_n | `adapted` | `bytes.h`, `bytes.c` | Implemented; empty-separator behavior now follows Odin's rune-aware semantics. |
 | replace / replace_all / remove / remove_all | `adapted` | `bytes.h`, `bytes.c` | Implemented; empty-old replacement now follows Odin's rune-boundary semantics. |
-| `bytes.Buffer` core | `adapted` | `byte_buffer.h`, `byte_buffer.c` | Init, reset, reserve, truncate, write, next, read, read_byte, unread_byte are implemented. |
-| `bytes.Reader` core | `adapted` | `byte_reader.h`, `byte_reader.c` | Init, read, read_at, read_byte, unread_byte, seek are implemented. |
+| `bytes.Buffer` core | `adapted` | `buffer.h`, `buffer.c` | Init, reset, reserve, truncate, write, next, read, read_byte, unread_byte are implemented. |
+| `bytes.Reader` core | `adapted` | `reader.h`, `reader.c` | Init, read, read_at, read_byte, unread_byte, seek are implemented. |
 | rune_count / truncate_to_rune / contains_rune / index_rune | `planned` | none | Not implemented yet. |
 | case conversion (`to_lower_ascii`, `to_upper_ascii`) | `adapted` | `bytes.h`, `bytes.c` | ASCII-only case mapping; bytes >= 0x80 pass through so UTF-8 stays valid. Odin `core/bytes` has no case-conversion procs, so this is a Bedrock addition, not a 1:1 port. Unicode-aware conversion is deferred (case tables), hence the `_ascii` suffix. |
 | equal_fold | `planned` | none | Depends on higher Unicode case-folding support. |
@@ -141,7 +141,7 @@ Current Bedrock files:
 | `bytes.Reader` rune operations | `planned` | none | `read_rune`, `unread_rune` not landed. |
 | `bytes.Reader` `io` adapters | `adapted` | `bytes/reader.h`, `bytes/reader.c` | Exposed as a generic stream with read/read_at/seek/size/query support. |
 | predicate / proc-based scans and trims | `planned` | none | `index_proc`, `trim_left_proc`, etc. not started. |
-| trim cutset / trim_space / trim_null | `planned` | none | Not started. |
+| trim cutset / trim_space / trim_null | `adapted` | `bytes.h`, `bytes.c` | Landed. Cutset trimming is rune-aware; `trim_space` is intentionally ASCII-whitespace-only until Unicode space tables land. |
 | split iterators / split_multi / fields | `adapted` | `strings.h`, `strings.c`, `bytes.h`, `bytes.c` | Allocation-free split iterator landed as a caller-owned cursor struct (`br_*_split_iter` + `_next` / `_split_after_iter_next`), plus a strings fields iterator. The iterator yields the split LIST element-for-element (keeps trailing empties and yields one empty field for empty-input-with-separator) — a documented deviation from Odin's `split_iterator`, which drops the trailing empty; `fields`/the fields iterator are the skip-empties path. `split_multi` not started. |
 | partition / alias helpers | `planned` | none | Not started. |
 | reverse / scrub / expand_tabs / justify | `excluded` | none | Struck July 19, 2026 pre-port (see cut list): niche text-processing surface. |
@@ -180,11 +180,11 @@ Current Bedrock files:
 | index / index_rune | `done` | `strings.h`, `strings.c` | Implemented. |
 | truncate_to_byte / truncate_to_rune | `done` | `strings.h`, `strings.c` | Implemented. |
 | trim_prefix / trim_suffix | `done` | `strings.h`, `strings.c` | Implemented. |
-| `strings.Builder` core | `adapted` | `string_builder.h`, `string_builder.c` | Heap-backed and fixed-backing builder landed with write/pop operations. |
-| `strings.Reader` core | `adapted` | `string_reader.h`, `string_reader.c` | Byte and rune read/unread plus seek are implemented. |
-| ptr / cstring conversion helpers | `planned` | none | `string_from_ptr`, `clone_to_cstring`, etc. are not landed. |
+| `strings.Builder` core | `adapted` | `builder.h`, `builder.c` | Heap-backed and fixed-backing builder landed with write/pop operations. |
+| `strings.Reader` core | `adapted` | `reader.h`, `reader.c` | Byte and rune read/unread plus seek are implemented. |
+| ptr / cstring conversion helpers | `adapted` | `strings.h`, `strings.c` | Length-delimited strings remain the primary API; `br_string_clone_to_cstr` provides explicit owned C-string interop. Broader raw-pointer conversion helpers remain excluded. |
 | contains_any / index_any / last_index / last_index_any / index_byte / last_index_byte | `done` | `strings.h`, `strings.c` | Implemented. |
-| prefix_length / common_prefix | `planned` | none | Not landed. |
+| prefix_length / common_prefix | `adapted` | `strings.h`, `strings.c` | Landed as rune-boundary-aware sub-view helpers. |
 | join / concatenate / count / repeat | `adapted` | `strings.h`, `strings.c` | Implemented as explicit allocating helpers plus substring counting. |
 | replace / remove family | `adapted` | `strings.h`, `strings.c` | Implemented with explicit rewrite results; empty-old replacement follows rune boundaries. |
 | split family | `adapted` | `strings.h`, `strings.c` | Implemented; empty-separator behavior follows Odin's rune-aware string semantics. |
@@ -244,7 +244,8 @@ Current Bedrock files:
 | generic `read_full` / `read_at_least` / `write_full` / `write_at_least` helpers | `adapted` | `io.h`, `io.c`, `tests/test_io.c` | Landed with Odin-style exact/minimum semantics plus Bedrock `NO_PROGRESS` guards for malformed C callbacks. |
 | generic `copy` / `copy_buffer` helpers | `adapted` | `io.h`, `io.c`, `tests/test_io.c` | Landed with explicit short-write detection. |
 | close / flush / destroy lifecycle operations | `adapted` | `io.h`, `io.c` | Present in the generic stream API; current in-memory streams mostly report unsupported. |
-| buffered IO / scanners / pipes | `adapted` | `bufio/*`, `tests/test_bufio.c` | Core buffered IO has moved into the new `bufio` module. |
+| buffered IO | `adapted` | `bufio/*`, `tests/test_bufio.c` | Core buffered IO has moved into the `bufio` module. |
+| scanners / pipes | `planned` | none | Scanner remains planned; no pipe abstraction has landed. |
 
 Summary:
 - `io` now exists as a real foundational module.
@@ -306,9 +307,9 @@ Why this label:
   public semaphores, several futex wait/wake backends, and the first
   `primitives_atomic` slices.
 - The public shape is close enough to start integrating with other modules.
-- The backend structure is still far from Odin's actual `core/sync` tree:
-  timeout pieces, Haiku/WASM futex backends, and the exact per-OS primitive
-  split still have no Bedrock equivalents.
+- Timeout support is landed. Remaining backend work is target verification and
+  optional Haiku/WASM futex support; the exact per-OS file split was explicitly
+  excluded as a capability-neutral layout goal.
 
 Current Bedrock files:
 - `include/bedrock/sync.h`
@@ -340,8 +341,8 @@ Current Bedrock files:
 | `Recursive_Mutex` | `adapted` | `sync/primitives.h`, `src/sync/primitives_internal.c` | Landed as a zero-value-ready wrapper over `br_atomic_recursive_mutex`. Bedrock preserves the documented same-owner try-lock behavior. |
 | `Cond` | `adapted` | `sync/primitives.h`, `src/sync/primitives_internal.c`, `tests/test_sync.c` | Wait/signal/broadcast and timeout wait landed as a zero-value-ready wrapper over `br_atomic_cond`. |
 | `Sema` | `adapted` | `sync/primitives.h`, `src/sync/primitives_internal.c`, `tests/test_sync.c` | Public semaphore landed as a zero-value-ready wrapper over `br_atomic_sema`, with an optional C reset/init helper for non-zero initial counts and timeout wait. |
-| `sync_util` guard/lock aliases | `adapted` | `sync/sync_util.h` | Generic `lock`/`unlock`/`try_lock` style macros landed. Odin's function-style `guard` becomes a scoped block macro because C has no `defer`. |
-| `Wait_Group` | `adapted` | `sync/extended.h`, `src/sync/extended.c`, `tests/test_sync.c` | Core add/done/wait and timeout wait landed. Bedrock tracks remaining duration across condition wait iterations so spurious wakeups do not restart the public timeout window. |
+| `sync_util` lock aliases | `adapted` | `sync/sync_util.h` | Generic `lock`/`unlock`/`try_lock` and shared-lock macros landed. Scoped guard macros are intentionally absent because C cannot guarantee unlock on `break`, `return`, or `goto`. |
+| `Wait_Group` | `adapted` | `sync/extended.h`, `src/sync/extended.c`, `tests/test_sync.c` | Core add/done/wait and timeout wait landed. Bedrock tracks remaining duration across condition wait iterations so spurious wakeups do not restart the public timeout window. Starting a new generation from zero must happen before concurrent waits. |
 | `Barrier` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Core init/wait landed. Built on Bedrock's own mutex+cond rather than `pthread_barrier`, which is optional POSIX and absent on macOS (verified July 19, 2026) — portable by construction. |
 | `Once` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Landed with a generic `void *` callback plus a no-data helper instead of Odin's overloaded proc family. |
 | `Auto_Reset_Event` | `adapted` | `sync/extended.h`, `src/sync/extended.c`, `tests/test_sync.c` | Landed with Odin's signed status counter plus `Sema` storage, using `br_atomic_i32` for C data-race safety. |
@@ -350,9 +351,9 @@ Current Bedrock files:
 | `Ticket_Mutex` | `adapted` | `sync/extended.h`, `src/sync/extended.c` | Lock/unlock landed with C atomics. |
 | `atomic.odin` surface | `adapted` | `sync/atomic.h`, `src/sync/atomic.c`, `tests/test_sync_atomic.c` | Landed as a C11-atomic-backed layer with Bedrock names and memory-order aliases. Bedrock intentionally keeps C's compare-exchange `expected` pointer contract instead of emulating Odin's tuple-return API, and currently requires compiler/target support for C11 atomics. |
 | `primitives_internal.odin` | `adapted` | `src/sync/primitives_internal.c` | Public primitive wrappers now live in an Odin-shaped internal bridge over the atomic/futex layer. Bedrock keeps C-style explicit `init`/`destroy` reset/no-op helpers. |
-| `primitives_atomic.odin` | `adapted` | `sync/primitives_atomic.h`, `src/sync/primitives_atomic.c`, `tests/test_sync_futex.c` | `Atomic_Mutex`, `Atomic_RW_Mutex`, `Atomic_Recursive_Mutex`, `Atomic_Cond`, and `Atomic_Sema` landed on top of Bedrock futex, including atomic condition/semaphore timeout waits. `Atomic_Mutex` keeps Odin's three-state shape but uses Rust-style relaxed-load spinning and a CAS fast path. `Atomic_Recursive_Mutex` stores owner atomically to avoid C data races and follows documented recursive try-lock behavior rather than Odin's current same-owner `mutex_try_lock` branch. |
+| `primitives_atomic.odin` | `adapted` | `sync/primitives_atomic.h`, `src/sync/primitives_atomic.c`, `tests/test_sync_futex.c` | `Atomic_Mutex`, `Atomic_RW_Mutex`, `Atomic_Recursive_Mutex`, `Atomic_Cond`, and `Atomic_Sema` landed on top of Bedrock futex, including atomic condition/semaphore timeout waits. Semaphore retries retain one deadline under contention. `Atomic_Mutex` keeps Odin's three-state shape but uses Rust-style relaxed-load spinning and a CAS fast path. `Atomic_Recursive_Mutex` stores owner atomically to avoid C data races and follows documented recursive try-lock behavior rather than Odin's current same-owner `mutex_try_lock` branch. |
 | per-OS primitive split (`linux`, `darwin`, `freebsd`, `netbsd`, `openbsd`, `haiku`, `wasm`) | `excluded` | none | Struck as a goal July 19, 2026 (cut list): a file-layout refactor with no new capability; thread ID dispatch stays consolidated in `src/sync/primitives.c`. |
-| Futex public surface and backends | `adapted` | `sync/futex.h`, `src/sync/futex_*.c`, `tests/test_sync_futex.c` | Futex wait/timeout-wait/signal/broadcast landed for Linux, Windows, Darwin, FreeBSD, NetBSD, and OpenBSD; Linux is locally tested, other source ports still need target-specific verification. Windows runtime-resolves Odin's `RtlWaitOnAddress` path plus wake functions so users do not need extra sync import libraries, Darwin weak-imports newer `os_sync_*` APIs with `__ulock_*` fallback, and FreeBSD uses the native no-timeout `_umtx_op` form instead of Odin's 4-hour timeout loop. Haiku and WASM are still missing. |
+| Futex public surface and backends | `adapted` | `sync/futex.h`, `src/sync/futex_*.c`, `tests/test_sync_futex.c` | Futex wait/timeout-wait/signal/broadcast landed for Linux, Windows, Darwin, FreeBSD, NetBSD, and OpenBSD; Linux and Darwin are locally tested, other source ports still need target-specific verification. Narrow native timeout representations are consumed in chunks rather than wrapping or expiring early. Windows runtime-resolves Odin's `RtlWaitOnAddress` path plus wake functions, Darwin weak-imports newer `os_sync_*` APIs with `__ulock_*` fallback, and FreeBSD uses native no-timeout `_umtx_op`. Haiku and WASM are still missing. |
 | benaphores / recursive benaphores | `excluded` | none | Struck July 19, 2026 pre-port (cut list): redundant against the existing mutex/sema surface. |
 | timeout-based waits | `adapted` | `sync/futex.h`, `sync/primitives_atomic.h`, `sync/primitives.h`, `sync/extended.h` | Timeout waits landed for futex, atomic cond/sema, public cond/sema, and wait groups. |
 | `sync/chan` | `deferred` | none | Channels are a later step, not part of the initial blocking-primitives slice. |
@@ -411,7 +412,7 @@ Summary:
 
 ## `core/encoding`
 
-Current label: `partial v1` (pilot wave in progress)
+Current label: `v1 core encoding set`
 
 Current Bedrock files:
 - `include/bedrock/encoding.h` (module umbrella)
@@ -426,7 +427,7 @@ Current Bedrock files:
 | --- | --- | --- | --- |
 | `encoding/hex` | `adapted` | `encoding/hex.h`, `src/encoding/hex.c` | Encode (lower/upper, allocating/into-buffer/writer), decode (allocating/into-buffer), decode_sequence. Deviations per spec: frees on error (fixes Odin's leak wart), byte `error_offset` reporting, `BR_STATUS_INVALID_ENCODING` for malformed input. |
 | `encoding/endian` | `adapted` | `encoding/endian.h` | All 8 widths checked get/put over views plus unchecked raw-pointer forms. Deviations per spec: `br_endian_` prefix, shift-based host-agnostic assembly, memcpy float bit-casts, memcpy byte-order probe (no compiler extensions), no f16. Upstream has zero tests; Bedrock's suite is the first. |
-| `encoding/base64` | `adapted` | `encoding/base64.h`, `src/encoding/base64.c` | Std/URL alphabets x padded/raw presets + a strict flag; encode (allocating/into-buffer/writer) and decode (allocating/into-buffer/writer). Deviations per spec: explicit presets + strict/padded controls (Odin exposes only a lenient decoder); drops Odin's dead `dst` decode param (caller buffers go through the into-buffer variant); no whitespace skipping (Go's decoder skips `\r\n`, Bedrock rejects any non-alphabet byte at its `error_offset`); strict rejects a non-canonical final quantum, lenient masks. RFC 4648 vectors. |
+| `encoding/base64` | `adapted` | `encoding/base64.h`, `src/encoding/base64.c` | Std/URL alphabets x padded/raw presets + a strict flag; encode (allocating/into-buffer/writer) and decode (allocating/into-buffer/writer). Encoded-length arithmetic saturates publicly and is checked internally before allocation, writes, or streaming. Deviations per spec: explicit presets + strict/padded controls (Odin exposes only a lenient decoder); drops Odin's dead `dst` decode param (caller buffers go through the into-buffer variant); no whitespace skipping (Go's decoder skips `\r\n`, Bedrock rejects any non-alphabet byte at its `error_offset`); strict rejects a non-canonical final quantum, lenient masks. RFC 4648 vectors. |
 | `encoding/varint` | `adapted` | `encoding/varint.h`, `src/encoding/varint.c` | Unsigned + signed LEB128 over the u64/i64 ABI: encoded_len, encode (into-buffer), decode. Deviations per spec: u64/i64 canonical width (Odin uses u128/i128; max 10 bytes not 19); DWARF sign-extended signed LEB128 (NOT Go's zig-zag); own `br_uleb128_result`/`br_ileb128_result` structs (no `error_offset` — `size` is bytes consumed always); truncation -> `UNEXPECTED_EOF`, value-too-wide -> `INVALID_ENCODING`, short encode buffer -> `SHORT_BUFFER` (never truncates). Signed 10th-byte padding bits must match the sign (`INT64_MIN` fills all 10 bytes). Stream read/write variants deferred. |
 
 ## `core/path`
@@ -441,7 +442,7 @@ Current Bedrock files:
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
 | `path/slashpath` | `adapted` | `path/slashpath.h`, `src/path/slashpath.c` | Full surface (clean/dir/base/ext/name/split/split_elements/join/match). Deviations per spec/modules/path.md: rewrite-result aliasing (no clone when already clean, improving on Odin's Lazy_Buffer), match follows Go's malformed-pattern validation that Odin's port dropped (suspected upstream bug, verification pending), match errors are BR_STATUS_INVALID_ARGUMENT. Test suite ports Go's path vectors including all 56 match tests; upstream Odin has none. |
-| `path/filepath` | `excluded` | none | Not requested; `br_path_` stays reserved. |
+| `path/filepath` | `deferred` | none | Deferred until the approved `os` v1 surface lands; `br_path_` stays reserved. |
 
 ## `core/math`
 
@@ -512,14 +513,14 @@ Current Bedrock files:
 | Odin feature/file | Status | Bedrock files | Notes |
 | --- | --- | --- | --- |
 | `Duration` and constants | `adapted` | `time/time.h` | Landed as `br_duration` with nanosecond precision and `BR_NANOSECOND` through `BR_HOUR`. |
-| `Time` / `now` / `sleep` | `adapted` | `time/time.h`, `src/time/time_*.c` | Landed as Unix nanoseconds plus platform sleep. Windows follows Odin's millisecond `Sleep` behavior for now. |
-| `Tick` / low-level perf helpers | `partial` | `time/time.h`, `src/time/time.c`, `src/time/time_*.c` | Monotonic tick, add/diff/since/lap landed. TSC/invariant-frequency helpers are deferred. |
+| `Time` / `now` / `sleep` | `adapted` | `time/time.h`, `src/time/time_*.c` | Landed as Unix nanoseconds plus platform sleep. Narrow native sleep intervals are chunked across the full positive `br_duration` range; Windows rounds the final sub-millisecond interval up. |
+| `Tick` / low-level perf helpers | `adapted` | `time/time.h`, `src/time/time.c`, `src/time/time_*.c` | Monotonic tick, add/diff/since/lap landed. TSC/invariant-frequency helpers were deliberately skipped. |
 | duration conversion helpers | `adapted` | `src/time/time.c` | Nanoseconds plus floating micro/milli/second/minute/hour conversions landed. |
 | duration round/truncate helpers | `planned` | none | Small self-contained helpers, but not needed for sync timeout wiring. |
-| stopwatch helpers | `planned` | none | Not needed for sync timeouts. |
+| stopwatch helpers | `deferred` | none | Deferred until a concrete consumer asks for the convenience wrapper. |
 | civil datetime slice | `adapted` | `time/datetime.h`, `src/time/datetime.c` | Landed: `br_date`/`br_time_of_day`/`br_datetime`/`br_delta`/`br_ordinal`, date<->ordinal (Reingold-Dershowitz), `is_leap_year`, the validate family, `from_components`, `add_delta`/`subtract`. NO timezone field (a `br_datetime` is always naive/civil; RFC 3339 offsets are carried by the rfc3339 layer). The ordinal accumulation uses the 400-year-cycle form (146097 days per 400 years) in pure int64 — no 128-bit path — and the year bounds (`BR_DATETIME_MIN/MAX_YEAR = ±25000000000000000`) are set to the widest at which every intermediate term stays in int64 with margin. That is deliberately a hair inside Odin's i64-saturating constants (a deviation): still astronomically beyond `br_time`'s reachable ~1677..2262 window and any real calendar, and it keeps the calendar core portable with no `__int128`/MSVC split. Deferred within the slice: `ordinal_to_datetime`, `day_of_week`, `last_day_of_month`, `year_range`, `add_days_to_date`, gcd/lcm. |
-| epoch bridge (datetime <-> Unix ns) | `adapted` | `time/datetime.h`, `src/time/datetime.c` | `br_datetime_to_time` returns a `{br_time, br_status}` result: `br_time`'s int64-ns window spans civil years ~1677..2262, so a datetime outside it returns `BR_STATUS_OUT_OF_RANGE` via an overflow-safe bounds check (compares against the int64 limits BEFORE multiplying, never a post-multiply wrap; UBSan-clean at the exact INT64_MIN/MAX instants). `br_time_to_datetime` is total. |
-| RFC 3339 parse/format | `adapted` | `time/rfc3339.h`, `src/time/rfc3339.c` | Landed against `br_time`, no timezone database (fixed integer-minute offsets). Deviations from Odin: strict `br_rfc3339_parse` + permissive `br_rfc3339_parse_prefix` split (strconv model); liberal separators in (`T`/`t`/space, `Z`/`z`) and strict uppercase out; fractional 1..9 digits into nanoseconds (Odin reads only 2 — bug #13, filed); leap second accepted only in the `minute==59 && second==60` form, smeared to `:59.999999999` with an `is_leap_second` flag (any other `:60` -> `INVALID_ENCODING`); offset normalized to UTC and preserved; `br_rfc3339_format` cannot range-fail (every `br_time` is a 4-digit year), only `SHORT_BUFFER`, never truncates, emits nanoseconds only when nonzero with trailing zeros trimmed. Round-trip text asymmetry for `:60` is intentional and documented (instant preserved, text not). |
+| epoch bridge (datetime <-> Unix ns) | `adapted` | `time/datetime.h`, `src/time/datetime.c` | `br_datetime_to_time` returns a `{br_time, br_status}` result: invalid caller-built datetimes return `INVALID_ARGUMENT`; valid datetimes outside `br_time`'s ~1677..2262 int64-ns window return `OUT_OF_RANGE` through overflow-safe prechecks, including the exact negative division boundary. `br_time_to_datetime` is total. |
+| RFC 3339 parse/format | `adapted` | `time/rfc3339.h`, `src/time/rfc3339.c` | Landed against `br_time`, no timezone database (fixed integer-minute offsets). Deviations from Odin: strict `br_rfc3339_parse` + permissive `br_rfc3339_parse_prefix` split (strconv model); liberal separators in (`T`/`t`/space, `Z`/`z`) and strict uppercase out; fractional 1..9 digits into nanoseconds (Odin reads only 2 — bug #13, filed); leap second accepted only in the `minute==59 && second==60` form, smeared to `:59.999999999` with an `is_leap_second` flag (any other `:60` -> `INVALID_ENCODING`); offset normalized to UTC and preserved; `br_rfc3339_format` rejects offsets outside `-23:59..+23:59` with `INVALID_ARGUMENT`, returns `SHORT_BUFFER` for NULL or undersized output, never truncates, and emits nanoseconds only when nonzero with trailing zeros trimmed. Round-trip text asymmetry for `:60` is intentional and documented (instant preserved, text not). |
 | timezone / ISO-8601 | `excluded` | none | Struck July 19, 2026 (see `tracking/cut-list.md`): no IANA/TZif database, no ISO-8601 beyond RFC 3339. |
 
 ## `core/strconv`
@@ -539,5 +540,5 @@ Current Bedrock files:
 | decimal engine (`strconv/decimal`) | `adapted` | `src/strconv/decimal.c` | Fixed `[384]`-digit multiprecision decimal ported from Odin's `decimal` + `generic_float`, parameterized by `br__float_info` (f32/f64). No bignum/heap/tables. |
 | int parse (`atoi`/`parse_int`/`parse_uint`) | `adapted` | `parse.c` | Strict `br_parse_i64`/`_u64` + `_prefix`; base 0/2..36; i32/u32 narrowing wrappers. Deviations: strict-by-default; base 2..36 superset over Odin's `assert(base<=16)`; base-0 recognizes `0x`/`0o`/`0b` only (Odin's `0d`/`0z` dropped); no underscore separators; bad base returns `INVALID_ARGUMENT` (no panic); overflow saturates with `OUT_OF_RANGE`; `br_parse_u64` rejects a sign. |
 | float parse (`parse_f64`/`parse_f32`) | `adapted` | `parse.c`, `decimal.c` | Native f32 rounding via `decimal_to_float_bits(&d,&br__f32_info)` — NOT f64-then-narrow (fixes Odin's double-rounding bug, `tracking/odin-suspected-bugs.md`); verified by the `1.00000017881393432617187499` -> `0x3f800001` witness. Case-insensitive inf/infinity/nan. |
-| int/bool/float format (`generic_ftoa`, `write_*`) | `adapted` | `format.c` | int (all bases), bool, and f32/f64 in shortest/decimal/exponent/general. Deviations: typed `br_float_format` enum + `_f32`/`_f64` pairs (not fmt byte + bit_size); never-truncate (`SHORT_BUFFER`, count 0); negative prec in non-shortest is `INVALID_ARGUMENT`; `*_SHORTEST_MAX` macros are shortest-only, other modes size via `br_format_f*_bound` (clamped so a pathological prec cannot overflow). No leading `+` on positive values. |
-| `quote`/`unquote`, `Append*` family, f16 | `excluded`/`planned` | none | `Append*` dropped (into-buffer + builder cover it); quote/unquote deferred to the `ini` consumer; f16 excluded (no standard C type). Eisel-Lemire/Grisu3 fast paths deliberately declined for exact-shortest at minimal code cost. |
+| int/bool/float format (`generic_ftoa`, `write_*`) | `adapted` | `format.c` | int (all bases), bool, and f32/f64 in shortest/decimal/exponent/general. Deviations: typed `br_float_format` enum + `_f32`/`_f64` pairs (not fmt byte + bit_size); never-truncate (`SHORT_BUFFER`, count 0); non-shortest precision outside `0..BR_FORMAT_FLOAT_PRECISION_MAX` is `INVALID_ARGUMENT`; `*_SHORTEST_MAX` macros are shortest-only, and other modes size via `br_format_f*_bound` (which clamps unsupported precision only to keep the arithmetic helper total). No leading `+` on positive values. |
+| `quote`/`unquote`, `Append*` family, f16 | `deferred`/`excluded` | none | Quote/unquote is deferred to the `ini` consumer; `Append*` is excluded because into-buffer + builder cover it; f16 is excluded because C11 has no standard type. Eisel-Lemire/Grisu3 fast paths deliberately declined for exact-shortest at minimal code cost. |

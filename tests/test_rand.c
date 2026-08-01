@@ -4,6 +4,12 @@
 
 #include <bedrock.h>
 
+#define br_rand_entropy_fill br_test_entropy_other_fill
+#define BR_RAND_FORCE_ENTROPY_OTHER 1
+#include "../src/rand/entropy_other.c"
+#undef BR_RAND_FORCE_ENTROPY_OTHER
+#undef br_rand_entropy_fill
+
 /*
 GOLDEN VECTORS — the differential-lock anchor. These are INDEPENDENT reference
 outputs, not produced by this implementation:
@@ -301,6 +307,14 @@ static void test_entropy_fill(void) {
   }
 }
 
+static void test_unsupported_entropy_fill(void) {
+  uint8_t byte = 0u;
+
+  assert(br_test_entropy_other_fill(NULL, 0u) == BR_STATUS_OK);
+  assert(br_test_entropy_other_fill(&byte, 0u) == BR_STATUS_OK);
+  assert(br_test_entropy_other_fill(&byte, 1u) == BR_STATUS_NOT_SUPPORTED);
+}
+
 static void test_seed_entropy(void) {
   br_rand r;
   br_status status = br_rand_seed_entropy(&r);
@@ -358,6 +372,7 @@ int main(void) {
   test_shuffle_is_permutation();
   test_shuffle_small_reaches_all_permutations();
   test_entropy_fill();
+  test_unsupported_entropy_fill();
   test_seed_entropy();
   test_private_generators_no_race();
   return 0;

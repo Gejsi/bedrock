@@ -38,6 +38,25 @@ static void test_tick_helpers(void) {
   assert(lap.nsec != 0 || !br_time_is_supported());
 }
 
+static void test_saturating_arithmetic(void) {
+  br_tick tick;
+  br_time time_start;
+  br_time time_end;
+
+  tick.nsec = INT64_MAX;
+  assert(br_tick_add(tick, 1).nsec == INT64_MAX);
+  tick.nsec = INT64_MIN;
+  assert(br_tick_add(tick, -1).nsec == INT64_MIN);
+
+  assert(br_tick_diff((br_tick){INT64_MIN}, (br_tick){INT64_MAX}) == BR_MAX_DURATION);
+  assert(br_tick_diff((br_tick){INT64_MAX}, (br_tick){INT64_MIN}) == BR_MIN_DURATION);
+
+  time_start.nsec = INT64_MIN;
+  time_end.nsec = INT64_MAX;
+  assert(br_time_diff(time_start, time_end) == BR_MAX_DURATION);
+  assert(br_time_diff(time_end, time_start) == BR_MIN_DURATION);
+}
+
 static void test_now_and_sleep(void) {
   br_tick start;
   br_tick end;
@@ -60,6 +79,7 @@ static void test_now_and_sleep(void) {
 int main(void) {
   test_duration_units();
   test_tick_helpers();
+  test_saturating_arithmetic();
   test_now_and_sleep();
   return 0;
 }

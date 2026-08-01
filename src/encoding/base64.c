@@ -78,15 +78,35 @@ br__base64_decode_into_result(usize count, usize off, br_status status) {
   return result;
 }
 
-size_t br_base64_encoded_len(br_base64_encoding enc, size_t src_len) {
+static bool br__base64_encoded_len(br_base64_encoding enc, usize src_len, usize *encoded_len) {
   usize groups = src_len / 3u;
   usize rem = src_len % 3u;
+  usize tail;
 
   if (enc.padded) {
-    return (src_len + 2u) / 3u * 4u;
+    groups += rem != 0u ? 1u : 0u;
+    if (groups > SIZE_MAX / 4u) {
+      return false;
+    }
+    *encoded_len = groups * 4u;
+    return true;
   }
   /* raw: full groups are 4 chars; a 1- or 2-byte tail is 2 or 3 chars. */
-  return groups * 4u + (rem == 0u ? 0u : rem + 1u);
+  tail = rem == 0u ? 0u : rem + 1u;
+  if (groups > (SIZE_MAX - tail) / 4u) {
+    return false;
+  }
+  *encoded_len = groups * 4u + tail;
+  return true;
+}
+
+size_t br_base64_encoded_len(br_base64_encoding enc, size_t src_len) {
+  usize encoded_len;
+
+  if (!br__base64_encoded_len(enc, src_len, &encoded_len)) {
+    return SIZE_MAX;
+  }
+  return encoded_len;
 }
 
 size_t br_base64_decoded_len(br_base64_encoding enc, br_bytes_view src) {
@@ -172,7 +192,9 @@ br_base64_encode(br_base64_encoding enc, br_bytes_view src, br_allocator allocat
     return br__base64_bytes_result(NULL, 0u, BR_STATUS_OK);
   }
 
-  out_len = br_base64_encoded_len(enc, src.len);
+  if (!br__base64_encoded_len(enc, src.len, &out_len)) {
+    return br__base64_bytes_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+  }
   alloc = br_allocator_alloc_uninit(allocator, out_len, 1u);
   if (alloc.status != BR_STATUS_OK) {
     return br__base64_bytes_result(NULL, 0u, alloc.status);
@@ -184,9 +206,12 @@ br_base64_encode(br_base64_encoding enc, br_bytes_view src, br_allocator allocat
 
 br_io_result
 br_base64_encode_into(br_base64_encoding enc, br_bytes_view src, u8 *dst, usize dst_cap) {
-  usize out_len = br_base64_encoded_len(enc, src.len);
+  usize out_len;
   usize written;
 
+  if (!br__base64_encoded_len(enc, src.len, &out_len)) {
+    return br_io_result_make(0u, BR_STATUS_SHORT_BUFFER);
+  }
   if (out_len == 0u) {
     return br_io_result_make(0u, BR_STATUS_OK);
   }
@@ -200,9 +225,15 @@ br_base64_encode_into(br_base64_encoding enc, br_bytes_view src, u8 *dst, usize 
 br_io_result br_base64_encode_to_writer(br_base64_encoding enc, br_bytes_view src, br_writer w) {
   const u8 *tbl = br__base64_alphabet(enc.alphabet);
   u8 buffer[512]; /* multiple of 4 so quanta never split across flushes */
+  usize encoded_len;
   usize buffered = 0u;
   usize total = 0u;
   usize i = 0u;
+
+  if (!br__base64_encoded_len(enc, src.len, &encoded_len)) {
+    return br_io_result_make(0u, BR_STATUS_OUT_OF_RANGE);
+  }
+  BR_UNUSED(encoded_len);
 
   while (i + 3u <= src.len) {
     u32 n = ((u32)src.data[i] << 16) | ((u32)src.data[i + 1u] << 8) | (u32)src.data[i + 2u];
@@ -340,10 +371,12 @@ static br_status br__base64_decode_chars(br_base64_encoding enc,
                                          br_bytes_view src,
                                          br__base64_decode_shape shape,
                                          u8 *dst,
-                                         usize *err_off) {
+                                         usize *err_off,
+                                         usize *written) {
   usize i = 0u;
   usize o = 0u;
 
+  *written = 0u;
   while (i + 4u <= shape.chars) {
     u8 v0 = br__base64_decode_value(enc.alphabet, src.data[i]);
     u8 v1 = br__base64_decode_value(enc.alphabet, src.data[i + 1u]);
@@ -373,6 +406,7 @@ static br_status br__base64_decode_chars(br_base64_encoding enc,
     dst[o + 2u] = (u8)n;
     i += 4u;
     o += 3u;
+    *written = o;
   }
 
   /* Final partial quantum of 2 or 3 characters (1 is structurally rejected). */
@@ -398,6 +432,7 @@ static br_status br__base64_decode_chars(br_base64_encoding enc,
         return BR_STATUS_INVALID_ENCODING;
       }
       dst[o] = (u8)(n >> 16);
+      o += 1u;
     } else {
       /* rem == 3: 3 chars -> 2 bytes; low 2 bits of v2 are unused. */
       u8 v2 = br__base64_decode_value(enc.alphabet, src.data[i + 2u]);
@@ -412,7 +447,9 @@ static br_status br__base64_decode_chars(br_base64_encoding enc,
       n |= (u32)v2 << 6;
       dst[o] = (u8)(n >> 16);
       dst[o + 1u] = (u8)(n >> 8);
+      o += 2u;
     }
+    *written = o;
   }
 
   return BR_STATUS_OK;
@@ -422,6 +459,7 @@ br_decode_result
 br_base64_decode(br_base64_encoding enc, br_bytes_view src, br_allocator allocator) {
   br__base64_decode_shape shape;
   usize err_off = 0u;
+  usize written = 0u;
   br_alloc_result alloc;
   br_status status;
 
@@ -437,7 +475,7 @@ br_base64_decode(br_base64_encoding enc, br_bytes_view src, br_allocator allocat
     return br__base64_decode_result(NULL, 0u, 0u, alloc.status);
   }
 
-  status = br__base64_decode_chars(enc, src, shape, (u8 *)alloc.ptr, &err_off);
+  status = br__base64_decode_chars(enc, src, shape, (u8 *)alloc.ptr, &err_off, &written);
   if (status != BR_STATUS_OK) {
     /* Free the scratch so a failed decode never returns a live allocation. */
     (void)br_allocator_free(allocator, alloc.ptr, shape.decoded);
@@ -450,6 +488,7 @@ br_decode_into_result
 br_base64_decode_into(br_base64_encoding enc, br_bytes_view src, u8 *dst, usize dst_cap) {
   br__base64_decode_shape shape;
   usize err_off = 0u;
+  usize written = 0u;
   br_status status;
 
   if (!br__base64_decode_shape_of(enc, src, &shape, &err_off)) {
@@ -462,9 +501,9 @@ br_base64_decode_into(br_base64_encoding enc, br_bytes_view src, u8 *dst, usize 
     return br__base64_decode_into_result(0u, 0u, BR_STATUS_SHORT_BUFFER);
   }
 
-  status = br__base64_decode_chars(enc, src, shape, dst, &err_off);
+  status = br__base64_decode_chars(enc, src, shape, dst, &err_off, &written);
   if (status != BR_STATUS_OK) {
-    return br__base64_decode_into_result(0u, err_off, status);
+    return br__base64_decode_into_result(written, err_off, status);
   }
   return br__base64_decode_into_result(shape.decoded, 0u, BR_STATUS_OK);
 }

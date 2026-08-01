@@ -73,8 +73,10 @@ Decode the hex sequence `src` into the caller buffer `dst` of capacity
 
 Returns the number of bytes written in `count`. Malformed input is reported the
 same way as `br_hex_decode` (odd length, or a bad byte, both
-`BR_STATUS_INVALID_ENCODING` with `error_offset`). `BR_STATUS_SHORT_BUFFER` if
-`dst_cap` is smaller than `br_hex_decoded_len(src.len)`;
+`BR_STATUS_INVALID_ENCODING` with `error_offset`); if malformed input follows
+complete byte pairs, `count` includes those bytes already written.
+`BR_STATUS_SHORT_BUFFER` if `dst_cap` is smaller than
+`br_hex_decoded_len(src.len)`;
 `BR_STATUS_INVALID_ARGUMENT` if `dst` is NULL while output is required.
 */
 br_decode_into_result br_hex_decode_into(br_bytes_view src, uint8_t *dst, size_t dst_cap);

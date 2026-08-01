@@ -105,47 +105,54 @@ static bool br__darwin_ulock_wait(br_futex *futex, u32 expected) {
 
 static bool
 br__darwin_ulock_wait_with_timeout(br_futex *futex, u32 expected, br_duration duration) {
-  i32 rc;
-
   if (__ulock_wait2 != NULL) {
-    rc = __ulock_wait2(BR__DARWIN_UL_COMPARE_AND_WAIT | BR__DARWIN_ULF_NO_ERRNO,
-                       futex,
-                       (u64)expected,
-                       (u64)duration,
-                       0u);
-  } else {
-    br_duration timeout_us_value;
-    u32 timeout_us;
+    i32 rc = __ulock_wait2(BR__DARWIN_UL_COMPARE_AND_WAIT | BR__DARWIN_ULF_NO_ERRNO,
+                           futex,
+                           (u64)expected,
+                           (u64)duration,
+                           0u);
 
-    if (__ulock_wait == NULL) {
+    if (rc >= 0) {
+      return true;
+    }
+    if (rc == -ETIMEDOUT) {
       return false;
     }
-
-    /*
-    Odin truncates nanoseconds to microseconds for the legacy __ulock_wait path.
-    Bedrock rounds tiny positive durations up so a timed wait cannot accidentally
-    become the no-timeout `0` form on older Darwin targets.
-    */
-    timeout_us_value = duration / BR_MICROSECOND;
-    if (timeout_us_value <= 0) {
-      timeout_us = 1u;
-    } else if (timeout_us_value > (br_duration)UINT32_MAX) {
-      timeout_us = UINT32_MAX;
-    } else {
-      timeout_us = (u32)timeout_us_value;
-    }
-    rc = __ulock_wait(
-      BR__DARWIN_UL_COMPARE_AND_WAIT | BR__DARWIN_ULF_NO_ERRNO, futex, (u64)expected, timeout_us);
+    return rc == -EINTR || rc == -EFAULT;
   }
 
-  if (rc >= 0) {
-    return true;
-  }
-
-  if (rc == -ETIMEDOUT) {
+  if (__ulock_wait == NULL) {
     return false;
   }
-  return rc == -EINTR || rc == -EFAULT;
+
+  for (;;) {
+    const br_duration max_chunk = (br_duration)UINT32_MAX * BR_MICROSECOND;
+    br_duration chunk = duration < max_chunk ? duration : max_chunk;
+    br_duration timeout_us_value = chunk / BR_MICROSECOND;
+    u32 timeout_us;
+    i32 rc;
+
+    if (chunk % BR_MICROSECOND != 0) {
+      timeout_us_value += 1;
+    }
+    timeout_us = (u32)timeout_us_value;
+    rc = __ulock_wait(
+      BR__DARWIN_UL_COMPARE_AND_WAIT | BR__DARWIN_ULF_NO_ERRNO, futex, (u64)expected, timeout_us);
+
+    if (rc >= 0) {
+      return true;
+    }
+    if (rc != -ETIMEDOUT) {
+      return rc == -EINTR || rc == -EFAULT;
+    }
+    if (duration <= chunk) {
+      return false;
+    }
+    duration -= chunk;
+    if (br_atomic_load_explicit(futex, BR_ATOMIC_ACQUIRE) != expected) {
+      return true;
+    }
+  }
 }
 
 static bool br__darwin_os_wake(br_futex *futex, bool broadcast, bool *handled) {

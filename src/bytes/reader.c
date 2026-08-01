@@ -24,6 +24,15 @@ static br_byte_reader_seek_result br__byte_reader_seek_result(i64 offset, br_sta
   return result;
 }
 
+static bool br__byte_reader_add_offset(i64 base, i64 offset, i64 *absolute) {
+  if ((offset > 0 && base > INT64_MAX - offset) || (offset < 0 && base < INT64_MIN - offset)) {
+    return false;
+  }
+
+  *absolute = base + offset;
+  return true;
+}
+
 void br_byte_reader_init(br_byte_reader *reader, br_bytes_view source) {
   if (reader == NULL) {
     return;
@@ -152,10 +161,15 @@ br_byte_reader_seek(br_byte_reader *reader, i64 offset, br_seek_from whence) {
       absolute = offset;
       break;
     case BR_SEEK_FROM_CURRENT:
-      absolute = reader->index + offset;
+      if (!br__byte_reader_add_offset(reader->index, offset, &absolute)) {
+        return br__byte_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);
+      }
       break;
     case BR_SEEK_FROM_END:
-      absolute = (i64)reader->source.len + offset;
+      if ((uint64_t)reader->source.len > (uint64_t)INT64_MAX ||
+          !br__byte_reader_add_offset((i64)reader->source.len, offset, &absolute)) {
+        return br__byte_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);
+      }
       break;
     default:
       return br__byte_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);

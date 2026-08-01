@@ -12,6 +12,100 @@ static bool sv_eq(br_string_view a, const char *b) {
   return br_string_equal(a, sv(b));
 }
 
+typedef struct test_slashpath_strict_allocation {
+  void *ptr;
+  usize size;
+} test_slashpath_strict_allocation;
+
+typedef struct test_slashpath_strict_allocator {
+  test_slashpath_strict_allocation allocations[8];
+  usize allocation_count;
+  usize size_errors;
+} test_slashpath_strict_allocator;
+
+static br_alloc_result test_slashpath_alloc_result(void *ptr, usize size, br_status status) {
+  br_alloc_result result;
+
+  result.ptr = ptr;
+  result.size = size;
+  result.status = status;
+  return result;
+}
+
+static usize test_slashpath_strict_find(const test_slashpath_strict_allocator *strict,
+                                        const void *ptr) {
+  usize i;
+
+  for (i = 0u; i < strict->allocation_count; i += 1u) {
+    if (strict->allocations[i].ptr == ptr) {
+      return i;
+    }
+  }
+  return SIZE_MAX;
+}
+
+static br_alloc_result test_slashpath_strict_allocator_proc(void *context,
+                                                            const br_alloc_request *request) {
+  test_slashpath_strict_allocator *strict = (test_slashpath_strict_allocator *)context;
+  br_alloc_result result;
+  usize index;
+
+  switch (request->op) {
+    case BR_ALLOC_OP_ALLOC:
+    case BR_ALLOC_OP_ALLOC_UNINIT:
+      result = br_allocator_call(br_allocator_heap(), request);
+      if (result.status != BR_STATUS_OK || result.ptr == NULL) {
+        return result;
+      }
+      if (strict->allocation_count == BR_ARRAY_COUNT(strict->allocations)) {
+        (void)br_allocator_free(br_allocator_heap(), result.ptr, result.size);
+        return test_slashpath_alloc_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+      }
+      strict->allocations[strict->allocation_count].ptr = result.ptr;
+      strict->allocations[strict->allocation_count].size = result.size;
+      strict->allocation_count += 1u;
+      return result;
+
+    case BR_ALLOC_OP_RESIZE:
+    case BR_ALLOC_OP_RESIZE_UNINIT:
+    case BR_ALLOC_OP_FREE:
+      if (request->ptr == NULL) {
+        return br_allocator_call(br_allocator_heap(), request);
+      }
+      index = test_slashpath_strict_find(strict, request->ptr);
+      if (index == SIZE_MAX || strict->allocations[index].size != request->old_size) {
+        strict->size_errors += 1u;
+        return test_slashpath_alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+      }
+
+      result = br_allocator_call(br_allocator_heap(), request);
+      if (result.status != BR_STATUS_OK) {
+        return result;
+      }
+      if (request->op == BR_ALLOC_OP_FREE || request->size == 0u) {
+        strict->allocation_count -= 1u;
+        strict->allocations[index] = strict->allocations[strict->allocation_count];
+      } else {
+        strict->allocations[index].ptr = result.ptr;
+        strict->allocations[index].size = result.size;
+      }
+      return result;
+
+    case BR_ALLOC_OP_RESET:
+      return test_slashpath_alloc_result(NULL, 0u, BR_STATUS_NOT_SUPPORTED);
+  }
+
+  return test_slashpath_alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+}
+
+static br_allocator test_slashpath_strict_allocator_make(test_slashpath_strict_allocator *strict) {
+  br_allocator allocator;
+
+  allocator.fn = test_slashpath_strict_allocator_proc;
+  allocator.ctx = strict;
+  return allocator;
+}
+
 /* clean, with the aliasing contract checked: an already-clean input must come
    back allocated=false. */
 static void assert_clean(const char *in, const char *want) {
@@ -91,6 +185,38 @@ static void test_clean(void) {
   assert_clean("////", "/");
   assert_clean("/../../..", "/");
   assert_clean("a/../..", "..");
+}
+
+static void test_owned_result_sizes(void) {
+  test_slashpath_strict_allocator strict;
+  br_allocator allocator;
+  br_string_rewrite_result cleaned;
+  br_string_result joined;
+  br_string_view parts[3] = {sv("a"), sv(".."), sv("b")};
+
+  memset(&strict, 0, sizeof(strict));
+  allocator = test_slashpath_strict_allocator_make(&strict);
+
+  cleaned = br_slashpath_clean(sv("a/../b"), allocator);
+  assert(cleaned.status == BR_STATUS_OK);
+  assert(cleaned.allocated);
+  assert(sv_eq(cleaned.value, "b"));
+  assert(strict.allocation_count == 1u);
+  assert(strict.allocations[0].ptr == cleaned.owned.data);
+  assert(strict.allocations[0].size == cleaned.owned.len);
+  assert(br_string_rewrite_free(cleaned, allocator) == BR_STATUS_OK);
+  assert(strict.size_errors == 0u);
+  assert(strict.allocation_count == 0u);
+
+  joined = br_slashpath_join(parts, BR_ARRAY_COUNT(parts), allocator);
+  assert(joined.status == BR_STATUS_OK);
+  assert(sv_eq(br_string_view_from_string(joined.value), "b"));
+  assert(strict.allocation_count == 1u);
+  assert(strict.allocations[0].ptr == joined.value.data);
+  assert(strict.allocations[0].size == joined.value.len);
+  assert(br_string_free(joined.value, allocator) == BR_STATUS_OK);
+  assert(strict.size_errors == 0u);
+  assert(strict.allocation_count == 0u);
 }
 
 static void test_split(void) {
@@ -362,6 +488,7 @@ static void test_is_predicates(void) {
 int main(void) {
   test_is_predicates();
   test_clean();
+  test_owned_result_sizes();
   test_split();
   test_base();
   test_dir();

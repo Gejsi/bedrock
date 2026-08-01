@@ -115,6 +115,17 @@ static br_string_rewrite_result br__slashpath_lazy_result(br__slashpath_lazy *lb
   if (lb->b == NULL) {
     return br__slashpath_alias(br__slashpath_view(lb->s.data, lb->w));
   }
+  if (lb->w != lb->s.len) {
+    br_alloc_result resized =
+      br_allocator_resize_uninit(lb->allocator, lb->b, lb->s.len, lb->w, 1u);
+
+    if (resized.status != BR_STATUS_OK) {
+      (void)br_allocator_free(lb->allocator, lb->b, lb->s.len);
+      lb->b = NULL;
+      return br__slashpath_owned(NULL, 0u, resized.status);
+    }
+    lb->b = (char *)resized.ptr;
+  }
   return br__slashpath_owned(lb->b, lb->w, BR_STATUS_OK);
 }
 

@@ -60,6 +60,10 @@ than the remaining buffer space.
 br_bufio_writer_io_result
 br_bufio_writer_write(br_bufio_writer *writer, const void *src, size_t src_len);
 br_status br_bufio_writer_write_byte(br_bufio_writer *writer, uint8_t value);
+
+/*
+Write one rune as UTF-8. Invalid rune values are encoded as U+FFFD.
+*/
 br_bufio_writer_io_result br_bufio_writer_write_rune(br_bufio_writer *writer, br_rune value);
 br_bufio_writer_io_result br_bufio_writer_write_string(br_bufio_writer *writer, br_string_view s);
 

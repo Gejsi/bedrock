@@ -40,6 +40,8 @@ Bedrock's dynamic arena, with these design choices:
   `FREE` reports not-supported and `RESET` maps to `free_all`
 - block cycling preserves the current block if acquiring the next block fails,
   instead of mutating state before the failing allocation completes
+- reset/free-all/destroy retain ownership records when a backing free fails;
+  callers may retry the operation, and generic `RESET` reports the failure
 */
 
 br_status br_dynamic_arena_init(br_dynamic_arena *arena,

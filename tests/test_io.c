@@ -21,6 +21,12 @@ typedef struct test_limited_reader {
   usize max_per_read;
 } test_limited_reader;
 
+typedef struct test_terminal_reader {
+  const u8 *data;
+  usize len;
+  usize pos;
+} test_terminal_reader;
+
 typedef struct test_no_progress_stream {
   br_io_mode mode;
   usize calls;
@@ -115,6 +121,33 @@ static br_i64_result test_limited_reader_proc(
       memcpy(data, reader->data + reader->pos, count);
       reader->pos += count;
       return br_i64_result_make((i64)count, BR_STATUS_OK);
+    case BR_IO_MODE_QUERY:
+      return br_stream_query_utility(br_io_mode_bit(BR_IO_MODE_READ));
+    default:
+      return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+  }
+}
+
+static br_i64_result test_terminal_reader_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  test_terminal_reader *reader;
+  usize count;
+
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
+
+  reader = (test_terminal_reader *)context;
+  switch (mode) {
+    case BR_IO_MODE_READ:
+      if (reader->pos >= reader->len) {
+        return br_i64_result_make(0, BR_STATUS_EOF);
+      }
+
+      count = br_min_size(data_len, reader->len - reader->pos);
+      memcpy(data, reader->data + reader->pos, count);
+      reader->pos += count;
+      return br_i64_result_make((i64)count,
+                                reader->pos == reader->len ? BR_STATUS_EOF : BR_STATUS_OK);
     case BR_IO_MODE_QUERY:
       return br_stream_query_utility(br_io_mode_bit(BR_IO_MODE_READ));
     default:
@@ -471,9 +504,13 @@ static void test_io_string_streams(void) {
 
 static void test_io_byte_and_rune_helpers(void) {
   static const u8 utf8_word[] = {'a', 0xc3u, 0xa4u, 'b'};
+  static const u8 euro[] = {0xe2u, 0x82u, 0xacu};
   static const u8 invalid_leading[] = {0x80u, 'x'};
   static const u8 truncated[] = {0xe2u, 0x82u};
   br_byte_reader byte_reader;
+  test_limited_reader limited_reader;
+  test_no_progress_stream stuck_reader;
+  test_terminal_reader terminal_reader;
   br_string_reader string_reader;
   br_string_builder builder;
   br_stream byte_stream;
@@ -555,6 +592,43 @@ static void test_io_byte_and_rune_helpers(void) {
   rune_result = br_read_rune(br_string_reader_as_stream(&string_reader));
   assert(rune_result.value == BR_RUNE_ERROR);
   assert(rune_result.width == 2u);
+  assert(rune_result.status == BR_STATUS_EOF);
+
+  limited_reader.data = euro;
+  limited_reader.len = BR_ARRAY_COUNT(euro);
+  limited_reader.pos = 0u;
+  limited_reader.max_per_read = 1u;
+  rune_result = br_read_rune(br_stream_make(&limited_reader, test_limited_reader_proc));
+  assert(rune_result.value == (br_rune)0x20ac);
+  assert(rune_result.width == BR_ARRAY_COUNT(euro));
+  assert(rune_result.status == BR_STATUS_OK);
+  assert(limited_reader.pos == BR_ARRAY_COUNT(euro));
+
+  rune_result = br_read_rune(br_stream_make(&limited_reader, test_limited_reader_proc));
+  assert(rune_result.width == 0u);
+  assert(rune_result.status == BR_STATUS_EOF);
+
+  stuck_reader.mode = BR_IO_MODE_READ;
+  stuck_reader.calls = 0u;
+  rune_result = br_read_rune(br_stream_make(&stuck_reader, test_no_progress_stream_proc));
+  assert(rune_result.width == 0u);
+  assert(rune_result.status == BR_STATUS_NO_PROGRESS);
+  assert(stuck_reader.calls == 1u);
+
+  terminal_reader.data = utf8_word;
+  terminal_reader.len = 1u;
+  terminal_reader.pos = 0u;
+  rune_result = br_read_rune(br_stream_make(&terminal_reader, test_terminal_reader_proc));
+  assert(rune_result.value == (br_rune)'a');
+  assert(rune_result.width == 1u);
+  assert(rune_result.status == BR_STATUS_EOF);
+
+  terminal_reader.data = euro;
+  terminal_reader.len = BR_ARRAY_COUNT(euro);
+  terminal_reader.pos = 0u;
+  rune_result = br_read_rune(br_stream_make(&terminal_reader, test_terminal_reader_proc));
+  assert(rune_result.value == (br_rune)0x20ac);
+  assert(rune_result.width == BR_ARRAY_COUNT(euro));
   assert(rune_result.status == BR_STATUS_EOF);
 }
 

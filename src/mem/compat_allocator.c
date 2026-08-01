@@ -123,6 +123,7 @@ static br_alloc_result br__compat_resize_internal(br_compat_allocator *compat,
   br_allocator parent;
   br_alloc_result allocation;
   usize orig_alignment;
+  usize orig_payload_size;
   usize orig_prefix;
   usize orig_size;
   usize new_alignment;
@@ -151,11 +152,12 @@ static br_alloc_result br__compat_resize_internal(br_compat_allocator *compat,
 
   header = br__compat_header_from_user_ptr(ptr);
   orig_alignment = header->alignment;
+  orig_payload_size = header->size;
   orig_prefix = br__compat_prefix_size(orig_alignment);
-  if (header->size > SIZE_MAX - orig_prefix) {
+  if (orig_payload_size > SIZE_MAX - orig_prefix) {
     return br__compat_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
   }
-  orig_size = header->size + orig_prefix;
+  orig_size = orig_payload_size + orig_prefix;
   new_alignment = br_max_size(orig_alignment, alignment);
   new_prefix = br__compat_prefix_size(new_alignment);
   if (new_size > SIZE_MAX - new_prefix) {
@@ -163,7 +165,7 @@ static br_alloc_result br__compat_resize_internal(br_compat_allocator *compat,
   }
   req_size = new_size + new_prefix;
 
-  if (header->size == new_size && orig_alignment == new_alignment) {
+  if (orig_payload_size == new_size && orig_alignment == new_alignment) {
     return br__compat_result(ptr, new_size, BR_STATUS_OK);
   }
 
@@ -186,7 +188,7 @@ static br_alloc_result br__compat_resize_internal(br_compat_allocator *compat,
   grows so data remains stable even if the parent resize keeps the same base
   pointer in place.
   */
-  bytes_to_move = br_min_size(header->size, new_size);
+  bytes_to_move = br_min_size(orig_payload_size, new_size);
   if (new_prefix != orig_prefix && bytes_to_move != 0u) {
     memmove((u8 *)allocation.ptr + new_prefix, (u8 *)allocation.ptr + orig_prefix, bytes_to_move);
   }

@@ -4,6 +4,8 @@
 
 #include <bedrock/time/time.h>
 
+#include "time_internal.h"
+
 #if (defined(__APPLE__) && defined(__MACH__)) || defined(__FreeBSD__) || defined(__NetBSD__) ||    \
   defined(__OpenBSD__)
 
@@ -26,21 +28,28 @@ br_time br_time_now(void) {
   br_time result = {0};
 
   if (clock_gettime(CLOCK_REALTIME, &ts) == 0) {
-    result.nsec = (i64)ts.tv_sec * BR_SECOND + (i64)ts.tv_nsec;
+    result.nsec = br__time_saturating_seconds_nanos((i64)ts.tv_sec, (i64)ts.tv_nsec);
   }
   return result;
 }
 
 void br_sleep(br_duration duration) {
-  struct timespec ts;
+  const br_duration max_chunk = (br_duration)INT32_MAX * BR_SECOND;
 
-  if (duration <= 0) {
-    return;
-  }
+  while (duration > 0) {
+    br_duration chunk = duration < max_chunk ? duration : max_chunk;
+    struct timespec ts;
+    int rc;
 
-  ts.tv_sec = (time_t)(duration / BR_SECOND);
-  ts.tv_nsec = (long)(duration % BR_SECOND);
-  while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {
+    ts.tv_sec = (time_t)(chunk / BR_SECOND);
+    ts.tv_nsec = (long)(chunk % BR_SECOND);
+    do {
+      rc = nanosleep(&ts, &ts);
+    } while (rc != 0 && errno == EINTR);
+    if (rc != 0) {
+      return;
+    }
+    duration -= chunk;
   }
 }
 
@@ -49,7 +58,7 @@ br_tick br_tick_now(void) {
   br_tick result = {0};
 
   if (clock_gettime(BR__TIME_TICK_CLOCK, &ts) == 0) {
-    result.nsec = (i64)ts.tv_sec * BR_SECOND + (i64)ts.tv_nsec;
+    result.nsec = br__time_saturating_seconds_nanos((i64)ts.tv_sec, (i64)ts.tv_nsec);
   }
   return result;
 }

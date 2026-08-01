@@ -12,10 +12,11 @@ does NOT include a timezone database, TZif parsing, or ISO-8601 beyond RFC 3339.
 - `Tick` as monotonic nanoseconds
 - `now`, `sleep`, `yield`, `tick_now`, `tick_add`, `tick_diff`, `tick_since`,
   `tick_lap_time`, and duration conversion helpers
+- saturating tick/time arithmetic at the `int64_t` endpoints
 - platform split matching Odin's small files: `time_linux.c`, `time_unix.c`,
   `time_windows.c`, `time_other.c`
 
-## Civil datetime slice (planned)
+## Civil datetime slice
 
 A minimal calendrical layer — enough for RFC 3339, with NO timezone database.
 All fields are standard C types; field widths match Odin's datetime package.
@@ -78,8 +79,11 @@ typedef struct br_datetime_result { br_datetime value; br_status status; } br_da
 br_datetime_result br_datetime_from_components(int64_t year, int8_t month, int8_t day,
                                                int8_t hour, int8_t minute, int8_t second, int32_t nano);
 
-br_datetime_result br_datetime_add_delta(br_datetime dt, br_delta delta); /* normalizes + re-validates */
-br_delta           br_datetime_subtract(br_datetime a, br_datetime b);    /* a - b, normalized */
+/* add_delta rejects invalid inputs and reports OUT_OF_RANGE when the normalized
+   result is outside the datetime range. subtract returns normalized nonnegative
+   seconds/nanos and saturates when the normalized day count cannot fit. */
+br_datetime_result br_datetime_add_delta(br_datetime dt, br_delta delta);
+br_delta           br_datetime_subtract(br_datetime a, br_datetime b);
 ```
 
 Deferred within this slice (not ported now): `ordinal_to_datetime`,
@@ -114,7 +118,7 @@ br_datetime    br_time_to_datetime(br_time t);
   not), so a `br_datetime{0}` is likewise invalid. Build datetimes with
   `br_datetime_from_components` or by parsing; do not rely on zero-init.
 
-## RFC 3339 (planned)
+## RFC 3339
 
 Parse and format RFC 3339 timestamps against `br_time`, reusing the strconv
 error model. NO timezone database: offsets are fixed integer minutes.
@@ -135,7 +139,8 @@ br_rfc3339_result br_rfc3339_parse(br_string_view s);
 br_rfc3339_result br_rfc3339_parse_prefix(br_string_view s);
 
 /* Format the instant at the given fixed offset (offset_min = 0 emits 'Z').
-   SHORT_BUFFER (count 0) if dst too small; never truncates. */
+   Offsets outside -23:59..+23:59 are INVALID_ARGUMENT. SHORT_BUFFER (count 0)
+   if dst is NULL or too small; never truncates. */
 br_io_result br_rfc3339_format(br_time t, int32_t utc_offset_min, uint8_t *dst, size_t dst_cap);
 
 /* Widest legal output: YYYY(4) + "-MM-DD"(6)... = date 10, 'T' 1, "hh:mm:ss" 8,
@@ -170,7 +175,10 @@ br_io_result br_rfc3339_format(br_time t, int32_t utc_offset_min, uint8_t *dst, 
   instant; the flag preserves what the text asserted.
 - OFFSET: parsed as signed integer minutes (`±(60*hh + mm)`), applied to
   normalize `value` to UTC, and preserved in `utc_offset_min` so the caller can
-  reconstruct the original local wall-clock. No IANA, no tz database.
+  reconstruct the original local wall-clock. The offset is applied in civil
+  space before conversion to `br_time`, so a local timestamp just outside the
+  instant endpoints can still normalize to a representable UTC instant. No
+  IANA, no tz database.
 
 ### Format semantics and decisions
 
@@ -182,7 +190,9 @@ br_io_result br_rfc3339_format(br_time t, int32_t utc_offset_min, uint8_t *dst, 
 - YEAR RANGE: RFC 3339's grammar is a FIXED 4-digit year (0000..9999) — and
   every representable `br_time` already satisfies it, because int64 nanoseconds
   span civil years ~1677..2262 only. `br_rfc3339_format` therefore CANNOT fail
-  on range and carries no dead year guard; its only failure is `SHORT_BUFFER`.
+  on year range and carries no dead year guard. It rejects a caller offset
+  outside `-23:59..+23:59` with `INVALID_ARGUMENT`; a NULL or undersized output
+  buffer returns `SHORT_BUFFER`.
   The valid-input-unrepresentable-target case lives where it is actually
   reachable: at the epoch bridge (`br_datetime_to_time` returns
   `BR_STATUS_OUT_OF_RANGE` for datetimes outside the int64-ns window). If
@@ -234,7 +244,8 @@ br_io_result br_rfc3339_format(br_time t, int32_t utc_offset_min, uint8_t *dst, 
   `INVALID_ENCODING` at the right `consumed` offset; strict rejects trailing
   bytes, `_prefix` accepts them with `consumed` set.
 - Range boundaries at the TRUE extremes: the exact INT64_MAX- and INT64_MIN-
-  nanosecond instants (civil years 2262 and 1677) format and round-trip;
+  nanosecond instants (civil years 2262 and 1677) format and round-trip at the
+  extreme legal offsets; invalid offsets including `INT32_MIN/MAX` are rejected;
   `br_datetime_to_time` returns `BR_STATUS_OUT_OF_RANGE` for datetimes outside
   the window (e.g. year 9999 and year 2263+) with no silent wrap — the
   overflow-safe check is the regression target; undersized `dst` ->

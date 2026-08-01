@@ -64,7 +64,6 @@ static br_rfc3339_result br__rfc3339_parse(br_string_view s, bool require_all) {
   bool is_leap = false;
   int32_t offset_min = 0;
   br_datetime dt;
-  br_time base;
   br_time_of_day tod;
 
   if (s.data == NULL || s.len == 0u) {
@@ -168,27 +167,33 @@ static br_rfc3339_result br__rfc3339_parse(br_string_view s, bool require_all) {
     return br__rfc3339_error(pos); /* strict: trailing bytes */
   }
 
-  /* Bridge to an instant. RFC 3339 admits years the int64-ns br_time cannot
-     hold (e.g. 1500 or 3000), so this is a genuinely reachable range failure:
-     the text was well-formed (consumed = full length) but the instant is
-     unrepresentable. Propagate OUT_OF_RANGE. */
+  /*
+  Apply the offset in civil space before bridging to br_time. A local timestamp
+  can sit just outside the int64-nanosecond window while its UTC instant remains
+  representable, so bridging first would either reject a valid instant or
+  overflow while subtracting the offset.
+  */
   {
-    br_time_result bridged = br_datetime_to_time(dt);
+    br_delta offset_delta = {0, -(i64)offset_min * 60, 0};
+    br_datetime_result utc = br_datetime_add_delta(dt, offset_delta);
+    br_time_result bridged;
+
+    if (utc.status != BR_STATUS_OK) {
+      memset(&result, 0, sizeof(result));
+      result.consumed = pos;
+      result.status = utc.status;
+      return result;
+    }
+    bridged = br_datetime_to_time(utc.value);
     if (bridged.status != BR_STATUS_OK) {
       memset(&result, 0, sizeof(result));
       result.consumed = pos;
-      result.status = bridged.status; /* BR_STATUS_OUT_OF_RANGE */
+      result.status = bridged.status;
       return result;
     }
-    base = bridged.value;
+    result.value = bridged.value;
   }
 
-  /* Normalize to UTC: the civil value is at local offset, so subtract it. The
-     offset is bounded (|offset| <= 23:59), a small adjustment within the
-     representable window the bridge just confirmed. */
-  base.nsec -= (i64)offset_min * 60ll * 1000000000ll;
-
-  result.value = base;
   result.utc_offset_min = offset_min;
   result.is_leap_second = is_leap;
   result.consumed = pos;
@@ -225,20 +230,27 @@ static usize br__write_digits(u8 *buf, usize pos, i64 value, int count) {
 br_io_result br_rfc3339_format(br_time t, int32_t utc_offset_min, u8 *dst, usize dst_cap) {
   u8 buf[BR_RFC3339_MAX];
   usize pos = 0u;
-  br_time local;
   br_datetime dt;
+  br_datetime_result local;
+  br_delta offset_delta;
   i64 nano;
 
-  /* Render at the requested offset: the stored instant is UTC, so add the
-     offset back to recover the local wall clock. */
-  local = t;
-  local.nsec += (i64)utc_offset_min * 60ll * 1000000000ll;
-  dt = br_time_to_datetime(local);
+  if (utc_offset_min < -(23 * 60 + 59) || utc_offset_min > 23 * 60 + 59) {
+    return br__io_result(0u, BR_STATUS_INVALID_ARGUMENT);
+  }
 
-  /* No year-range guard is needed: br_time's int64-ns window spans civil years
-     ~1677..2262, entirely inside RFC 3339's 0000..9999 grammar, so the year is
-     always 4 digits here. (If br_time ever widens, restore a guard.) The only
-     failure this function can report is SHORT_BUFFER. */
+  /* Recover local wall time in civil space so extreme instants cannot overflow. */
+  dt = br_time_to_datetime(t);
+  offset_delta.days = 0;
+  offset_delta.seconds = (i64)utc_offset_min * 60;
+  offset_delta.nanos = 0;
+  local = br_datetime_add_delta(dt, offset_delta);
+  if (local.status != BR_STATUS_OK) {
+    return br__io_result(0u, local.status);
+  }
+  dt = local.value;
+
+  /* A legal offset moves br_time's 1677..2262 civil window by less than a day. */
   pos = br__write_digits(buf, pos, dt.date.year, 4);
   buf[pos++] = '-';
   pos = br__write_digits(buf, pos, dt.date.month, 2);
@@ -284,7 +296,7 @@ br_io_result br_rfc3339_format(br_time t, int32_t utc_offset_min, u8 *dst, usize
     pos = br__write_digits(buf, pos, mag % 60, 2);
   }
 
-  if (pos > dst_cap) {
+  if (dst == NULL || pos > dst_cap) {
     return br__io_result(0u, BR_STATUS_SHORT_BUFFER); /* never truncate */
   }
   memcpy(dst, buf, pos);

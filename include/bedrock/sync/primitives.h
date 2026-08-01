@@ -70,6 +70,8 @@ void br_cond_broadcast(br_cond *cond);
 
 br_status br_sema_init(br_sema *sema, uint32_t count);
 void br_sema_destroy(br_sema *sema);
+
+/* Posting saturates the permit count at UINT32_MAX; permits never wrap away. */
 void br_sema_post(br_sema *sema, uint32_t count);
 void br_sema_wait(br_sema *sema);
 bool br_sema_wait_with_timeout(br_sema *sema, br_duration duration);

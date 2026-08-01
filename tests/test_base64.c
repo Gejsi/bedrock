@@ -157,6 +157,21 @@ static void test_strict_vs_lenient(void) {
   assert(d.status == BR_STATUS_OK && d.count == 1u);
 }
 
+static void test_error_reports_partial_output(void) {
+  uint8_t buf[8] = {0xa5u, 0xa5u, 0xa5u, 0xa5u, 0xa5u, 0xa5u, 0xa5u, 0xa5u};
+  br_base64_encoding strict = br_base64_raw_std();
+  br_decode_into_result d;
+
+  strict.strict = true;
+  /* "QUJD" writes "ABC"; the final non-canonical "Zk" then fails. */
+  d = br_base64_decode_into(strict, bv("QUJDZk"), buf, sizeof(buf));
+  assert(d.status == BR_STATUS_INVALID_ENCODING);
+  assert(d.error_offset == 5u);
+  assert(d.count == 3u);
+  assert(memcmp(buf, "ABC", 3u) == 0);
+  assert(buf[3] == 0xa5u);
+}
+
 /* Undersized dst -> SHORT_BUFFER, count 0, nothing written (never truncates). */
 static void test_short_buffer(void) {
   uint8_t small[2];
@@ -168,6 +183,29 @@ static void test_short_buffer(void) {
 
   d = br_base64_decode_into(br_base64_std(), bv("Zm9vYmFy"), small, sizeof(small));
   assert(d.status == BR_STATUS_SHORT_BUFFER && d.count == 0u);
+}
+
+static void test_encoded_length_overflow(void) {
+  usize groups_overflow = SIZE_MAX / 4u + 1u;
+  usize raw_exact_max_len = (SIZE_MAX / 4u) * 3u + 2u;
+  usize raw_overflow_len = groups_overflow * 3u;
+  usize padded_overflow_len = (SIZE_MAX / 4u) * 3u + 1u;
+  br_bytes_view impossible;
+  u8 dst = 0u;
+  br_io_result result;
+
+  assert(br_base64_encoded_len(br_base64_std(), padded_overflow_len) == SIZE_MAX);
+  assert(br_base64_encoded_len(br_base64_raw_std(), raw_exact_max_len) == SIZE_MAX);
+  assert(br_base64_encoded_len(br_base64_raw_std(), raw_overflow_len) == SIZE_MAX);
+
+  impossible = br_bytes_view_make(&dst, padded_overflow_len);
+  result = br_base64_encode_into(br_base64_std(), impossible, &dst, 1u);
+  assert(result.status == BR_STATUS_SHORT_BUFFER);
+  assert(result.count == 0u);
+
+  result = br_base64_encode_to_writer(br_base64_std(), impossible, br_stream_make(NULL, NULL));
+  assert(result.status == BR_STATUS_OUT_OF_RANGE);
+  assert(result.count == 0u);
 }
 
 /* Allocating encode/decode round-trip, and free-on-error leaves no live alloc. */
@@ -207,7 +245,9 @@ int main(void) {
   test_bad_byte_and_whitespace();
   test_structural_length();
   test_strict_vs_lenient();
+  test_error_reports_partial_output();
   test_short_buffer();
+  test_encoded_length_overflow();
   test_allocating_and_free_on_error();
   return 0;
 }

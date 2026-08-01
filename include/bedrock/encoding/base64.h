@@ -69,7 +69,9 @@ static inline br_base64_encoding br_base64_raw_url(void) {
 /*
 Number of encoded characters produced for `src_len` input bytes: a padded
 encoding rounds up to a multiple of four; a raw encoding emits only the
-characters the final partial group needs.
+characters the final partial group needs. The result saturates at SIZE_MAX, so
+SIZE_MAX can mean either an exact raw-encoding length or an unrepresentable
+larger result; encode operations distinguish those cases internally.
 */
 size_t br_base64_encoded_len(br_base64_encoding enc, size_t src_len);
 
@@ -98,7 +100,8 @@ br_base64_encode_into(br_base64_encoding enc, br_bytes_view src, uint8_t *dst, s
 
 /*
 Encode `src` to the writer `w`, returning the count written and propagating the
-writer's status on a short or failed write.
+writer's status on a short or failed write. Returns BR_STATUS_OUT_OF_RANGE
+without reading `src` if the encoded byte count cannot fit in size_t.
 */
 br_io_result br_base64_encode_to_writer(br_base64_encoding enc, br_bytes_view src, br_writer w);
 
@@ -116,6 +119,8 @@ br_base64_decode(br_base64_encoding enc, br_bytes_view src, br_allocator allocat
 /*
 Decode `src` into the caller buffer `dst` of capacity `dst_cap`, returning the
 count written. Malformed input is reported as in `br_base64_decode`.
+If an error follows complete decoded groups, `count` includes the bytes already
+written.
 `BR_STATUS_SHORT_BUFFER` (count 0) if `dst_cap` is smaller than the decoded
 length.
 */

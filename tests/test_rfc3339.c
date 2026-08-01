@@ -231,6 +231,40 @@ static void test_parse_out_of_range(void) {
   assert(br_rfc3339_parse(sv("2000-01-01T00:00:00Z")).status == BR_STATUS_OK);
 }
 
+static void test_offset_boundaries(void) {
+  char out[BR_RFC3339_MAX + 1];
+  br_time hi = {INT64_MAX};
+  br_time lo = {INT64_MIN};
+  br_rfc3339_result parsed;
+  br_io_result formatted;
+
+  /* Local civil time may cross br_time's endpoint while the UTC instant remains valid. */
+  assert(format_into(hi, 23 * 60 + 59, out, sizeof(out)) == BR_STATUS_OK);
+  assert(strcmp(out, "2262-04-12T23:46:16.854775807+23:59") == 0);
+  parsed = br_rfc3339_parse(sv(out));
+  assert(parsed.status == BR_STATUS_OK && parsed.value.nsec == INT64_MAX);
+
+  assert(format_into(lo, -(23 * 60 + 59), out, sizeof(out)) == BR_STATUS_OK);
+  assert(strcmp(out, "1677-09-20T00:13:43.145224192-23:59") == 0);
+  parsed = br_rfc3339_parse(sv(out));
+  assert(parsed.status == BR_STATUS_OK && parsed.value.nsec == INT64_MIN);
+
+  /* Well-formed timestamps whose UTC adjustment exceeds br_time report range failure. */
+  parsed = br_rfc3339_parse(sv("2262-04-11T23:47:16.854775807-00:01"));
+  assert(parsed.status == BR_STATUS_OUT_OF_RANGE && parsed.consumed == 35u);
+  parsed = br_rfc3339_parse(sv("1677-09-21T00:12:43.145224192+00:01"));
+  assert(parsed.status == BR_STATUS_OUT_OF_RANGE && parsed.consumed == 35u);
+
+  /* Caller-provided offsets outside RFC 3339's range are rejected before arithmetic. */
+  formatted = br_rfc3339_format(hi, INT32_MAX, (u8 *)out, sizeof(out));
+  assert(formatted.status == BR_STATUS_INVALID_ARGUMENT && formatted.count == 0u);
+  formatted = br_rfc3339_format(lo, INT32_MIN, (u8 *)out, sizeof(out));
+  assert(formatted.status == BR_STATUS_INVALID_ARGUMENT && formatted.count == 0u);
+
+  formatted = br_rfc3339_format((br_time){0}, 0, NULL, BR_RFC3339_MAX);
+  assert(formatted.status == BR_STATUS_SHORT_BUFFER && formatted.count == 0u);
+}
+
 int main(void) {
   test_parse_basic();
   test_separators_and_case();
@@ -243,5 +277,6 @@ int main(void) {
   test_leap_round_trip_asymmetry();
   test_format_true_extremes();
   test_parse_out_of_range();
+  test_offset_boundaries();
   return 0;
 }

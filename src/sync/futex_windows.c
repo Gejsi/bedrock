@@ -51,6 +51,8 @@ static bool br__windows_sync_symbol(const char *name, FARPROC *out_symbol) {
 }
 
 static bool br__windows_duration_to_timeout(br_duration duration, LARGE_INTEGER *timeout) {
+  LONGLONG intervals;
+
   if (duration <= 0 || timeout == NULL) {
     return false;
   }
@@ -59,7 +61,11 @@ static bool br__windows_duration_to_timeout(br_duration duration, LARGE_INTEGER 
   RtlWaitOnAddress expects relative timeouts as negative 100ns intervals, which
   matches Odin's CustomWaitOnAddress path.
   */
-  timeout->QuadPart = -(LONGLONG)(duration / 100);
+  intervals = (LONGLONG)(duration / 100);
+  if (duration % 100 != 0) {
+    intervals += 1;
+  }
+  timeout->QuadPart = -intervals;
   return true;
 }
 

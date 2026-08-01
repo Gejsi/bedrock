@@ -217,14 +217,11 @@ br_decode_into_result br_hex_decode_into(br_bytes_view src, u8 *dst, usize dst_c
     u8 hi;
     u8 lo;
 
-    /* On a malformed byte the caller's buffer holds only partial scratch, so
-       count reports 0: no valid output was produced (mirrors the allocating
-       decode returning an empty value). error_offset locates the fault. */
     if (!br__hex_digit(src.data[j], &hi)) {
-      return br__hex_decode_into_result(0u, j, BR_STATUS_INVALID_ENCODING);
+      return br__hex_decode_into_result(i, j, BR_STATUS_INVALID_ENCODING);
     }
     if (!br__hex_digit(src.data[j + 1u], &lo)) {
-      return br__hex_decode_into_result(0u, j + 1u, BR_STATUS_INVALID_ENCODING);
+      return br__hex_decode_into_result(i, j + 1u, BR_STATUS_INVALID_ENCODING);
     }
 
     dst[i] = (u8)((hi << 4) | lo);

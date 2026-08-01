@@ -1,5 +1,10 @@
 # Log
 
+## Status
+
+Design brief only. No `bedrock/log.h`, implementation, or tests have landed;
+the declarations below are the proposed v1 surface, not current API.
+
 Structured, leveled logging over an explicit `br_logger`. Key-value structured
 records are the core; message text is composed by the caller on the landed
 substrate (strings builder + `br_format_*`), locale-free. No printf-style format
@@ -144,8 +149,9 @@ void br_log_write(br_logger *lg, br_log_level level, br_string_view msg);
 
 Rendered record (one line): `<rfc3339-timestamp> <LEVEL> [tid=<n>] [<scope>]
 <msg> key=value key=value ...` — timestamp from `br_time_now()` +
-`br_rfc3339_format` (which cannot fail for any representable `br_time`, so the
-timestamp path is infallible); thread id from `br_current_thread_id()`
+`br_rfc3339_format` with UTC offset 0 and a correctly sized fixed buffer (so the
+timestamp path cannot hit its invalid-offset or short-buffer failures); thread
+id from `br_current_thread_id()`
 (`sync/thread.h`, reused not redefined); scope omitted when empty. Numeric attrs
 via `br_format_*`, str/bytes verbatim, bool as `true`/`false`, ptr as `0x…`.
 

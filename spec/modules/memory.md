@@ -11,37 +11,40 @@ without hidden ambient context.
 - fixed-buffer arena allocator
 - scratch allocator
 - stack allocator
-- small stack allocator
 - dynamic arena allocator
 - buddy allocator
 - compat allocator
+- mutex allocator
 - cross-platform virtual memory reserve/commit/decommit/release/protect
 - virtual static arenas
 - virtual growing arenas
 - arena savepoints / rewind markers
 - virtual arena temp/watermark helpers
 - trailing guard-page overflow protection for virtual arenas
-- rollback stack allocator
 - tracking allocator
 - null allocator
-- panic/fail-fast allocator
-- future debug wrappers such as guard allocators
+- fail allocator
+- selected portable low-level memory helpers
 
 ## Defer
 
 - TLSF and other specialized allocators
 - platform-specific VM extras beyond the current trailing guard-page support
 
+Small-stack and rollback-stack allocators were cut as redundant with the
+canonical stack allocator and arena mark/rewind respectively. See
+`tracking/cut-list.md`.
+
 Those features are valuable, but they belong after the core VM-backed arena
 story is stable.
 
-## Proposed Core Allocator Shape
+## Core Allocator Shape
 
 Bedrock should not expose `malloc`-shaped callbacks as the only abstraction.
 Odin's single-dispatch allocator model is better, but the C API should use
 plain request/response structs rather than language magic.
 
-Example direction:
+Current public shape:
 
 ```c
 typedef enum br_alloc_op {
@@ -64,7 +67,7 @@ typedef struct br_alloc_request {
 typedef struct br_alloc_result {
     void *ptr;
     size_t size;
-    int status;
+    br_status status;
 } br_alloc_result;
 
 typedef br_alloc_result (*br_allocator_fn)(void *ctx, const br_alloc_request *req);
@@ -75,7 +78,7 @@ typedef struct br_allocator {
 } br_allocator;
 ```
 
-The exact spellings can change, but the design intent should not:
+The design intent is:
 
 - one allocator object
 - one dispatch point
@@ -84,9 +87,9 @@ The exact spellings can change, but the design intent should not:
 
 ## Arena Design
 
-The first arena implementation should be a plain fixed-buffer bump allocator.
+The base arena is a plain fixed-buffer bump allocator.
 
-Needed operations:
+Core operations:
 
 - `br_arena_init`
 - `br_arena_alloc`
@@ -137,25 +140,6 @@ Important Bedrock-specific deviations from Odin for now:
   current resize code appears to compare against the header's previous offset
   instead
 
-## Small Stack Design
-
-Bedrock now also has a buffered small stack allocator close to Odin's current
-shape.
-
-- contiguous backing buffer supplied by the caller
-- tiny per-allocation headers that only store padding
-- out-of-order frees are allowed and rewind the running offset immediately
-- later allocations can overwrite memory from allocations that used to follow
-  the freed pointer
-
-Important Bedrock-specific deviations from Odin for now:
-
-- misuse returns statuses instead of Odin's panic-heavy diagnostics
-- the allocator adapter currently targets Bedrock's alloc/free/resize/reset ABI,
-  not Odin's richer query-features/query-info modes
-- alignment still has to satisfy Bedrock's power-of-two allocator contract
-  after the Odin-style clamp to the small-stack maximum
-
 ## Dynamic Arena Design
 
 Bedrock now also has a dynamic arena close to Odin's current shape.
@@ -189,6 +173,10 @@ Important Bedrock-specific deviations from Odin for now:
   ABI, so `FREE` is not supported and `RESET` maps to `free_all`
 - block cycling preserves the current block if acquiring the next block fails,
   instead of mutating state before the failing allocation completes
+- out-band allocations keep private backing size/alignment metadata while the
+  public arena representation remains a `void **` pointer list
+- reset, free-all, and destroy retain ownership records when a backing free
+  fails; generic `RESET` reports the failure, and callers can retry cleanup
 
 ## Buddy Allocator Design
 
@@ -306,31 +294,16 @@ Important Bedrock-specific deviations from Odin for now:
 - no allocator feature queries, so `clear_on_reset` is an explicit policy flag
 - no source-location tracking yet
 
-## Rollback Stack Allocator
-
-Bedrock now also has a rollback stack allocator layer. The intended v1 shape is:
-
-- fixed head block plus optional dynamically chained blocks
-- out-of-order frees that collapse freed tails
-- in-place resize for the last allocation when possible
-- allocator adapter support for normal Bedrock allocation call sites
-
-Important Bedrock-specific deviations from Odin for now:
-
-- initialization is split into explicit buffered and dynamic entry points
-- invalid usage returns statuses instead of Odin's assertion-heavy diagnostics
-- fallback resize copies `min(old_size, new_size)` bytes explicitly
-
 ## Low-Level Helper Scope
 
-Bedrock should be selective about Odin's low-level `mem` helper surface.
+Bedrock is selective about Odin's low-level `mem` helper surface.
 
-- portable `mem.odin` helpers like byte set/zero/copy/compare/check-zero are
-  reasonable targets
+- portable byte set/zero/copy/move/compare/check-zero helpers are landed in
+  `include/bedrock/mem/mem.h`
 - `raw.odin` is mostly Odin-runtime-specific layout exposure and should not be
   treated as a direct Bedrock port target
-- if Bedrock adds low-level helpers here later, they should stay focused on the
-  portable subset rather than recreating Odin's `any`/slice/map runtime layouts
+- future helpers should stay focused on the portable subset rather than
+  recreating Odin's `any`/slice/map runtime layouts
 
 ## Temporary Allocation
 

@@ -114,7 +114,8 @@ br_status br_string_reader_unread_rune(br_string_reader *reader);
 /*
 Seek relative to the start, current cursor, or end of the source.
 
-Seeking past the end is allowed. Only negative final offsets are rejected.
+Seeking past the end is allowed. Negative final offsets and offsets that cannot
+be represented by `int64_t` are rejected.
 */
 br_string_reader_seek_result
 br_string_reader_seek(br_string_reader *reader, int64_t offset, br_seek_from whence);

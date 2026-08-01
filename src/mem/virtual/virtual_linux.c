@@ -4,6 +4,7 @@
 
 #include <errno.h>
 #include <sys/mman.h>
+#include <unistd.h>
 
 static br_status br__vm_status_from_linux_errno(int err) {
   switch (err) {
@@ -17,7 +18,9 @@ static br_status br__vm_status_from_linux_errno(int err) {
 }
 
 usize br__vm_platform_page_size_query(void) {
-  return 4096u;
+  long page_size = sysconf(_SC_PAGESIZE);
+
+  return page_size > 0 ? (usize)page_size : 0u;
 }
 
 br_vm_region_result br__vm_platform_reserve(usize size) {

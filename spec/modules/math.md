@@ -1,7 +1,7 @@
 # Math
 
 Bit-level integer operations ported from Odin `core/math/bits` (modeled on Go's
-`math/bits`). The pilot wave ports the fixed-width bit helpers.
+`math/bits`). The v1 set covers the fixed-width bit helpers.
 
 ## Scope
 
@@ -99,7 +99,9 @@ uint32_t br_bits_field_insert_u32(uint32_t base, uint32_t insert, unsigned offse
 ```
 
 Bitfield contract: `offset + bits <= width` is the caller's responsibility;
-out-of-range values are unchecked, like C shift operands.
+out-of-range values are unchecked, like C shift operands. A zero-width field is
+empty even at `offset == width`: extraction returns zero and insertion returns
+the unchanged base value.
 
 Widths provided: clz/ctz/popcount/count_zeros/bit_width/rotate/reverse for
 u8,u16,u32,u64; byteswap for u16,u32,u64; is_power_of_two for u8..u64 + i8..i64;
@@ -107,7 +109,7 @@ add/sub/mul/div for u32,u64; field_extract/insert for u8..u64 and i8..i64.
 
 ## Intentional deviations from Odin
 
-- No u128/i128 anywhere in the pilot (portable C11 has no 128-bit); a future
+- No u128/i128 anywhere in v1 (portable C11 has no 128-bit); a future
   path may be gated on `__SIZEOF_INT128__`, matching the varint decision.
   `mul_u64` MAY use `__int128` internally when available with a portable
   dual-word fallback.

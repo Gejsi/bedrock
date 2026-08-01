@@ -6,18 +6,18 @@ need redesign, and which ones should stay out of scope.
 Detailed status for the currently active module ports lives in
 `tracking/odin-coverage-checklist.md`.
 
-Priority (July 19, 2026): complete and audit the landed core
-modules before expanding new module families. Encodings base64/varint and the
-parser wave (csv/ini/scanner) are queued behind core completion.
+Priority (August 1, 2026): complete and audit the landed core modules before
+expanding new module families. Base64 and varint are landed; the parser wave
+(csv/ini/scanner) remains queued behind core completion.
 
 | Odin package | Decision | Notes |
 | --- | --- | --- |
 | `core/unicode/utf8` | partial v1 | Self-contained UTF-8 encode/decode/validate/count foundation landed without vendor dependencies; higher Unicode tables and case folding are still separate work. |
 | `core/bytes` | partial v1 | Slice/view model, buffer, reader, split, and replace/remove family landed, including Odin-style rune-aware empty-substring behavior; remaining gaps are mostly explicit rune helpers and some convenience APIs. |
 | `core/strings` | partial v1 | String view/owned string layer, builder, reader, split, and replace/remove helpers landed with UTF-8-aware rune search/count behavior; broader conversion, iterator, and Unicode-table work still remains. |
-| `core/io` | partial v1 | Odin-style single stream proc plus in-memory adapters landed, including generic byte/rune/exact-read-write/copy helpers and `read_at`/`write_at`/`size` fallbacks; buffered utilities still remain above it. |
+| `core/io` | partial v1 | Odin-style single stream proc plus in-memory adapters landed, including generic byte/rune/exact-read-write/copy helpers and `read_at`/`write_at`/`size` fallbacks. Core buffered utilities have landed in `bufio`; scanner remains. |
 | `core/bufio` | partial v1 | Buffered reader, writer, read-writer, and transfer helpers landed on top of `io`; scanner and some convenience helpers still remain. The standalone lookahead reader was cut July 19, 2026 in favor of `bufio.Reader`'s peek (see cut-list). |
-| `core/mem` | partial v1 | Allocators, fixed arenas, scratch allocator, stack allocator, dynamic arena allocator, buddy allocator, compat allocator, mutex allocator, tracking allocator with Odin-style locking, and an Odin-shaped `virtual/*` split for cross-platform virtual memory, mutex-protected virtual growing/static arenas, temp helpers, trailing guard-page overflow protection, and path-based file mapping landed; specialized allocators still remain. `small_stack` and `rollback_stack` were cut July 19, 2026 (see cut-list). |
+| `core/mem` | partial v1 | Allocators, fixed arenas, scratch allocator, stack allocator, dynamic arena allocator, buddy allocator, compat allocator, mutex allocator, tracking allocator with Odin-style locking, and an Odin-shaped `virtual/*` split for cross-platform virtual memory, mutex-protected virtual growing/static arenas, temp helpers, and trailing guard-page overflow protection landed; specialized allocators still remain. Path-based file mapping was removed because file APIs belong in `os`. `small_stack` and `rollback_stack` were cut July 19, 2026 (see cut-list). |
 | `core/encoding/base64` | v1 | Straightforward table-driven code. |
 | `core/encoding/hex` | v1 | Straightforward. |
 | `core/encoding/endian` | v1 | Straightforward. |
@@ -38,7 +38,7 @@ parser wave (csv/ini/scanner) are queued behind core completion.
 | `core/encoding/xml` | exclude v1 | Large parser surface; not first-wave material. |
 | `core/flags` | exclude v1 | Struct-tag and RTTI heavy. |
 | `core/reflect` | exclude v1 | Language/runtime feature, not a library fit. |
-| `core/os` | scoping GO (July 19, 2026) | Scoped-v1 brief complete; verdict GO, phased. Design against the PROMOTED `core/os` (former `os2`; NEVER `core/os/old`). Phase 1 (POSIX): files (open/close/read/write/seek/stat/size/remove/rename/exists over br_io streams + explicit allocators) + env (get/set/environ) + args. Phase 1b (Windows): same surface + the UTF-16 path tax, which pulls `unicode/utf16` forward from deferred to REQUIRED (minimal mechanical transcode). Phase 2: directory iteration. OUT: process spawn (fork/exec vs CreateProcess — a module unto itself). Prereq: clone-to-cstring (in flight, #71). Open maintainer decision: args capture via explicit `br_os_args_init(argc, argv)` from main() (recommended — no runtime to scrape argv) vs platform argv-scraping. Awaits go/no-go + the args ruling. |
+| `core/os` | GO, implementation pending (July 19, 2026) | Scoped-v1 brief complete; verdict GO, phased. Design against the PROMOTED `core/os` (former `os2`; NEVER `core/os/old`). Phase 1 (POSIX): files (open/close/read/write/seek/stat/size/remove/rename/exists over br_io streams + explicit allocators) + env (get/set/environ) + args. Phase 1b (Windows): same surface over the landed WTF-8/WTF-16 path codec. Phase 2: directory iteration. OUT: process spawn (fork/exec vs CreateProcess — a module unto itself). Prerequisites `clone_to_cstr` and WTF-8 are landed. The remaining maintainer decision is args capture via explicit `br_os_args_init(argc, argv)` from `main` (recommended) versus platform argv scraping. |
 | `core/sys`, `core/net` | exclude v1 | Too platform-heavy for initial scope. |
 | `core/unicode/utf16` (as WTF-8) | v1 (landed July 19, 2026) | Shipped as the lossless WTF-8 codec (`unicode/wtf8.h`, `src/unicode/wtf8.c`) per spec/modules/unicode.md, the Windows-path prerequisite for os v1. Typeless (bytes in views, no OsStr type); well-formed-only validator (`br_wtf8_valid`); two-pass sizers + never-truncate WTF-16↔WTF-8 transcode; `br_wtf8_concat` well-formed join. Named deviations: LOSSLESS (Zig model) vs Odin's `utf16` U+FFFD-lossy mapping; typeless vs Rust's `OsStr`; the well-formed validator is the only one (no `valid_general`, deferred with producer analysis). The strict `utf8` codec is untouched — WTF-8 keeps a small deliberate local copy of its byte-layout arithmetic (0xED continuation cap raised so lone surrogates decode), pinned by a differential agreement test. |
 | `core/crypto/*` | exclude v1 | Large and security-sensitive. |
@@ -69,7 +69,7 @@ lines at `2c25fb9`.
 | `core/slice` | 2167 | Generic slice algorithms; folds into the planned container/sort redesign rather than a standalone port. |
 | `core/log` | 1130 | Useful; couples to output policy; add on demand. Demand materialized July 19, 2026; research brief complete (explicit `br_logger` per the no-globals rule — Go slog's Handler split is the design teacher; structured-KV + builder formatting over the landed strconv/builder substrate, no fmt reopening; compile-time level stripping designed in; rfc3339 timestamps as the dogfood). Awaits the go/no-go and the formatting-style ruling. |
 | `core/text/scanner` | 667 | Overlaps the planned bufio scanner; decide one home when the parser family lands. |
-| `core/path/filepath` | subtree | OS-aware paths; needs the excluded os layer. `br_path_` stays reserved. |
+| `core/path/filepath` | subtree | OS-aware paths; deferred until the approved `os` v1 surface lands. `br_path_` stays reserved. |
 | `core/unicode` tables | large | The property/case-fold tables several shipped deviations explicitly wait on. A dedicated future wave, not excluded. |
 | `core/encoding/cbor` | 3806 | Real but niche binary serialization; below json in demand. |
 | `core/encoding/uuid` | 1058 | Deferred July 19, 2026 (walked back from same-day PORT). Strongest deferred candidate: no canonical portable C answer (libuuid is a fragmented system dependency) and demand proven by Go/Rust, where uuid lives outside std yet tops import charts. Scoped v4 + v7 needs only rand + time; v4 randomness sourcing (PRNG vs OS entropy per RFC 9562) is the open design question when a concrete consumer revives it. |
@@ -89,7 +89,7 @@ lines at `2c25fb9`.
 | `core/math/big`, `math/cmplx`, `math/linalg`, `math/noise`, `math/ease`, `math/fixed` | Specialist math (bignum, complex, graphics, animation, fixed-point). |
 | `core/rexcode` | 186k lines of generated regex/Unicode data; not hand-portable surface. |
 | `core/simd` | Compiler/architecture substrate, not portable C11 surface. |
-| `core/nbio`, `core/dynlib`, `core/terminal` | Platform-heavy (event loops, dlopen, ANSI control) — same tier as excluded os/net. |
+| `core/nbio`, `core/dynlib`, `core/terminal` | Platform-heavy (event loops, dlopen, ANSI control) and outside v1 even though the narrower `os` package is approved. |
 | `core/testing`, `core/prof`, `core/debug` | Tooling, not consumer-facing library surface. |
 | `core/odin` | Odin's own AST/parser — meaningless in a C library. |
 | `core/relative` | Odin-runtime pointer idiom with no C fit. |

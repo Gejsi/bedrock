@@ -24,7 +24,8 @@ typedef struct br_rfc3339_result {
 /*
 Parse a complete RFC 3339 timestamp. The whole view must be the timestamp;
 trailing bytes yield BR_STATUS_INVALID_ENCODING. An empty view is not a
-timestamp (BR_STATUS_INVALID_ENCODING, consumed 0).
+timestamp (BR_STATUS_INVALID_ENCODING, consumed 0). A well-formed timestamp
+whose UTC instant is outside br_time returns BR_STATUS_OUT_OF_RANGE.
 */
 br_rfc3339_result br_rfc3339_parse(br_string_view s);
 
@@ -39,13 +40,13 @@ br_rfc3339_result br_rfc3339_parse_prefix(br_string_view s);
 Format `t` at the given fixed offset. An offset of 0 emits the canonical 'Z';
 any other offset emits '+hh:mm' / '-hh:mm'. The separator and zero terminator
 are always uppercase 'T' and 'Z'. Fractional seconds are emitted only when
-nonzero, with trailing zeros trimmed.
+nonzero, with trailing zeros trimmed. Legal offsets are -23:59 through +23:59;
+an offset outside that range returns BR_STATUS_INVALID_ARGUMENT.
 
 Returns the number of bytes written. If `dst` is too small the result is
-BR_STATUS_SHORT_BUFFER with count 0 (never a truncated write). This is the only
-failure: every representable br_time falls in civil years ~1677..2262, well
-inside RFC 3339's fixed 4-digit year, so formatting cannot fail on range. (An
-unrepresentable instant is rejected earlier, at the datetime-to-time bridge.)
+BR_STATUS_SHORT_BUFFER with count 0 (never a truncated write). Offset arithmetic
+is performed as civil datetime arithmetic, so formatting an extreme br_time at
+a legal offset cannot overflow.
 */
 br_io_result br_rfc3339_format(br_time t, int32_t utc_offset_min, uint8_t *dst, size_t dst_cap);
 

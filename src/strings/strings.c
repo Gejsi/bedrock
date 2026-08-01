@@ -697,23 +697,23 @@ br_string_view br_string_substring(br_string_view s, usize rune_start, usize run
 size_t br_string_prefix_length(br_string_view a, br_string_view b) {
   usize common = br_min_size(a.len, b.len);
   usize i = 0u;
-  usize last_boundary = 0u;
 
-  /* Walk runes of `a` in lockstep with `b`, stopping at the first rune that
-     differs or that would exceed the shared byte length. Returns the byte
-     length up to the last whole matching rune. */
+  /* Decode both sides so a malformed prefix cannot make the result depend on
+     argument order or split a valid rune in either operand. */
   while (i < common) {
     br_utf8_decode_result da = br_utf8_decode(br_bytes_view_make(a.data + i, a.len - i));
-    usize width = da.width > 0u ? da.width : 1u;
+    br_utf8_decode_result db = br_utf8_decode(br_bytes_view_make(b.data + i, b.len - i));
+    usize a_width = da.width > 0u ? da.width : 1u;
+    usize b_width = db.width > 0u ? db.width : 1u;
 
-    if (i + width > common || memcmp(a.data + i, b.data + i, width) != 0) {
+    if (a_width != b_width || a_width > common - i ||
+        memcmp(a.data + i, b.data + i, a_width) != 0) {
       break;
     }
-    i += width;
-    last_boundary = i;
+    i += a_width;
   }
 
-  return last_boundary;
+  return i;
 }
 
 br_string_view br_string_common_prefix(br_string_view a, br_string_view b) {

@@ -190,6 +190,25 @@ static void test_ileb128_int64_min_full_width(void) {
   assert(d.status == BR_STATUS_OK && d.value == INT64_MIN && d.size == 10u);
 }
 
+static void test_ileb128_signed_extremes(void) {
+  static const uint8_t min_encoded[10] = {
+    0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x7f};
+  static const uint8_t max_encoded[10] = {
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00};
+  uint8_t buf[10];
+  br_io_result e;
+
+  assert(br_ileb128_encoded_len(INT64_MIN) == sizeof(min_encoded));
+  e = br_ileb128_encode(INT64_MIN, buf, sizeof(buf));
+  assert(e.status == BR_STATUS_OK && e.count == sizeof(min_encoded));
+  assert(memcmp(buf, min_encoded, sizeof(min_encoded)) == 0);
+
+  assert(br_ileb128_encoded_len(INT64_MAX) == sizeof(max_encoded));
+  e = br_ileb128_encode(INT64_MAX, buf, sizeof(buf));
+  assert(e.status == BR_STATUS_OK && e.count == sizeof(max_encoded));
+  assert(memcmp(buf, max_encoded, sizeof(max_encoded)) == 0);
+}
+
 static void test_truncation_and_empty(void) {
   static const uint8_t truncated[] = {0x80, 0x80}; /* continuation, then EOF */
   br_uleb128_result u;
@@ -260,6 +279,7 @@ int main(void) {
   test_uleb128_roundtrip();
   test_ileb128_roundtrip();
   test_ileb128_int64_min_full_width();
+  test_ileb128_signed_extremes();
   test_truncation_and_empty();
   test_overflow();
   test_encode_short_buffer();

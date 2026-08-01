@@ -138,8 +138,9 @@ br_bits_div_u32_result br_bits_div_u32(uint32_t hi, uint32_t lo, uint32_t y);
 br_bits_div_u64_result br_bits_div_u64(uint64_t hi, uint64_t lo, uint64_t y);
 
 /* Bitfields. The caller guarantees `offset + bits <= width`; out-of-range
-   values are unchecked, like C shift operands. `extract_iN` sign-extends the
-   field. */
+   values are unchecked, like C shift operands. A zero-width field is empty,
+   including at `offset == width`: extraction returns 0 and insertion returns
+   `base`. `extract_iN` sign-extends non-empty fields. */
 uint8_t br_bits_field_extract_u8(uint8_t value, unsigned offset, unsigned bits);
 uint16_t br_bits_field_extract_u16(uint16_t value, unsigned offset, unsigned bits);
 uint32_t br_bits_field_extract_u32(uint32_t value, unsigned offset, unsigned bits);

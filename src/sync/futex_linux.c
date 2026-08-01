@@ -19,13 +19,17 @@ static long br__futex_syscall(br_futex *futex, i32 op, u32 value, const struct t
   return syscall(SYS_futex, (u32 *)futex, op, value, timeout, NULL, 0);
 }
 
-static bool br__futex_duration_to_timespec(br_duration duration, struct timespec *ts) {
+static bool
+br__futex_duration_to_timespec(br_duration duration, struct timespec *ts, br_duration *chunk) {
+  const br_duration max_chunk = (br_duration)INT32_MAX * BR_SECOND;
+
   if (duration <= 0 || ts == NULL) {
     return false;
   }
 
-  ts->tv_sec = (time_t)(duration / BR_SECOND);
-  ts->tv_nsec = (long)(duration % BR_SECOND);
+  *chunk = duration < max_chunk ? duration : max_chunk;
+  ts->tv_sec = (time_t)(*chunk / BR_SECOND);
+  ts->tv_nsec = (long)(*chunk % BR_SECOND);
   return true;
 }
 
@@ -52,28 +56,36 @@ bool br_futex_wait(br_futex *futex, u32 expected) {
 }
 
 bool br_futex_wait_with_timeout(br_futex *futex, u32 expected, br_duration duration) {
-  struct timespec timeout;
-  long rc;
-
   if (futex == NULL) {
     return false;
   }
   if (br_atomic_load_explicit(futex, BR_ATOMIC_ACQUIRE) != expected) {
     return true;
   }
-  if (!br__futex_duration_to_timespec(duration, &timeout)) {
-    return false;
-  }
+  for (;;) {
+    struct timespec timeout;
+    br_duration chunk;
+    long rc;
 
-  rc = br__futex_syscall(futex, FUTEX_WAIT_PRIVATE, expected, &timeout);
-  if (rc == 0) {
-    return true;
-  }
+    if (!br__futex_duration_to_timespec(duration, &timeout, &chunk)) {
+      return false;
+    }
 
-  if (errno == ETIMEDOUT) {
-    return false;
+    rc = br__futex_syscall(futex, FUTEX_WAIT_PRIVATE, expected, &timeout);
+    if (rc == 0) {
+      return true;
+    }
+    if (errno != ETIMEDOUT) {
+      return errno == EINTR || errno == EAGAIN;
+    }
+    if (duration <= chunk) {
+      return false;
+    }
+    duration -= chunk;
+    if (br_atomic_load_explicit(futex, BR_ATOMIC_ACQUIRE) != expected) {
+      return true;
+    }
   }
-  return errno == EINTR || errno == EAGAIN;
 }
 
 void br_futex_signal(br_futex *futex) {

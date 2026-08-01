@@ -385,6 +385,12 @@ static void test_div(void) {
   d64 = br_bits_div_u64(5u, 0u, 5u);
   assert(d64.status == BR_STATUS_INVALID_ARGUMENT);
 
+  /* A divisor with its top bit set normalizes by s == 0 in the fallback. */
+  d64 = brfb_div_u64(0u, UINT64_MAX, (u64)1u << 63);
+  assert(d64.status == BR_STATUS_OK);
+  assert(d64.quo == 1u);
+  assert(d64.rem == (((u64)1u << 63) - 1u));
+
   /* Simple exact division. */
   d32 = br_bits_div_u32(0u, 100u, 7u);
   assert(d32.status == BR_STATUS_OK && d32.quo == 14u && d32.rem == 2u);
@@ -445,16 +451,32 @@ static void test_bitfields(void) {
   assert(br_bits_field_extract_u32(0xabcd1234u, 0u, 32u) == 0xabcd1234u);
   assert(br_bits_field_extract_u32(0xabcd1234u, 4u, 0u) == 0u);
 
+  /* Empty terminal fields are valid and must not shift by the type width. */
+  assert(br_bits_field_extract_u8(0xffu, 8u, 0u) == 0u);
+  assert(br_bits_field_extract_u16(0xffffu, 16u, 0u) == 0u);
+  assert(br_bits_field_extract_u32(UINT32_MAX, 32u, 0u) == 0u);
+  assert(br_bits_field_extract_u64(UINT64_MAX, 64u, 0u) == 0u);
+  assert(br_bits_field_extract_i64(-1, 64u, 0u) == 0);
+
   /* signed extract sign-extends. Field 0xF in 4 bits == -1. */
   assert(br_bits_field_extract_i32((i32)0x000000f0, 4u, 4u) == -1);
   assert(br_bits_field_extract_i32((i32)0x00000070, 4u, 4u) == 7);
-  assert(br_bits_field_extract_i8((i8)0xf0, 4u, 4u) == -1);
+  assert(br_bits_field_extract_i8(-16, 4u, 4u) == -1);
+  assert(br_bits_field_extract_i64(INT64_MIN, 0u, 64u) == INT64_MIN);
 
   /* insert: replace bits [offset, offset+bits) with insert's low bits. */
   assert(br_bits_field_insert_u32(0x00000000u, 0xffu, 8u, 8u) == 0x0000ff00u);
   assert(br_bits_field_insert_u32(0xffffffffu, 0x00u, 8u, 8u) == 0xffff00ffu);
   assert(br_bits_field_insert_u32(0x12345678u, 0xabu, 0u, 8u) == 0x123456abu);
   assert(br_bits_field_insert_u32(0x12345678u, 0x99u, 0u, 32u) == 0x00000099u);
+  assert(br_bits_field_insert_u8(0x12u, 0xffu, 8u, 0u) == 0x12u);
+  assert(br_bits_field_insert_u16(0x1234u, 0xffffu, 16u, 0u) == 0x1234u);
+  assert(br_bits_field_insert_u32(0x12345678u, UINT32_MAX, 32u, 0u) == 0x12345678u);
+  assert(br_bits_field_insert_u64(0x123456789abcdef0ull, UINT64_MAX, 64u, 0u) ==
+         0x123456789abcdef0ull);
+  assert(br_bits_field_insert_i64(-7, -1, 64u, 0u) == -7);
+  assert(br_bits_field_insert_i8(0, -1, 0u, 8u) == -1);
+  assert(br_bits_field_insert_i64(0, INT64_MIN, 0u, 64u) == INT64_MIN);
 
   /* round-trip: insert then extract returns the low `bits` of the inserted. */
   {

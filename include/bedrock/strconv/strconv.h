@@ -133,10 +133,14 @@ br_io_result br_format_bool(bool value, uint8_t *dst, size_t dst_cap);
 Format a floating-point number. `prec` is ignored for `BR_FLOAT_SHORTEST` and is
 otherwise the count of fractional digits (`BR_FLOAT_DECIMAL`/`BR_FLOAT_EXPONENT`)
 or significant digits (`BR_FLOAT_GENERAL`). A negative `prec` in any non-shortest
-mode is `BR_STATUS_INVALID_ARGUMENT`. NaN and infinities format as `NaN`,
-`+Inf`, and `-Inf`. Buffer rules match the integer formatters. `br_format_f32`
-formats at `float` precision (it does not promote to `double`).
+mode, or one greater than `BR_FORMAT_FLOAT_PRECISION_MAX`, is
+`BR_STATUS_INVALID_ARGUMENT`. GENERAL precision 0 is treated as 1. NaN and
+infinities format as `NaN`, `+Inf`, and `-Inf`. Buffer rules match the integer
+formatters. `br_format_f32` formats at `float` precision (it does not promote to
+`double`).
 */
+#define BR_FORMAT_FLOAT_PRECISION_MAX 1048576
+
 br_io_result
 br_format_f64(double value, br_float_format fmt, int prec, uint8_t *dst, size_t dst_cap);
 br_io_result
@@ -148,15 +152,16 @@ Worst-case byte counts. The `_SHORTEST_MAX` macros bound ONLY the
 huge-magnitude `BR_FLOAT_DECIMAL` needs hundreds of integral digits), so size
 those with `br_format_f64_bound`/`br_format_f32_bound`.
 */
-#define BR_FORMAT_I64_MAX 20u          /* -9223372036854775808 */
-#define BR_FORMAT_U64_MAX 20u          /* 18446744073709551615 */
+#define BR_FORMAT_I64_MAX 65u          /* sign + 64 base-2 digits */
+#define BR_FORMAT_U64_MAX 64u          /* 64 base-2 digits */
 #define BR_FORMAT_F64_SHORTEST_MAX 24u /* sign, digits, '.', 'e', exp sign, exp */
 #define BR_FORMAT_F32_SHORTEST_MAX 16u
 
 /*
-Worst-case bytes to format any value in `(fmt, prec)`. The result is clamped to
-a safe maximum, so a pathological `prec` cannot overflow the computation; the
-formatter still reports `BR_STATUS_SHORT_BUFFER` if `dst` cannot hold it.
+Worst-case bytes to format any value for every accepted `(fmt, prec)`;
+successful output never exceeds the returned bound. For an unsupported
+precision, the calculation clamps to `BR_FORMAT_FLOAT_PRECISION_MAX` so the
+bound helper itself remains total and cannot overflow.
 */
 size_t br_format_f64_bound(br_float_format fmt, int prec);
 size_t br_format_f32_bound(br_float_format fmt, int prec);

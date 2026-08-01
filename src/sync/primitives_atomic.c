@@ -2,6 +2,8 @@
 
 #include <bedrock/sync/primitives_atomic.h>
 
+#include "primitives_atomic_internal.h"
+
 static u32 br__atomic_mutex_spin(br_atomic_mutex *mutex) {
   for (usize spin = 100u; spin > 0u; --spin) {
     /*
@@ -355,12 +357,30 @@ void br_atomic_sema_init(br_atomic_sema *sema, u32 count) {
 }
 
 void br_atomic_sema_post(br_atomic_sema *sema, u32 count) {
-  if (sema == NULL) {
+  u32 old_count;
+  u32 new_count;
+
+  if (sema == NULL || count == 0u) {
     return;
   }
 
-  br_atomic_add_explicit(&sema->count, count, BR_ATOMIC_RELEASE);
-  if (count == 1u) {
+  old_count = br_atomic_load_explicit(&sema->count, BR_ATOMIC_RELAXED);
+  for (;;) {
+    u32 expected = old_count;
+    u32 available = UINT32_MAX - old_count;
+
+    new_count = count > available ? UINT32_MAX : old_count + count;
+    if (new_count == old_count) {
+      return;
+    }
+    if (br_atomic_compare_exchange_weak_explicit(
+          &sema->count, &expected, new_count, BR_ATOMIC_RELEASE, BR_ATOMIC_RELAXED)) {
+      break;
+    }
+    old_count = expected;
+  }
+
+  if (new_count - old_count == 1u) {
     br_futex_signal(&sema->count);
   } else {
     br_futex_broadcast(&sema->count);
@@ -392,21 +412,39 @@ void br_atomic_sema_wait(br_atomic_sema *sema) {
   }
 }
 
-bool br_atomic_sema_wait_with_timeout(br_atomic_sema *sema, br_duration duration) {
+bool br__atomic_sema_wait_with_timeout_hooked(br_atomic_sema *sema,
+                                              br_duration duration,
+                                              br__atomic_sema_wait_hook_fn before_wait,
+                                              br__atomic_sema_wait_hook_fn before_cas,
+                                              void *context) {
+  br_tick start;
   u32 original_count;
+  bool retried;
 
   if (sema == NULL || duration <= 0) {
     return false;
   }
 
+  start = br_tick_now();
+  retried = false;
   for (;;) {
+    if (retried && br_tick_since(start) >= duration) {
+      return false;
+    }
+
     original_count = br_atomic_load_explicit(&sema->count, BR_ATOMIC_RELAXED);
-    for (br_tick start = br_tick_now(); original_count == 0u;) {
-      br_duration remaining = duration - br_tick_since(start);
-      if (remaining < 0) {
+    while (original_count == 0u) {
+      br_duration elapsed = br_tick_since(start);
+      br_duration remaining;
+
+      if (elapsed >= duration) {
         return false;
       }
+      remaining = elapsed <= 0 ? duration : duration - elapsed;
 
+      if (before_wait != NULL) {
+        before_wait(context);
+      }
       if (!br_futex_wait_with_timeout(&sema->count, original_count, remaining)) {
         return false;
       }
@@ -414,6 +452,9 @@ bool br_atomic_sema_wait_with_timeout(br_atomic_sema *sema, br_duration duration
       original_count = br_atomic_load_explicit(&sema->count, BR_ATOMIC_RELAXED);
     }
 
+    if (before_cas != NULL) {
+      before_cas(context);
+    }
     if (br_atomic_compare_exchange_strong_explicit(&sema->count,
                                                    &original_count,
                                                    original_count - 1u,
@@ -421,5 +462,10 @@ bool br_atomic_sema_wait_with_timeout(br_atomic_sema *sema, br_duration duration
                                                    BR_ATOMIC_ACQUIRE)) {
       return true;
     }
+    retried = true;
   }
+}
+
+bool br_atomic_sema_wait_with_timeout(br_atomic_sema *sema, br_duration duration) {
+  return br__atomic_sema_wait_with_timeout_hooked(sema, duration, NULL, NULL, NULL);
 }

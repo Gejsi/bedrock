@@ -19,6 +19,22 @@ typedef struct misaligning_block_pool {
   size_t used;
 } misaligning_block_pool;
 
+typedef struct fail_allocations_allocator {
+  br_allocator parent;
+  usize remaining_allocations;
+  usize remaining_free_failures;
+} fail_allocations_allocator;
+
+typedef struct strict_out_band_allocator {
+  br_allocator parent;
+  void *target;
+  usize target_size;
+  usize target_alignment;
+  usize free_failures_remaining;
+  bool target_freed;
+  bool bad_free;
+} strict_out_band_allocator;
+
 static br_alloc_result misaligning_block_fn(void *ctx, const br_alloc_request *req) {
   misaligning_block_pool *pool = (misaligning_block_pool *)ctx;
   br_alloc_result result;
@@ -53,6 +69,71 @@ static br_alloc_result misaligning_block_fn(void *ctx, const br_alloc_request *r
       result.status = BR_STATUS_NOT_SUPPORTED;
       return result;
   }
+}
+
+static br_alloc_result fail_allocations_fn(void *ctx, const br_alloc_request *req) {
+  fail_allocations_allocator *allocator = (fail_allocations_allocator *)ctx;
+  br_alloc_result result = {0};
+
+  if (allocator == NULL || req == NULL) {
+    result.status = BR_STATUS_INVALID_ARGUMENT;
+    return result;
+  }
+
+  switch (req->op) {
+    case BR_ALLOC_OP_ALLOC:
+    case BR_ALLOC_OP_ALLOC_UNINIT:
+    case BR_ALLOC_OP_RESIZE:
+    case BR_ALLOC_OP_RESIZE_UNINIT:
+      if (allocator->remaining_allocations == 0u) {
+        result.status = BR_STATUS_OUT_OF_MEMORY;
+        return result;
+      }
+      allocator->remaining_allocations -= 1u;
+      break;
+    case BR_ALLOC_OP_FREE:
+      if (allocator->remaining_free_failures != 0u) {
+        allocator->remaining_free_failures -= 1u;
+        result.status = BR_STATUS_OUT_OF_MEMORY;
+        return result;
+      }
+      break;
+    case BR_ALLOC_OP_RESET:
+      break;
+  }
+
+  return br_allocator_call(allocator->parent, req);
+}
+
+static br_alloc_result strict_out_band_fn(void *ctx, const br_alloc_request *req) {
+  strict_out_band_allocator *allocator = (strict_out_band_allocator *)ctx;
+  br_alloc_result result = {0};
+
+  if (allocator == NULL || req == NULL) {
+    result.status = BR_STATUS_INVALID_ARGUMENT;
+    return result;
+  }
+
+  if (req->op == BR_ALLOC_OP_FREE && req->ptr == allocator->target) {
+    if (req->old_size != allocator->target_size || req->alignment != allocator->target_alignment) {
+      allocator->bad_free = true;
+    }
+    if (allocator->free_failures_remaining != 0u) {
+      allocator->free_failures_remaining -= 1u;
+      result.status = BR_STATUS_OUT_OF_MEMORY;
+      return result;
+    }
+    allocator->target_freed = true;
+  }
+
+  result = br_allocator_call(allocator->parent, req);
+  if ((req->op == BR_ALLOC_OP_ALLOC || req->op == BR_ALLOC_OP_ALLOC_UNINIT) && req->size >= 96u &&
+      req->alignment == 64u && result.status == BR_STATUS_OK) {
+    allocator->target = result.ptr;
+    allocator->target_size = result.size;
+    allocator->target_alignment = req->alignment;
+  }
+  return result;
 }
 
 static void test_dynamic_arena_basic_resize(void) {
@@ -168,6 +249,259 @@ static void test_dynamic_arena_out_band_and_allocator_adapter(void) {
   br_tracking_allocator_destroy(&array_tracking);
 }
 
+static void test_dynamic_arena_out_band_free_uses_recorded_layout(void) {
+  strict_out_band_allocator strict;
+  br_dynamic_arena arena;
+  br_allocator allocator;
+  br_alloc_result out_band;
+
+  memset(&strict, 0, sizeof(strict));
+  memset(&arena, 0, sizeof(arena));
+  strict.parent = br_allocator_heap();
+  allocator = (br_allocator){.fn = strict_out_band_fn, .ctx = &strict};
+
+  assert(br_dynamic_arena_init(&arena, br_allocator_heap(), allocator, 64u, 64u, 8u) ==
+         BR_STATUS_OK);
+
+  out_band = br_allocator_alloc_uninit(br_dynamic_arena_allocator(&arena), 96u, 64u);
+  assert(out_band.status == BR_STATUS_OK);
+  assert(out_band.ptr != strict.target);
+  assert(arena.out_band_allocations[0] == out_band.ptr);
+  assert(arena.out_band_count == 1u);
+
+  br_dynamic_arena_reset(&arena);
+  assert(strict.target_freed);
+  assert(!strict.bad_free);
+  assert(arena.out_band_count == 0u);
+
+  br_dynamic_arena_destroy(&arena);
+}
+
+static void test_dynamic_arena_out_band_free_failure_keeps_ownership(void) {
+  strict_out_band_allocator strict;
+  br_dynamic_arena arena;
+  br_allocator allocator;
+  br_alloc_result out_band;
+
+  memset(&strict, 0, sizeof(strict));
+  memset(&arena, 0, sizeof(arena));
+  strict.parent = br_allocator_heap();
+  strict.free_failures_remaining = 1u;
+  allocator = (br_allocator){.fn = strict_out_band_fn, .ctx = &strict};
+
+  assert(br_dynamic_arena_init(&arena, br_allocator_heap(), allocator, 64u, 64u, 8u) ==
+         BR_STATUS_OK);
+
+  out_band = br_allocator_alloc_uninit(br_dynamic_arena_allocator(&arena), 96u, 64u);
+  assert(out_band.status == BR_STATUS_OK);
+  assert(arena.out_band_count == 1u);
+
+  assert(br_allocator_reset(br_dynamic_arena_allocator(&arena)) == BR_STATUS_OUT_OF_MEMORY);
+  assert(!strict.target_freed);
+  assert(arena.out_band_count == 1u);
+
+  assert(br_allocator_reset(br_dynamic_arena_allocator(&arena)) == BR_STATUS_OK);
+  assert(strict.target_freed);
+  assert(!strict.bad_free);
+  assert(arena.out_band_count == 0u);
+
+  br_dynamic_arena_destroy(&arena);
+}
+
+static void test_dynamic_arena_destroy_retries_out_band_free_failure(void) {
+  strict_out_band_allocator strict;
+  br_dynamic_arena arena;
+  br_allocator allocator;
+  br_alloc_result out_band;
+
+  memset(&strict, 0, sizeof(strict));
+  memset(&arena, 0, sizeof(arena));
+  strict.parent = br_allocator_heap();
+  strict.free_failures_remaining = 1u;
+  allocator = (br_allocator){.fn = strict_out_band_fn, .ctx = &strict};
+
+  assert(br_dynamic_arena_init(&arena, br_allocator_heap(), allocator, 64u, 64u, 8u) ==
+         BR_STATUS_OK);
+  out_band = br_allocator_alloc_uninit(br_dynamic_arena_allocator(&arena), 96u, 64u);
+  assert(out_band.status == BR_STATUS_OK);
+
+  br_dynamic_arena_destroy(&arena);
+  assert(!strict.target_freed);
+  assert(arena.out_band_count == 1u);
+  assert(arena.out_band_allocations != NULL);
+
+  br_dynamic_arena_destroy(&arena);
+  assert(strict.target_freed);
+  assert(!strict.bad_free);
+  assert(arena.out_band_allocations == NULL);
+  assert(arena.array_allocator.fn == NULL);
+}
+
+static void test_dynamic_arena_free_all_retries_block_free_failure(void) {
+  fail_allocations_allocator failing_block;
+  br_dynamic_arena arena;
+  br_allocator allocator;
+  br_alloc_result allocation;
+
+  memset(&failing_block, 0, sizeof(failing_block));
+  memset(&arena, 0, sizeof(arena));
+  failing_block.parent = br_allocator_heap();
+  failing_block.remaining_allocations = SIZE_MAX;
+  failing_block.remaining_free_failures = 1u;
+
+  assert(br_dynamic_arena_init(&arena,
+                               (br_allocator){.fn = fail_allocations_fn, .ctx = &failing_block},
+                               br_allocator_heap(),
+                               64u,
+                               128u,
+                               8u) == BR_STATUS_OK);
+  allocator = br_dynamic_arena_allocator(&arena);
+  allocation = br_allocator_alloc_uninit(allocator, 32u, 8u);
+  assert(allocation.status == BR_STATUS_OK);
+
+  assert(br_allocator_reset(allocator) == BR_STATUS_OUT_OF_MEMORY);
+  assert(arena.current_block != NULL);
+  assert(br_allocator_reset(allocator) == BR_STATUS_OK);
+  assert(arena.current_block == NULL);
+
+  br_dynamic_arena_destroy(&arena);
+}
+
+static void test_dynamic_arena_destroy_retries_metadata_free_failure(void) {
+  br_tracking_allocator array_tracking;
+  fail_allocations_allocator failing_array;
+  br_dynamic_arena arena;
+
+  memset(&array_tracking, 0, sizeof(array_tracking));
+  memset(&failing_array, 0, sizeof(failing_array));
+  memset(&arena, 0, sizeof(arena));
+  br_tracking_allocator_init(&array_tracking, br_allocator_heap(), br_allocator_heap());
+  failing_array.parent = br_tracking_allocator_allocator(&array_tracking);
+  failing_array.remaining_allocations = SIZE_MAX;
+
+  assert(br_dynamic_arena_init(&arena,
+                               br_allocator_heap(),
+                               (br_allocator){.fn = fail_allocations_fn, .ctx = &failing_array},
+                               64u,
+                               128u,
+                               8u) == BR_STATUS_OK);
+  assert(br_dynamic_arena_alloc_uninit(&arena, 48u).status == BR_STATUS_OK);
+  assert(br_dynamic_arena_alloc_uninit(&arena, 48u).status == BR_STATUS_OK);
+  br_dynamic_arena_reset(&arena);
+  assert(arena.unused_blocks != NULL);
+
+  br_dynamic_arena_free_all(&arena);
+  failing_array.remaining_free_failures = 1u;
+  br_dynamic_arena_destroy(&arena);
+  assert(arena.unused_blocks != NULL);
+  assert(array_tracking.stats.live_allocation_count != 0u);
+
+  br_dynamic_arena_destroy(&arena);
+  assert(arena.unused_blocks == NULL);
+  assert(array_tracking.stats.live_allocation_count == 0u);
+  br_tracking_allocator_destroy(&array_tracking);
+}
+
+static void test_dynamic_arena_reset_keeps_ownership_on_metadata_oom(void) {
+  br_tracking_allocator block_tracking;
+  br_tracking_allocator array_tracking;
+  fail_allocations_allocator failing_array;
+  br_dynamic_arena arena;
+  br_alloc_result first;
+  br_alloc_result second;
+
+  memset(&block_tracking, 0, sizeof(block_tracking));
+  memset(&array_tracking, 0, sizeof(array_tracking));
+  memset(&failing_array, 0, sizeof(failing_array));
+  memset(&arena, 0, sizeof(arena));
+
+  br_tracking_allocator_init(&block_tracking, br_allocator_heap(), br_allocator_heap());
+  br_tracking_allocator_init(&array_tracking, br_allocator_heap(), br_allocator_heap());
+  failing_array.parent = br_tracking_allocator_allocator(&array_tracking);
+  failing_array.remaining_allocations = 1u;
+
+  assert(br_dynamic_arena_init(&arena,
+                               br_tracking_allocator_allocator(&block_tracking),
+                               (br_allocator){.fn = fail_allocations_fn, .ctx = &failing_array},
+                               64u,
+                               128u,
+                               8u) == BR_STATUS_OK);
+
+  first = br_dynamic_arena_alloc_uninit(&arena, 48u);
+  second = br_dynamic_arena_alloc_uninit(&arena, 48u);
+  assert(first.status == BR_STATUS_OK);
+  assert(second.status == BR_STATUS_OK);
+  assert(block_tracking.stats.live_allocation_count == 2u);
+  assert(arena.used_count == 1u);
+  assert(arena.current_block != NULL);
+
+  /*
+  The only permitted metadata growth was consumed while cycling to the second
+  block. Reset now cannot create unused_blocks, so both existing owners must
+  remain represented until destroy frees them.
+  */
+  br_dynamic_arena_reset(&arena);
+  assert(arena.current_block != NULL);
+  assert(arena.used_count == 1u);
+  assert(arena.unused_count == 0u);
+  assert(block_tracking.stats.live_allocation_count == 2u);
+
+  br_dynamic_arena_destroy(&arena);
+  assert(block_tracking.stats.live_allocation_count == 0u);
+  assert(array_tracking.stats.live_allocation_count == 0u);
+  br_tracking_allocator_destroy(&block_tracking);
+  br_tracking_allocator_destroy(&array_tracking);
+}
+
+static void test_dynamic_arena_cycle_reserves_ownership_before_allocating(void) {
+  br_tracking_allocator block_tracking;
+  fail_allocations_allocator failing_block;
+  fail_allocations_allocator failing_array;
+  br_dynamic_arena arena;
+  br_alloc_result first;
+  br_alloc_result second;
+  void *current_block;
+
+  memset(&block_tracking, 0, sizeof(block_tracking));
+  memset(&failing_block, 0, sizeof(failing_block));
+  memset(&failing_array, 0, sizeof(failing_array));
+  memset(&arena, 0, sizeof(arena));
+
+  br_tracking_allocator_init(&block_tracking, br_allocator_heap(), br_allocator_heap());
+  failing_block.parent = br_tracking_allocator_allocator(&block_tracking);
+  failing_block.remaining_allocations = SIZE_MAX;
+  failing_block.remaining_free_failures = 1u;
+  failing_array.parent = br_allocator_heap();
+
+  assert(br_dynamic_arena_init(&arena,
+                               (br_allocator){.fn = fail_allocations_fn, .ctx = &failing_block},
+                               (br_allocator){.fn = fail_allocations_fn, .ctx = &failing_array},
+                               64u,
+                               128u,
+                               8u) == BR_STATUS_OK);
+
+  first = br_dynamic_arena_alloc_uninit(&arena, 48u);
+  assert(first.status == BR_STATUS_OK);
+  assert(block_tracking.stats.live_allocation_count == 1u);
+  current_block = arena.current_block;
+
+  /*
+  Cycling needs a used-block ownership slot. Its allocation fails before a
+  second block is acquired, so even an injected block-free failure cannot leak
+  an unrecorded allocation.
+  */
+  second = br_dynamic_arena_alloc_uninit(&arena, 48u);
+  assert(second.status == BR_STATUS_OUT_OF_MEMORY);
+  assert(block_tracking.stats.live_allocation_count == 1u);
+  assert(arena.current_block == current_block);
+  assert(arena.used_count == 0u);
+
+  failing_block.remaining_free_failures = 0u;
+  br_dynamic_arena_destroy(&arena);
+  assert(block_tracking.stats.live_allocation_count == 0u);
+  br_tracking_allocator_destroy(&block_tracking);
+}
+
 static void test_dynamic_arena_request_alignment(void) {
   br_dynamic_arena arena;
   br_allocator allocator;
@@ -256,6 +590,62 @@ static void test_dynamic_arena_large_alignment(void) {
   assert(page.status == BR_STATUS_OK);
   assert(page.ptr != NULL);
   assert(((uptr)page.ptr % 4096u) == 0u);
+
+  br_dynamic_arena_destroy(&arena);
+}
+
+static void test_dynamic_arena_resize_realigns_equal_and_shrunk_allocations(void) {
+  uint8_t pool_mem[2048];
+  misaligning_block_pool pool;
+  br_dynamic_arena arena;
+  br_allocator allocator;
+  br_alloc_result original;
+  br_alloc_result equal;
+  br_alloc_result separator;
+  br_alloc_result shrink_source;
+  br_alloc_result shrunk;
+
+  memset(pool_mem, 0, sizeof(pool_mem));
+  pool.base = pool_mem;
+  pool.len = sizeof(pool_mem);
+  pool.used = 0u;
+  memset(&arena, 0, sizeof(arena));
+
+  assert(br_dynamic_arena_init(&arena,
+                               (br_allocator){.fn = misaligning_block_fn, .ctx = &pool},
+                               br_allocator_heap(),
+                               256u,
+                               512u,
+                               8u) == BR_STATUS_OK);
+  allocator = br_dynamic_arena_allocator(&arena);
+
+  original = br_allocator_alloc_uninit(allocator, 16u, 8u);
+  assert(original.status == BR_STATUS_OK);
+  assert(((uptr)original.ptr % 64u) != 0u);
+  memset(original.ptr, 0x31, original.size);
+
+  equal = br_allocator_resize_uninit(allocator, original.ptr, original.size, original.size, 64u);
+  assert(equal.status == BR_STATUS_OK);
+  assert(equal.ptr != original.ptr);
+  assert(((uptr)equal.ptr % 64u) == 0u);
+  for (usize i = 0u; i < equal.size; ++i) {
+    assert(((u8 *)equal.ptr)[i] == 0x31u);
+  }
+
+  separator = br_allocator_alloc_uninit(allocator, 8u, 8u);
+  assert(separator.status == BR_STATUS_OK);
+  shrink_source = br_allocator_alloc_uninit(allocator, 24u, 8u);
+  assert(shrink_source.status == BR_STATUS_OK);
+  assert(((uptr)shrink_source.ptr % 64u) != 0u);
+  memset(shrink_source.ptr, 0x52, shrink_source.size);
+
+  shrunk = br_allocator_resize_uninit(allocator, shrink_source.ptr, shrink_source.size, 8u, 64u);
+  assert(shrunk.status == BR_STATUS_OK);
+  assert(shrunk.ptr != shrink_source.ptr);
+  assert(((uptr)shrunk.ptr % 64u) == 0u);
+  for (usize i = 0u; i < shrunk.size; ++i) {
+    assert(((u8 *)shrunk.ptr)[i] == 0x52u);
+  }
 
   br_dynamic_arena_destroy(&arena);
 }
@@ -355,8 +745,16 @@ int main(void) {
   test_dynamic_arena_basic_resize();
   test_dynamic_arena_reset_reuses_blocks();
   test_dynamic_arena_out_band_and_allocator_adapter();
+  test_dynamic_arena_out_band_free_uses_recorded_layout();
+  test_dynamic_arena_out_band_free_failure_keeps_ownership();
+  test_dynamic_arena_destroy_retries_out_band_free_failure();
+  test_dynamic_arena_free_all_retries_block_free_failure();
+  test_dynamic_arena_destroy_retries_metadata_free_failure();
+  test_dynamic_arena_reset_keeps_ownership_on_metadata_oom();
+  test_dynamic_arena_cycle_reserves_ownership_before_allocating();
   test_dynamic_arena_request_alignment();
   test_dynamic_arena_large_alignment();
+  test_dynamic_arena_resize_realigns_equal_and_shrunk_allocations();
   test_dynamic_arena_reused_block_realigns();
   test_dynamic_arena_reused_block_margin_overflow();
   return 0;

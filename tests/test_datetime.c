@@ -75,6 +75,30 @@ static void test_bridge_out_of_range(void) {
     assert(a.status == BR_STATUS_OK);
     assert(b.status == BR_STATUS_OK && b.value.nsec < 0); /* pre-1970 is negative */
   }
+
+  /*
+  The first day whose ordinal difference reaches floor(INT64_MIN / 86400)
+  used to overflow in the intermediate day-to-second multiplication before
+  returning OUT_OF_RANGE.
+  */
+  {
+    br_datetime lower_product_boundary =
+      br_datetime_from_components(-292277022657ll, 1, 27, 0, 0, 0, 0).value;
+    br_time_result boundary = br_datetime_to_time(lower_product_boundary);
+
+    assert(boundary.status == BR_STATUS_OUT_OF_RANGE);
+    assert(boundary.value.nsec == 0);
+  }
+
+  {
+    br_datetime invalid = br_datetime_from_components(1970, 1, 1, 0, 0, 0, 0).value;
+    br_time_result result;
+
+    invalid.date.year = INT64_MIN;
+    result = br_datetime_to_time(invalid);
+    assert(result.status == BR_STATUS_INVALID_ARGUMENT);
+    assert(result.value.nsec == 0);
+  }
 }
 
 static void test_ordinal_round_trip(void) {
@@ -223,6 +247,75 @@ static void test_add_subtract(void) {
   }
 }
 
+static void test_add_subtract_boundaries(void) {
+  br_datetime min_dt = br_datetime_from_components(BR_DATETIME_MIN_YEAR, 1, 1, 0, 0, 0, 0).value;
+  br_datetime max_dt =
+    br_datetime_from_components(BR_DATETIME_MAX_YEAR, 12, 31, 23, 59, 59, 999999999).value;
+  br_datetime base = br_datetime_from_components(2020, 1, 31, 23, 0, 0, 0).value;
+  br_delta delta;
+  br_datetime_result added;
+  br_delta diff;
+
+  /* Each unnormalized field can be extreme without overflowing an intermediate. */
+  delta.days = 0;
+  delta.seconds = INT64_MAX;
+  delta.nanos = INT64_MAX;
+  added = br_datetime_add_delta(base, delta);
+  assert(added.status == BR_STATUS_OK);
+  diff = br_datetime_subtract(added.value, base);
+  assert(diff.seconds >= 0 && diff.seconds < 86400);
+  assert(diff.nanos >= 0 && diff.nanos < 1000000000);
+
+  /* Large opposite-signed terms cancel before the representable-range check. */
+  delta.days = INT64_MAX;
+  delta.seconds = INT64_MAX;
+  delta.nanos = 0;
+  assert(br_datetime_add_delta(min_dt, delta).status == BR_STATUS_OK);
+
+  /* Crossing either civil endpoint is a range error, never signed overflow. */
+  delta.days = 0;
+  delta.seconds = 0;
+  delta.nanos = 1;
+  assert(br_datetime_add_delta(max_dt, delta).status == BR_STATUS_OUT_OF_RANGE);
+  delta.nanos = -1;
+  assert(br_datetime_add_delta(min_dt, delta).status == BR_STATUS_OUT_OF_RANGE);
+
+  /* Midnight crossings normalize seconds and nanoseconds into nonnegative fields. */
+  {
+    br_datetime a = br_datetime_from_components(2020, 2, 1, 1, 0, 0, 0).value;
+    br_datetime b = br_datetime_from_components(2020, 1, 31, 23, 0, 0, 0).value;
+    br_delta forward = br_datetime_subtract(a, b);
+    br_delta reverse = br_datetime_subtract(b, a);
+
+    assert(forward.days == 0 && forward.seconds == 7200 && forward.nanos == 0);
+    assert(reverse.days == -1 && reverse.seconds == 79200 && reverse.nanos == 0);
+  }
+  {
+    br_datetime a = br_datetime_from_components(2020, 2, 1, 0, 0, 0, 0).value;
+    br_datetime b = br_datetime_from_components(2020, 1, 31, 23, 59, 59, 1).value;
+    br_delta subsecond = br_datetime_subtract(a, b);
+
+    assert(subsecond.days == 0);
+    assert(subsecond.seconds == 0);
+    assert(subsecond.nanos == 999999999);
+  }
+
+  /* The status-free subtraction API has explicit normalized saturation endpoints. */
+  diff = br_datetime_subtract(max_dt, min_dt);
+  assert(diff.days == INT64_MAX && diff.seconds == 86399 && diff.nanos == 999999999);
+  diff = br_datetime_subtract(min_dt, max_dt);
+  assert(diff.days == INT64_MIN && diff.seconds == 0 && diff.nanos == 0);
+
+  /* Invalid caller-built datetimes never reach unsafe calendar arithmetic. */
+  {
+    br_datetime invalid = min_dt;
+    invalid.date.year = INT64_MIN;
+    diff = br_datetime_subtract(invalid, min_dt);
+    assert(diff.days == 0 && diff.seconds == 0 && diff.nanos == 0);
+    assert(br_datetime_add_delta(invalid, delta).status == BR_STATUS_INVALID_ARGUMENT);
+  }
+}
+
 int main(void) {
   test_absolute_ordinals();
   test_absolute_epoch();
@@ -232,5 +325,6 @@ int main(void) {
   test_epoch_round_trip();
   test_validation();
   test_add_subtract();
+  test_add_subtract_boundaries();
   return 0;
 }

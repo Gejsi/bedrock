@@ -66,6 +66,27 @@ static void test_string_reader_read_at_and_seek(void) {
 
   seek_result = br_string_reader_seek(&reader, -10, BR_SEEK_FROM_CURRENT);
   assert(seek_result.status == BR_STATUS_INVALID_ARGUMENT);
+
+  seek_result = br_string_reader_seek(&reader, INT64_MAX, BR_SEEK_FROM_START);
+  assert(seek_result.status == BR_STATUS_OK);
+  assert(seek_result.offset == INT64_MAX);
+  seek_result = br_string_reader_seek(&reader, 1, BR_SEEK_FROM_CURRENT);
+  assert(seek_result.status == BR_STATUS_INVALID_ARGUMENT);
+  seek_result = br_string_reader_seek(&reader, 0, BR_SEEK_FROM_CURRENT);
+  assert(seek_result.status == BR_STATUS_OK);
+  assert(seek_result.offset == INT64_MAX);
+
+  seek_result = br_string_reader_seek(&reader, INT64_MAX, BR_SEEK_FROM_END);
+  assert(seek_result.status == BR_STATUS_INVALID_ARGUMENT);
+
+  seek_result = br_string_reader_seek(&reader, 1, BR_SEEK_FROM_START);
+  assert(seek_result.status == BR_STATUS_OK);
+  seek_result = br_string_reader_seek(&reader, INT64_MIN, BR_SEEK_FROM_CURRENT);
+  assert(seek_result.status == BR_STATUS_INVALID_ARGUMENT);
+  seek_result = br_string_reader_seek(&reader, 0, BR_SEEK_FROM_CURRENT);
+  assert(seek_result.status == BR_STATUS_OK);
+  assert(seek_result.offset == 1);
+
   seek_result = br_string_reader_seek(&reader, 0, (br_seek_from)99);
   assert(seek_result.status == BR_STATUS_INVALID_ARGUMENT);
 }
@@ -87,6 +108,14 @@ static void test_string_reader_rune_semantics(void) {
   assert(rune_result.status == BR_STATUS_OK);
   assert(rune_result.value == (br_rune)0x00e4);
   assert(rune_result.width == 2u);
+  assert(br_string_reader_unread_rune(&reader) == BR_STATUS_OK);
+
+  rune_result = br_string_reader_read_rune(&reader);
+  assert(rune_result.status == BR_STATUS_OK);
+  assert(rune_result.value == (br_rune)0x00e4);
+  assert(rune_result.width == 2u);
+
+  assert(br_string_reader_seek(&reader, 0, (br_seek_from)99).status == BR_STATUS_INVALID_ARGUMENT);
   assert(br_string_reader_unread_rune(&reader) == BR_STATUS_OK);
 
   rune_result = br_string_reader_read_rune(&reader);

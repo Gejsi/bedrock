@@ -1,5 +1,7 @@
 #include <bedrock/base.h>
 
+#include <stdatomic.h>
+
 #include "internal.h"
 
 br_vm_region_result br__vm_region_result(u8 *data, usize size, br_status status) {
@@ -12,13 +14,27 @@ br_vm_region_result br__vm_region_result(u8 *data, usize size, br_status status)
 }
 
 usize br__vm_cached_page_size(void) {
-  static usize cached_page_size = 0u;
+  static atomic_size_t cached_page_size = ATOMIC_VAR_INIT(0u);
+  usize page_size;
+  usize expected;
 
-  if (cached_page_size == 0u) {
-    cached_page_size = br__vm_platform_page_size_query();
+  page_size = atomic_load_explicit(&cached_page_size, memory_order_acquire);
+  if (page_size != 0u) {
+    return page_size;
   }
 
-  return cached_page_size;
+  page_size = br__vm_platform_page_size_query();
+  if (page_size == 0u) {
+    return 0u;
+  }
+
+  expected = 0u;
+  if (!atomic_compare_exchange_strong_explicit(
+        &cached_page_size, &expected, page_size, memory_order_release, memory_order_relaxed)) {
+    page_size = expected;
+  }
+
+  return page_size;
 }
 
 usize br_vm_page_size(void) {

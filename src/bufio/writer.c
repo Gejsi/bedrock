@@ -208,7 +208,7 @@ br_bufio_writer_io_result br_bufio_writer_write_rune(br_bufio_writer *writer, br
     return br_io_result_make(0u, BR_STATUS_INVALID_ARGUMENT);
   }
 
-  if (value < BR_RUNE_SELF) {
+  if (value >= 0 && value < BR_RUNE_SELF) {
     br_status status;
 
     status = br_bufio_writer_write_byte(writer, (u8)value);

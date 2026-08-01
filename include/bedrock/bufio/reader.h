@@ -99,19 +99,23 @@ found.
 br_bufio_reader_slice_result br_bufio_reader_read_slice(br_bufio_reader *reader, uint8_t delim);
 
 /*
-Read until `delim` is found and return an owned byte slice.
+Read until `delim` is found and return an owned byte slice. The allocation is
+exactly `value.len` bytes and can be released with `br_bytes_free`.
 */
 br_bytes_result
 br_bufio_reader_read_bytes(br_bufio_reader *reader, uint8_t delim, br_allocator allocator);
 
 /*
-Read until `delim` is found and return an owned string.
+Read until `delim` is found and return an owned string. The allocation is
+exactly `value.len` bytes and can be released with `br_string_free`.
 */
 br_string_result
 br_bufio_reader_read_string(br_bufio_reader *reader, uint8_t delim, br_allocator allocator);
 
 /*
-Write all remaining buffered and source bytes into `sink`.
+Write all remaining buffered and source bytes into `sink`. EOF after copied
+data is a successful completion; any other status associated with copied source
+data is returned after those bytes have been written.
 */
 br_i64_result br_bufio_reader_write_to(br_bufio_reader *reader, br_stream sink);
 

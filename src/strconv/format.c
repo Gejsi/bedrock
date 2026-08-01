@@ -90,8 +90,6 @@ near 1.8e308 (309 digits), f32 near 3.4e38 (39 digits).
 */
 #define BR__F64_MAX_INT_DIGITS 309u
 #define BR__F32_MAX_INT_DIGITS 39u
-/* A clamp well under SIZE_MAX so a pathological prec cannot overflow the sum. */
-#define BR__FORMAT_BOUND_CLAMP ((size_t)1u << 20)
 
 static size_t br__format_float_bound(br_float_format fmt, int prec, unsigned max_int_digits) {
   size_t p;
@@ -102,8 +100,8 @@ static size_t br__format_float_bound(br_float_format fmt, int prec, unsigned max
   }
   /* NaN/Inf are "NaN"/"+Inf"/"-Inf" — dwarfed by the digit bounds below. */
   p = prec < 0 ? 0u : (size_t)prec;
-  if (p > BR__FORMAT_BOUND_CLAMP) {
-    p = BR__FORMAT_BOUND_CLAMP;
+  if (p > (size_t)BR_FORMAT_FLOAT_PRECISION_MAX) {
+    p = (size_t)BR_FORMAT_FLOAT_PRECISION_MAX;
   }
 
   switch (fmt) {
@@ -131,9 +129,10 @@ size_t br_format_f32_bound(br_float_format fmt, int prec) {
 /* -------- float formatting -------- */
 
 /*
-Streams digits straight into `dst`, bounds-checked at every append so a full
-buffer aborts before any partial write is observed by the caller (the caller
-discards the result on SHORT_BUFFER). `ok` latches false on the first overflow.
+Counts or emits a fully formatted float. The formatter first runs with `dst`
+NULL to find the exact size, then emits only after proving the caller's buffer
+can hold all bytes. Runs of zeroes are handled in bulk so even the maximum
+accepted precision finishes in bounded work when the destination is short.
 */
 typedef struct br__sink {
   u8 *dst;
@@ -142,23 +141,39 @@ typedef struct br__sink {
   bool ok;
 } br__sink;
 
-static void br__sink_byte(br__sink *s, u8 c) {
+static void br__sink_bytes(br__sink *s, const u8 *src, usize count) {
   if (!s->ok) {
     return;
   }
-  if (s->n >= s->cap) {
+  if (count > s->cap - s->n) {
     s->ok = false;
     return;
   }
-  s->dst[s->n] = c;
-  s->n += 1u;
+  if (s->dst != NULL) {
+    memcpy(s->dst + s->n, src, count);
+  }
+  s->n += count;
+}
+
+static void br__sink_byte(br__sink *s, u8 c) {
+  br__sink_bytes(s, &c, 1u);
 }
 
 static void br__sink_zeros(br__sink *s, i32 count) {
-  i32 i;
-  for (i = 0; i < count; i += 1) {
-    br__sink_byte(s, '0');
+  usize n;
+
+  if (!s->ok || count <= 0) {
+    return;
   }
+  n = (usize)count;
+  if (n > s->cap - s->n) {
+    s->ok = false;
+    return;
+  }
+  if (s->dst != NULL) {
+    memset(s->dst + s->n, '0', n);
+  }
+  s->n += n;
 }
 
 /*
@@ -172,25 +187,34 @@ static void br__format_digits(br__sink *sink, bool neg, const br__decimal *d, i3
   }
 
   if (fmt == 'f') {
-    i32 i;
-
     if (d->decimal_point > 0) {
       i32 m = d->count < d->decimal_point ? d->count : d->decimal_point;
-      for (i = 0; i < m; i += 1) {
-        br__sink_byte(sink, d->digits[i]);
-      }
+      br__sink_bytes(sink, d->digits, (usize)m);
       br__sink_zeros(sink, d->decimal_point - m);
     } else {
       br__sink_byte(sink, '0');
     }
 
     if (prec > 0) {
+      i32 emitted = 0;
+      i32 j = d->decimal_point;
+
       br__sink_byte(sink, '.');
-      for (i = 0; i < prec; i += 1) {
-        i32 j = d->decimal_point + i;
-        u8 c = (j >= 0 && j < d->count) ? d->digits[j] : (u8)'0';
-        br__sink_byte(sink, c);
+      if (j < 0) {
+        i32 zeroes = j < -prec ? prec : -j;
+        br__sink_zeros(sink, zeroes);
+        emitted += zeroes;
+        j += zeroes;
       }
+      if (emitted < prec && j >= 0 && j < d->count) {
+        i32 digits = d->count - j;
+        if (digits > prec - emitted) {
+          digits = prec - emitted;
+        }
+        br__sink_bytes(sink, d->digits + j, (usize)digits);
+        emitted += digits;
+      }
+      br__sink_zeros(sink, prec - emitted);
     }
     return;
   }
@@ -199,20 +223,19 @@ static void br__format_digits(br__sink *sink, bool neg, const br__decimal *d, i3
   {
     u8 lead = d->count != 0 ? d->digits[0] : (u8)'0';
     i32 exp;
-    i32 i;
 
     br__sink_byte(sink, lead);
     if (prec > 0) {
-      i32 m;
+      i32 digits = d->count > 1 ? d->count - 1 : 0;
+
+      if (digits > prec) {
+        digits = prec;
+      }
       br__sink_byte(sink, '.');
-      i = 1;
-      m = d->count < prec + 1 ? d->count : prec + 1;
-      for (; i < m; i += 1) {
-        br__sink_byte(sink, d->digits[i]);
+      if (digits > 0) {
+        br__sink_bytes(sink, d->digits + 1, (usize)digits);
       }
-      for (; i <= prec; i += 1) {
-        br__sink_byte(sink, '0');
-      }
+      br__sink_zeros(sink, prec - digits);
     }
 
     br__sink_byte(sink, 'e');
@@ -246,9 +269,13 @@ static br_io_result br__format_float(
   i32 eprec;
   char shape;
   br__sink sink;
+  usize required;
 
-  if (fmt != BR_FLOAT_SHORTEST && prec < 0) {
+  if (fmt != BR_FLOAT_SHORTEST && (prec < 0 || prec > BR_FORMAT_FLOAT_PRECISION_MAX)) {
     return br__format_result(0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+  if (fmt == BR_FLOAT_GENERAL && prec == 0) {
+    prec = 1;
   }
 
   /* Inf / NaN. */
@@ -321,15 +348,21 @@ static br_io_result br__format_float(
     shape = fmt == BR_FLOAT_EXPONENT ? 'e' : 'f';
   }
 
+  sink.dst = NULL;
+  sink.cap = (usize)-1;
+  sink.n = 0u;
+  sink.ok = true;
+  br__format_digits(&sink, neg, &d, prec, shape);
+  required = sink.n;
+  if (dst == NULL || dst_cap < required) {
+    return br__format_result(0u, BR_STATUS_SHORT_BUFFER);
+  }
+
   sink.dst = dst;
   sink.cap = dst_cap;
   sink.n = 0u;
-  sink.ok = dst != NULL;
+  sink.ok = true;
   br__format_digits(&sink, neg, &d, prec, shape);
-
-  if (!sink.ok) {
-    return br__format_result(0u, BR_STATUS_SHORT_BUFFER);
-  }
   return br__format_result(sink.n, BR_STATUS_OK);
 }
 

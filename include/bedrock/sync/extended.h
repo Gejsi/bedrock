@@ -77,8 +77,17 @@ typedef struct br_ticket_mutex {
 
 br_status br_wait_group_init(br_wait_group *wg);
 void br_wait_group_destroy(br_wait_group *wg);
-void br_wait_group_add(br_wait_group *wg, int32_t delta);
-void br_wait_group_done(br_wait_group *wg);
+
+/*
+Adjust the task count without allowing it to become negative or overflow.
+Negative-count misuse returns BR_STATUS_INVALID_STATE; positive overflow returns
+BR_STATUS_OUT_OF_RANGE. On failure the count is unchanged. A positive add that
+starts a new generation from zero must happen before any concurrent wait.
+Callers may reuse a wait group only after every wait from the previous
+generation has returned.
+*/
+br_status br_wait_group_add(br_wait_group *wg, int32_t delta);
+br_status br_wait_group_done(br_wait_group *wg);
 void br_wait_group_wait(br_wait_group *wg);
 bool br_wait_group_wait_with_timeout(br_wait_group *wg, br_duration duration);
 

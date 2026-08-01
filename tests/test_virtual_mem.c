@@ -10,6 +10,75 @@
 #include <unistd.h>
 #endif
 
+#define TEST_VM_PAGE_SIZE_THREAD_COUNT 8u
+#define TEST_VM_PAGE_SIZE_ITERATIONS 256u
+
+typedef struct test_vm_page_size_thread {
+  br_atomic_bool *start;
+  usize result;
+} test_vm_page_size_thread;
+
+static void test_vm_spin_until_bool(const br_atomic_bool *value, bool expected) {
+  while (br_atomic_load_explicit(value, BR_ATOMIC_ACQUIRE) != expected) {
+    br_cpu_relax();
+  }
+}
+
+static int test_vm_page_size_worker(void *ctx) {
+  test_vm_page_size_thread *thread = (test_vm_page_size_thread *)ctx;
+  usize page_size = 0u;
+
+  test_vm_spin_until_bool(thread->start, true);
+  for (usize i = 0u; i < TEST_VM_PAGE_SIZE_ITERATIONS; ++i) {
+    usize current = br_vm_page_size();
+
+    if (i == 0u) {
+      page_size = current;
+    } else {
+      assert(current == page_size);
+    }
+  }
+
+  thread->result = page_size;
+  return 0;
+}
+
+static void test_vm_page_size_is_runtime_value_and_thread_safe(void) {
+  br_atomic_bool start;
+  br_thread threads[TEST_VM_PAGE_SIZE_THREAD_COUNT];
+  test_vm_page_size_thread states[TEST_VM_PAGE_SIZE_THREAD_COUNT];
+  usize expected;
+
+  br_atomic_init(&start, false);
+  memset(states, 0, sizeof(states));
+  for (usize i = 0u; i < TEST_VM_PAGE_SIZE_THREAD_COUNT; ++i) {
+    states[i].start = &start;
+    assert(br_thread_create(&threads[i], test_vm_page_size_worker, &states[i]) == BR_STATUS_OK);
+  }
+
+  br_atomic_store_explicit(&start, true, BR_ATOMIC_RELEASE);
+  for (usize i = 0u; i < TEST_VM_PAGE_SIZE_THREAD_COUNT; ++i) {
+    assert(br_thread_join(&threads[i], NULL) == BR_STATUS_OK);
+  }
+
+  expected = states[0].result;
+  for (usize i = 1u; i < TEST_VM_PAGE_SIZE_THREAD_COUNT; ++i) {
+    assert(states[i].result == expected);
+  }
+  if (expected == 0u) {
+    return;
+  }
+
+#if !defined(_WIN32)
+  {
+    long runtime_page_size = sysconf(_SC_PAGESIZE);
+
+    assert(runtime_page_size > 0);
+    assert(expected == (usize)runtime_page_size);
+  }
+#endif
+}
+
 static void test_vm_reserve_commit_release(void) {
   br_vm_region_result region;
   usize page_size = br_vm_page_size();
@@ -113,6 +182,58 @@ static void test_virtual_arena_growing(void) {
   br_virtual_arena_reset(&arena);
   assert(arena.total_used == 0u);
   assert(arena.total_reserved == initial_reserved);
+
+  br_virtual_arena_destroy(&arena);
+}
+
+static void test_virtual_arena_resize_realigns_equal_and_shrunk_allocations(void) {
+  br_virtual_arena arena;
+  br_allocator allocator;
+  br_alloc_result prefix;
+  br_alloc_result original;
+  br_alloc_result equal;
+  br_alloc_result shrink_source;
+  br_alloc_result shrunk;
+  usize page_size = br_vm_page_size();
+
+  if (page_size == 0u) {
+    return;
+  }
+
+  br_virtual_arena_init(&arena);
+  arena.default_commit_size = page_size;
+  assert(br_virtual_arena_init_static(&arena, page_size * 2u, page_size) == BR_STATUS_OK);
+  allocator = br_virtual_arena_allocator(&arena);
+
+  prefix = br_allocator_alloc_uninit(allocator, 8u, 8u);
+  assert(prefix.status == BR_STATUS_OK);
+  do {
+    original = br_allocator_alloc_uninit(allocator, 16u, 8u);
+    assert(original.status == BR_STATUS_OK);
+  } while (((uptr)original.ptr % 64u) == 0u);
+  memset(original.ptr, 0x63, original.size);
+
+  equal = br_allocator_resize_uninit(allocator, original.ptr, original.size, original.size, 64u);
+  assert(equal.status == BR_STATUS_OK);
+  assert(equal.ptr != original.ptr);
+  assert(((uptr)equal.ptr % 64u) == 0u);
+  for (usize i = 0u; i < equal.size; ++i) {
+    assert(((u8 *)equal.ptr)[i] == 0x63u);
+  }
+
+  do {
+    shrink_source = br_allocator_alloc_uninit(allocator, 24u, 8u);
+    assert(shrink_source.status == BR_STATUS_OK);
+  } while (((uptr)shrink_source.ptr % 64u) == 0u);
+  memset(shrink_source.ptr, 0x74, shrink_source.size);
+
+  shrunk = br_allocator_resize_uninit(allocator, shrink_source.ptr, shrink_source.size, 8u, 64u);
+  assert(shrunk.status == BR_STATUS_OK);
+  assert(shrunk.ptr != shrink_source.ptr);
+  assert(((uptr)shrunk.ptr % 64u) == 0u);
+  for (usize i = 0u; i < shrunk.size; ++i) {
+    assert(((u8 *)shrunk.ptr)[i] == 0x74u);
+  }
 
   br_virtual_arena_destroy(&arena);
 }
@@ -509,9 +630,11 @@ static void test_virtual_arena_serializes_allocations(void) {
 }
 
 int main(void) {
+  test_vm_page_size_is_runtime_value_and_thread_safe();
   test_vm_reserve_commit_release();
   test_virtual_arena_static();
   test_virtual_arena_growing();
+  test_virtual_arena_resize_realigns_equal_and_shrunk_allocations();
   test_virtual_arena_temp_end();
   test_virtual_arena_temp_ignore();
   test_virtual_arena_temp_invalid();

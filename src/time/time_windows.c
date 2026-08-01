@@ -16,9 +16,45 @@
 #define BR__WINDOWS_EPOCH_OFFSET_100NS ((u64)116444736000000000ull)
 
 static i64 br__time_mul_div_i64(i64 value, i64 numerator, i64 denominator) {
-  i64 quotient = value / denominator;
-  i64 remainder = value % denominator;
-  return quotient * numerator + remainder * numerator / denominator;
+  i64 quotient;
+  i64 remainder;
+  i64 fractional;
+
+  if (value <= 0 || numerator <= 0 || denominator <= 0) {
+    return 0;
+  }
+  quotient = value / denominator;
+  remainder = value % denominator;
+  if (quotient > INT64_MAX / numerator) {
+    return INT64_MAX;
+  }
+
+  /*
+  The exact fractional result is smaller than numerator. Floating-point avoids
+  overflowing remainder*numerator on unusual high-frequency counters; any
+  rounding is confined to the sub-second remainder.
+  */
+  fractional = (i64)((f64)remainder * (f64)numerator / (f64)denominator);
+  if (quotient * numerator > INT64_MAX - fractional) {
+    return INT64_MAX;
+  }
+  return quotient * numerator + fractional;
+}
+
+static i64 br__time_filetime_to_nsec(u64 ticks_100ns) {
+  if (ticks_100ns >= BR__WINDOWS_EPOCH_OFFSET_100NS) {
+    u64 since_epoch = ticks_100ns - BR__WINDOWS_EPOCH_OFFSET_100NS;
+    if (since_epoch > (u64)INT64_MAX / 100u) {
+      return INT64_MAX;
+    }
+    return (i64)(since_epoch * 100u);
+  } else {
+    u64 before_epoch = BR__WINDOWS_EPOCH_OFFSET_100NS - ticks_100ns;
+    if (before_epoch > ((u64)INT64_MAX + 1u) / 100u) {
+      return INT64_MIN;
+    }
+    return -(i64)(before_epoch * 100u);
+  }
 }
 
 bool br_time_is_supported(void) {
@@ -34,16 +70,26 @@ br_time br_time_now(void) {
   ticks.LowPart = file_time.dwLowDateTime;
   ticks.HighPart = file_time.dwHighDateTime;
 
-  result.nsec = (i64)((ticks.QuadPart - BR__WINDOWS_EPOCH_OFFSET_100NS) * 100u);
+  result.nsec = br__time_filetime_to_nsec(ticks.QuadPart);
   return result;
 }
 
 void br_sleep(br_duration duration) {
-  if (duration <= 0) {
-    return;
-  }
+  const br_duration max_chunk_millis = (br_duration)INFINITE - 1;
+  const br_duration max_chunk = max_chunk_millis * BR_MILLISECOND;
 
-  Sleep((DWORD)(duration / BR_MILLISECOND));
+  while (duration > max_chunk) {
+    Sleep((DWORD)max_chunk_millis);
+    duration -= max_chunk;
+  }
+  if (duration > 0) {
+    br_duration millis = duration / BR_MILLISECOND;
+
+    if (duration % BR_MILLISECOND != 0) {
+      millis += 1;
+    }
+    Sleep((DWORD)millis);
+  }
 }
 
 br_tick br_tick_now(void) {

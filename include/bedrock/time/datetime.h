@@ -92,12 +92,16 @@ br_datetime_result br_datetime_from_components(
 
 /*
 Add a (possibly unnormalized) delta to a datetime, returning a normalized,
-re-validated result.
+re-validated result. Invalid input datetimes return BR_STATUS_INVALID_ARGUMENT;
+a result outside the datetime range returns BR_STATUS_OUT_OF_RANGE.
 */
 br_datetime_result br_datetime_add_delta(br_datetime dt, br_delta delta);
 
 /*
-Return `a - b` as a normalized delta.
+Return `a - b` as a normalized delta, with seconds in 0..86399 and nanos in
+0..999999999. If the normalized day count is not representable, the result
+saturates to {INT64_MIN, 0, 0} or
+{INT64_MAX, 86399, 999999999}. Invalid input datetimes produce a zero delta.
 */
 br_delta br_datetime_subtract(br_datetime a, br_datetime b);
 
@@ -111,7 +115,8 @@ Bridge a civil datetime to a Unix-nanosecond instant, treating it as UTC.
 `br_time` holds int64 nanoseconds since 1970, spanning civil years ~1677..2262
 only, while a datetime spans far more — so this direction can fail: a datetime
 outside the representable window returns BR_STATUS_OUT_OF_RANGE (via an
-overflow-safe check, never a silent wrap).
+overflow-safe check, never a silent wrap). An invalid caller-built datetime
+returns BR_STATUS_INVALID_ARGUMENT.
 */
 br_time_result br_datetime_to_time(br_datetime dt);
 

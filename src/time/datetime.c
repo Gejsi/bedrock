@@ -221,40 +221,149 @@ static i64 br__tod_seconds(br_time_of_day t) {
 #define BR__SECONDS_PER_DAY 86400ll
 #define BR__NANOS_PER_SEC 1000000000ll
 
+typedef enum br__sum_result {
+  BR__SUM_TOO_LOW = -1,
+  BR__SUM_OK = 0,
+  BR__SUM_TOO_HIGH = 1,
+} br__sum_result;
+
+static u64 br__i64_magnitude(i64 value) {
+  if (value >= 0) {
+    return (u64)value;
+  }
+  return (u64)(-(value + 1)) + 1u;
+}
+
+/*
+Sum signed terms without a signed intermediate. The datetime bounds guarantee
+the positive and negative accumulators themselves fit in uint64.
+*/
+static br__sum_result br__sum_i64(const i64 *terms, usize count, i64 *out) {
+  u64 positive = 0u;
+  u64 negative = 0u;
+  usize i;
+
+  for (i = 0u; i < count; ++i) {
+    u64 magnitude = br__i64_magnitude(terms[i]);
+    u64 *accumulator = terms[i] < 0 ? &negative : &positive;
+
+    if (*accumulator > UINT64_MAX - magnitude) {
+      return terms[i] < 0 ? BR__SUM_TOO_LOW : BR__SUM_TOO_HIGH;
+    }
+    *accumulator += magnitude;
+  }
+
+  if (positive >= negative) {
+    u64 magnitude = positive - negative;
+    if (magnitude > (u64)INT64_MAX) {
+      return BR__SUM_TOO_HIGH;
+    }
+    *out = (i64)magnitude;
+  } else {
+    u64 magnitude = negative - positive;
+    if (magnitude > (u64)INT64_MAX + 1u) {
+      return BR__SUM_TOO_LOW;
+    }
+    *out = magnitude == (u64)INT64_MAX + 1u ? INT64_MIN : -(i64)magnitude;
+  }
+  return BR__SUM_OK;
+}
+
+static br_datetime_result br__datetime_error(br_status status) {
+  br_datetime zero;
+  memset(&zero, 0, sizeof(zero));
+  return br__datetime_result(zero, status);
+}
+
 br_datetime_result br_datetime_add_delta(br_datetime dt, br_delta delta) {
-  br_ordinal ord = br_date_to_ordinal(dt.date);
-  i64 seconds = br__tod_seconds(dt.time) + delta.seconds;
-  i64 nanos = (i64)dt.time.nano + delta.nanos;
-  i64 days = ord + delta.days;
-  i64 carry;
-  br_date date;
+  i64 delta_second_days;
+  i64 delta_seconds;
+  i64 nano_seconds;
+  i64 nanos;
+  i64 nano_days;
+  i64 nano_remainder_seconds;
+  i64 seconds;
+  i64 carry_days;
+  i64 days;
+  i64 day_terms[5];
+  br__sum_result sum_status;
   br_datetime out;
 
-  /* Normalize nanos into seconds (floored, so negative deltas borrow). */
-  carry = br__floor_div(nanos, BR__NANOS_PER_SEC);
-  nanos -= carry * BR__NANOS_PER_SEC;
-  seconds += carry;
+  if (br_datetime_validate(dt) != BR_STATUS_OK) {
+    return br__datetime_error(BR_STATUS_INVALID_ARGUMENT);
+  }
 
-  /* Normalize seconds into days. */
-  carry = br__floor_div(seconds, BR__SECONDS_PER_DAY);
-  seconds -= carry * BR__SECONDS_PER_DAY;
-  days += carry;
+  /*
+  Normalize each unbounded delta field before combining it with another. This
+  avoids transient overflow for values such as INT64_MAX seconds plus a
+  nanosecond carry.
+  */
+  br__divmod(delta.nanos, BR__NANOS_PER_SEC, &nano_seconds, &nanos);
+  nanos += (i64)dt.time.nano;
+  if (nanos >= BR__NANOS_PER_SEC) {
+    nanos -= BR__NANOS_PER_SEC;
+    nano_seconds += 1;
+  }
 
-  date = br_ordinal_to_date((br_ordinal)days);
-  out.date = date;
+  br__divmod(delta.seconds, BR__SECONDS_PER_DAY, &delta_second_days, &delta_seconds);
+  br__divmod(nano_seconds, BR__SECONDS_PER_DAY, &nano_days, &nano_remainder_seconds);
+
+  seconds = br__tod_seconds(dt.time) + delta_seconds + nano_remainder_seconds;
+  carry_days = seconds / BR__SECONDS_PER_DAY;
+  seconds %= BR__SECONDS_PER_DAY;
+
+  day_terms[0] = br_date_to_ordinal(dt.date);
+  day_terms[1] = delta.days;
+  day_terms[2] = delta_second_days;
+  day_terms[3] = nano_days;
+  day_terms[4] = carry_days;
+  sum_status = br__sum_i64(day_terms, BR_ARRAY_COUNT(day_terms), &days);
+  if (sum_status != BR__SUM_OK || days < BR_ORDINAL_MIN || days > BR_ORDINAL_MAX) {
+    return br__datetime_error(BR_STATUS_OUT_OF_RANGE);
+  }
+
+  out.date = br_ordinal_to_date((br_ordinal)days);
   out.time.hour = (int8_t)(seconds / 3600);
   out.time.minute = (int8_t)((seconds / 60) % 60);
   out.time.second = (int8_t)(seconds % 60);
   out.time.nano = (int32_t)nanos;
 
-  return br__datetime_result(out, br_datetime_validate(out));
+  return br__datetime_result(out, BR_STATUS_OK);
 }
 
 br_delta br_datetime_subtract(br_datetime a, br_datetime b) {
-  br_delta delta;
-  delta.days = (i64)br_date_to_ordinal(a.date) - (i64)br_date_to_ordinal(b.date);
-  delta.seconds = br__tod_seconds(a.time) - br__tod_seconds(b.time);
+  br_delta delta = {0, 0, 0};
+  i64 day_terms[3];
+  i64 carry_days;
+  br__sum_result sum_status;
+
+  if (br_datetime_validate(a) != BR_STATUS_OK || br_datetime_validate(b) != BR_STATUS_OK) {
+    return delta;
+  }
+
   delta.nanos = (i64)a.time.nano - (i64)b.time.nano;
+  delta.seconds = br__tod_seconds(a.time) - br__tod_seconds(b.time);
+  if (delta.nanos < 0) {
+    delta.nanos += BR__NANOS_PER_SEC;
+    delta.seconds -= 1;
+  }
+
+  carry_days = br__floor_div(delta.seconds, BR__SECONDS_PER_DAY);
+  delta.seconds = br__floor_mod(delta.seconds, BR__SECONDS_PER_DAY);
+
+  day_terms[0] = br_date_to_ordinal(a.date);
+  day_terms[1] = -br_date_to_ordinal(b.date);
+  day_terms[2] = carry_days;
+  sum_status = br__sum_i64(day_terms, BR_ARRAY_COUNT(day_terms), &delta.days);
+  if (sum_status == BR__SUM_TOO_HIGH) {
+    delta.days = INT64_MAX;
+    delta.seconds = BR__SECONDS_PER_DAY - 1;
+    delta.nanos = BR__NANOS_PER_SEC - 1;
+  } else if (sum_status == BR__SUM_TOO_LOW) {
+    delta.days = INT64_MIN;
+    delta.seconds = 0;
+    delta.nanos = 0;
+  }
   return delta;
 }
 
@@ -277,10 +386,17 @@ static br_time_result br__time_result(i64 nsec, br_status status) {
 }
 
 br_time_result br_datetime_to_time(br_datetime dt) {
-  br_ordinal ord = br_date_to_ordinal(dt.date);
-  i64 days = (i64)ord - (i64)br__unix_epoch_ordinal();
+  br_ordinal ord;
+  i64 days;
   i64 seconds;
   i64 nsec;
+
+  if (br_datetime_validate(dt) != BR_STATUS_OK) {
+    return br__time_result(0, BR_STATUS_INVALID_ARGUMENT);
+  }
+
+  ord = br_date_to_ordinal(dt.date);
+  days = (i64)ord - (i64)br__unix_epoch_ordinal();
 
   /* Overflow-safe: bound each step against the i64 limits BEFORE performing it,
      so a datetime beyond br_time's ~1677..2262 window returns OUT_OF_RANGE
@@ -294,10 +410,16 @@ br_time_result br_datetime_to_time(br_datetime dt) {
 
   /* days*SECONDS_PER_DAY, leaving room for + seconds. */
   if (days > br__floor_div(INT64_MAX - seconds, BR__SECONDS_PER_DAY) ||
-      days < br__floor_div(INT64_MIN, BR__SECONDS_PER_DAY)) {
+      days < br__floor_div(INT64_MIN, BR__SECONDS_PER_DAY) ||
+      (days == br__floor_div(INT64_MIN, BR__SECONDS_PER_DAY) &&
+       seconds < br__floor_mod(INT64_MIN, BR__SECONDS_PER_DAY))) {
     return br__time_result(0, BR_STATUS_OUT_OF_RANGE);
   }
-  seconds += days * BR__SECONDS_PER_DAY;
+  if (days >= 0) {
+    seconds += days * BR__SECONDS_PER_DAY;
+  } else {
+    seconds = (days + 1) * BR__SECONDS_PER_DAY - (BR__SECONDS_PER_DAY - seconds);
+  }
 
   /* seconds*NANOS_PER_SEC + nano must land within [INT64_MIN, INT64_MAX]. The
      upper bound divides the headroom (INT64_MAX - nano). The lower bound cannot

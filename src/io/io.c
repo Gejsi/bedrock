@@ -344,35 +344,46 @@ br_status br_write_byte(br_stream stream, u8 value) {
 
 br_io_rune_result br_read_rune(br_stream stream) {
   u8 buffer[BR_UTF8_MAX];
-  br_io_byte_result first;
-  br_io_result tail;
+  br_io_result first;
   br_utf8_decode_result decoded;
   usize expected;
   usize total;
-  br_status status;
 
-  first = br_read_byte(stream);
-  if (first.status != BR_STATUS_OK) {
+  first = br_read(stream, buffer, 1u);
+  if (first.count == 0u) {
+    if (first.status == BR_STATUS_OK) {
+      return br_io_rune_result_make(0, 0u, BR_STATUS_NO_PROGRESS);
+    }
     return br_io_rune_result_make(0, 0u, first.status);
   }
-  if (first.value < (u8)BR_RUNE_SELF) {
-    return br_io_rune_result_make((br_rune)first.value, 1u, BR_STATUS_OK);
+  if (buffer[0] < (u8)BR_RUNE_SELF) {
+    return br_io_rune_result_make((br_rune)buffer[0], 1u, first.status);
   }
 
-  buffer[0] = first.value;
-  expected = br__utf8_expected_width(first.value);
+  expected = br__utf8_expected_width(buffer[0]);
   if (expected == 1u) {
-    return br_io_rune_result_make(BR_RUNE_ERROR, 1u, BR_STATUS_OK);
+    return br_io_rune_result_make(BR_RUNE_ERROR, 1u, first.status);
+  }
+  if (first.status != BR_STATUS_OK) {
+    return br_io_rune_result_make(BR_RUNE_ERROR, 1u, first.status);
   }
 
-  tail = br_read(stream, buffer + 1u, expected - 1u);
-  total = 1u + tail.count;
-  if (tail.count + 1u < expected) {
-    status = tail.status != BR_STATUS_OK ? tail.status : BR_STATUS_EOF;
-    return br_io_rune_result_make(BR_RUNE_ERROR, total, status);
-  }
-  if (tail.status != BR_STATUS_OK) {
-    return br_io_rune_result_make(BR_RUNE_ERROR, total, tail.status);
+  total = 1u;
+  while (total < expected) {
+    br_io_result tail;
+
+    tail = br_read(stream, buffer + total, expected - total);
+    total += tail.count;
+    if (tail.status != BR_STATUS_OK) {
+      if (total == expected) {
+        decoded = br_utf8_decode(br_bytes_view_make(buffer, total));
+        return br_io_rune_result_make(decoded.value, total, tail.status);
+      }
+      return br_io_rune_result_make(BR_RUNE_ERROR, total, tail.status);
+    }
+    if (tail.count == 0u) {
+      return br_io_rune_result_make(BR_RUNE_ERROR, total, BR_STATUS_NO_PROGRESS);
+    }
   }
 
   decoded = br_utf8_decode(br_bytes_view_make(buffer, total));

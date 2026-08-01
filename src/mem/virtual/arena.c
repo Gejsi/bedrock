@@ -455,6 +455,8 @@ static br_alloc_result br__virtual_arena_alloc_internal(br_virtual_arena *arena,
 static br_alloc_result br__virtual_arena_allocator_fn_unlocked(br_virtual_arena *arena,
                                                                const br_alloc_request *req) {
   br_alloc_result result;
+  usize alignment;
+  bool ptr_is_aligned;
 
   if (req == NULL) {
     return br__virtual_arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
@@ -474,10 +476,14 @@ static br_alloc_result br__virtual_arena_allocator_fn_unlocked(br_virtual_arena 
       if (req->old_size == 0u) {
         return br__virtual_arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
       }
-      if (req->size == req->old_size) {
-        return br__virtual_arena_result(req->ptr, req->size, BR_STATUS_OK);
+      if (req->size == 0u) {
+        return br__virtual_arena_result(NULL, 0u, BR_STATUS_OK);
       }
-      if (req->size < req->old_size) {
+      if (br__vm_arena_normalize_alignment(req->alignment, 1u, &alignment) != BR_STATUS_OK) {
+        return br__virtual_arena_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+      }
+      ptr_is_aligned = ((uptr)req->ptr & (uptr)(alignment - 1u)) == 0u;
+      if (req->size <= req->old_size && ptr_is_aligned) {
         return br__virtual_arena_result(req->ptr, req->size, BR_STATUS_OK);
       }
 
@@ -486,16 +492,18 @@ static br_alloc_result br__virtual_arena_allocator_fn_unlocked(br_virtual_arena 
       still fall back to allocate-and-copy because the C allocator ABI does not
       track ownership metadata for arbitrary old pointers.
       */
-      if (arena != NULL && arena->curr_block != NULL) {
+      if (ptr_is_aligned && arena != NULL && arena->curr_block != NULL) {
         br_virtual_arena_block *block = arena->curr_block;
         u8 *ptr = (u8 *)req->ptr;
+        uptr base_address = (uptr)(void *)block->base;
+        uptr ptr_address = (uptr)req->ptr;
         usize start;
         usize old_end;
         usize extra;
         br_status status;
 
-        if (ptr >= block->base && ptr <= block->base + block->used) {
-          start = (usize)(ptr - block->base);
+        if (ptr_address >= base_address && ptr_address - base_address <= block->used) {
+          start = (usize)(ptr_address - base_address);
           if (req->old_size <= block->reserved - start) {
             old_end = start + req->old_size;
             if (old_end == block->used) {

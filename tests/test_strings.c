@@ -405,8 +405,12 @@ static void test_strings_prefix(void) {
   /* Common prefix stops at a whole-rune boundary; the shared "té" is 3 bytes. */
   static const u8 a[] = {'t', 0xc3u, 0xa9u, 'a'};
   static const u8 b[] = {'t', 0xc3u, 0xa9u, 'b'};
+  static const u8 malformed[] = {'a', 0xc3u};
+  static const u8 valid[] = {'a', 0xc3u, 0xa9u};
   br_string_view va = br_string_view_make(a, BR_ARRAY_COUNT(a));
   br_string_view vb = br_string_view_make(b, BR_ARRAY_COUNT(b));
+  br_string_view malformed_view = br_string_view_make(malformed, BR_ARRAY_COUNT(malformed));
+  br_string_view valid_view = br_string_view_make(valid, BR_ARRAY_COUNT(valid));
 
   assert(br_string_prefix_length(BR_STR_LIT("testing"), BR_STR_LIT("test")) == 4u);
   assert(br_string_prefix_length(BR_STR_LIT("telephone"), BR_STR_LIT("te")) == 2u);
@@ -417,6 +421,13 @@ static void test_strings_prefix(void) {
   /* A rune that shares its lead byte but differs later must not partially match. */
   assert(br_string_prefix_length(va, vb) == 3u);
   assert(br_string_equal(br_string_common_prefix(va, vb), br_string_view_make(a, 3u)));
+
+  /* A malformed trailing lead byte must not match part of a valid rune, and
+     reversing the operands must not change the prefix length. */
+  assert(br_string_prefix_length(malformed_view, valid_view) == 1u);
+  assert(br_string_prefix_length(valid_view, malformed_view) == 1u);
+  assert(br_string_common_prefix(malformed_view, valid_view).len == 1u);
+  assert(br_string_common_prefix(valid_view, malformed_view).len == 1u);
 }
 
 static void assert_string_split_iter_matches_list(br_string_view s, br_string_view sep) {

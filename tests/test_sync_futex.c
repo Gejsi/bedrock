@@ -2,6 +2,8 @@
 
 #include <bedrock.h>
 
+#include "../src/sync/primitives_atomic_internal.h"
+
 #if BR_SYNC_HAS_FUTEX
 
 static void spin_until_bool(const br_atomic_bool *value, bool expected) {
@@ -27,6 +29,14 @@ typedef struct sema_wait_state {
   br_atomic_i32 *waiting_count;
   br_atomic_i32 *done_count;
 } sema_wait_state;
+
+typedef struct sema_cas_timeout_state {
+  br_atomic_sema *sema;
+  br_atomic_bool before_cas;
+  br_atomic_bool allow_cas;
+  br_atomic_i32 wait_count;
+  bool acquired;
+} sema_cas_timeout_state;
 
 typedef struct atomic_cond_wait_state {
   br_atomic_cond *cond;
@@ -81,6 +91,30 @@ static int sema_wait_worker(void *ctx) {
   br_atomic_add_explicit(state->waiting_count, 1, BR_ATOMIC_RELEASE);
   br_atomic_sema_wait(state->sema);
   br_atomic_add_explicit(state->done_count, 1, BR_ATOMIC_RELEASE);
+  return 0;
+}
+
+static void sema_cas_timeout_before_cas(void *ctx) {
+  sema_cas_timeout_state *state = (sema_cas_timeout_state *)ctx;
+
+  br_atomic_store_explicit(&state->before_cas, true, BR_ATOMIC_RELEASE);
+  spin_until_bool(&state->allow_cas, true);
+}
+
+static void sema_cas_timeout_before_wait(void *ctx) {
+  sema_cas_timeout_state *state = (sema_cas_timeout_state *)ctx;
+
+  br_atomic_add_explicit(&state->wait_count, 1, BR_ATOMIC_RELAXED);
+}
+
+static int sema_cas_timeout_worker(void *ctx) {
+  sema_cas_timeout_state *state = (sema_cas_timeout_state *)ctx;
+
+  state->acquired = br__atomic_sema_wait_with_timeout_hooked(state->sema,
+                                                             20 * BR_MILLISECOND,
+                                                             sema_cas_timeout_before_wait,
+                                                             sema_cas_timeout_before_cas,
+                                                             state);
   return 0;
 }
 
@@ -237,6 +271,33 @@ static void test_atomic_sema_wait_with_timeout(void) {
   assert(!br_atomic_sema_wait_with_timeout(&sema, 1 * BR_MILLISECOND));
 }
 
+static void test_atomic_sema_timeout_deadline_survives_contention(void) {
+  br_atomic_sema sema = BR_ATOMIC_SEMA_INIT(1u);
+  sema_cas_timeout_state state;
+  br_thread thread;
+
+  state.sema = &sema;
+  state.acquired = true;
+  br_atomic_init(&state.before_cas, false);
+  br_atomic_init(&state.allow_cas, false);
+  br_atomic_init(&state.wait_count, 0);
+
+  assert(br_thread_create(&thread, sema_cas_timeout_worker, &state) == BR_STATUS_OK);
+  spin_until_bool(&state.before_cas, true);
+
+  /* Consume the permit observed by the timed waiter, then hold its CAS until
+     the original deadline has passed. The CAS must fail, and the next retry
+     must use that same deadline instead of starting a fresh timeout. */
+  br_atomic_sema_wait(&sema);
+  br_sleep(30 * BR_MILLISECOND);
+  br_atomic_store_explicit(&state.allow_cas, true, BR_ATOMIC_RELEASE);
+
+  assert(br_thread_join(&thread, NULL) == BR_STATUS_OK);
+  assert(!state.acquired);
+  assert(br_atomic_load_explicit(&state.wait_count, BR_ATOMIC_RELAXED) == 0);
+  assert(br_atomic_load_explicit(&sema.count, BR_ATOMIC_RELAXED) == 0u);
+}
+
 static void test_atomic_sema_post_many(void) {
   enum { THREAD_COUNT = 3 };
   br_atomic_sema sema;
@@ -264,6 +325,15 @@ static void test_atomic_sema_post_many(void) {
     assert(br_thread_join(&threads[(usize)i], NULL) == BR_STATUS_OK);
   }
   assert(br_atomic_load_explicit(&done_count, BR_ATOMIC_ACQUIRE) == THREAD_COUNT);
+}
+
+static void test_atomic_sema_saturates(void) {
+  br_atomic_sema sema = BR_ATOMIC_SEMA_INIT(UINT32_MAX);
+
+  br_atomic_sema_post(&sema, 1u);
+  assert(br_atomic_load_explicit(&sema.count, BR_ATOMIC_RELAXED) == UINT32_MAX);
+  br_atomic_sema_wait(&sema);
+  assert(br_atomic_load_explicit(&sema.count, BR_ATOMIC_RELAXED) == UINT32_MAX - 1u);
 }
 
 static void test_atomic_cond_signal(void) {
@@ -502,7 +572,9 @@ int main(void) {
   test_atomic_cond_wait_with_timeout();
   test_atomic_sema_wait_post_one();
   test_atomic_sema_wait_with_timeout();
+  test_atomic_sema_timeout_deadline_survives_contention();
   test_atomic_sema_post_many();
+  test_atomic_sema_saturates();
 #endif
   return 0;
 }

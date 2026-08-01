@@ -93,6 +93,26 @@ static void test_byte_reader_seek_semantics(void) {
   seek_result = br_byte_reader_seek(&reader, -10, BR_SEEK_FROM_CURRENT);
   assert(seek_result.status == BR_STATUS_INVALID_ARGUMENT);
 
+  seek_result = br_byte_reader_seek(&reader, INT64_MAX, BR_SEEK_FROM_START);
+  assert(seek_result.status == BR_STATUS_OK);
+  assert(seek_result.offset == INT64_MAX);
+  seek_result = br_byte_reader_seek(&reader, 1, BR_SEEK_FROM_CURRENT);
+  assert(seek_result.status == BR_STATUS_INVALID_ARGUMENT);
+  seek_result = br_byte_reader_seek(&reader, 0, BR_SEEK_FROM_CURRENT);
+  assert(seek_result.status == BR_STATUS_OK);
+  assert(seek_result.offset == INT64_MAX);
+
+  seek_result = br_byte_reader_seek(&reader, INT64_MAX, BR_SEEK_FROM_END);
+  assert(seek_result.status == BR_STATUS_INVALID_ARGUMENT);
+
+  seek_result = br_byte_reader_seek(&reader, 1, BR_SEEK_FROM_START);
+  assert(seek_result.status == BR_STATUS_OK);
+  seek_result = br_byte_reader_seek(&reader, INT64_MIN, BR_SEEK_FROM_CURRENT);
+  assert(seek_result.status == BR_STATUS_INVALID_ARGUMENT);
+  seek_result = br_byte_reader_seek(&reader, 0, BR_SEEK_FROM_CURRENT);
+  assert(seek_result.status == BR_STATUS_OK);
+  assert(seek_result.offset == 1);
+
   seek_result = br_byte_reader_seek(&reader, 0, (br_seek_from)99);
   assert(seek_result.status == BR_STATUS_INVALID_ARGUMENT);
 }

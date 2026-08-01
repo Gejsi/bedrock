@@ -30,21 +30,37 @@ void br_wait_group_destroy(br_wait_group *wg) {
   br_mutex_destroy(&wg->mutex);
 }
 
-void br_wait_group_add(br_wait_group *wg, i32 delta) {
-  if (wg == NULL || delta == 0) {
-    return;
+br_status br_wait_group_add(br_wait_group *wg, i32 delta) {
+  br_status status = BR_STATUS_OK;
+
+  if (wg == NULL) {
+    return BR_STATUS_INVALID_ARGUMENT;
+  }
+  if (delta == 0) {
+    return BR_STATUS_OK;
   }
 
   br_mutex_lock(&wg->mutex);
-  wg->counter += delta;
-  if (wg->counter == 0) {
-    br_cond_broadcast(&wg->cond);
+  {
+    i64 next = (i64)wg->counter + (i64)delta;
+
+    if (wg->counter < 0 || next < 0) {
+      status = BR_STATUS_INVALID_STATE;
+    } else if (next > INT32_MAX) {
+      status = BR_STATUS_OUT_OF_RANGE;
+    } else {
+      wg->counter = (i32)next;
+      if (wg->counter == 0) {
+        br_cond_broadcast(&wg->cond);
+      }
+    }
   }
   br_mutex_unlock(&wg->mutex);
+  return status;
 }
 
-void br_wait_group_done(br_wait_group *wg) {
-  br_wait_group_add(wg, -1);
+br_status br_wait_group_done(br_wait_group *wg) {
+  return br_wait_group_add(wg, -1);
 }
 
 void br_wait_group_wait(br_wait_group *wg) {
@@ -70,11 +86,14 @@ bool br_wait_group_wait_with_timeout(br_wait_group *wg, br_duration duration) {
   start = br_tick_now();
   br_mutex_lock(&wg->mutex);
   while (wg->counter != 0) {
-    br_duration remaining = duration - br_tick_since(start);
-    if (remaining < 0) {
+    br_duration elapsed = br_tick_since(start);
+    br_duration remaining;
+
+    if (elapsed >= duration) {
       ok = false;
       break;
     }
+    remaining = elapsed <= 0 ? duration : duration - elapsed;
 
     /*
     Odin currently passes the full duration to every condition wait iteration.
@@ -335,7 +354,13 @@ bool br_parker_park_with_timeout(br_parker *parker, br_duration duration) {
       return true;
     }
 
-    remaining = duration - br_tick_since(start);
+    {
+      br_duration elapsed = br_tick_since(start);
+      if (elapsed >= duration) {
+        return br__parker_finish_timeout(parker);
+      }
+      remaining = elapsed <= 0 ? duration : duration - elapsed;
+    }
     if (remaining <= 0) {
       return br__parker_finish_timeout(parker);
     }

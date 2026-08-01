@@ -52,6 +52,10 @@ Example direction:
 #include <bedrock/template/vec.h>
 ```
 
+`vec.h` includes its own Bedrock allocator dependencies, so this documented
+form is self-contained; callers only need to define the element type and
+generated type name.
+
 This should generate things like:
 
 - `foo_vec`

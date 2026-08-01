@@ -18,6 +18,23 @@ static br_ileb128_result br__ileb128_result(i64 value, usize size, br_status sta
   return r;
 }
 
+static u64 br__ileb128_shift_right(u64 bits) {
+  u64 sign_fill = (bits & ((u64)1u << 63)) != 0u ? ~(u64)0u << 57 : 0u;
+  return (bits >> 7) | sign_fill;
+}
+
+static i64 br__ileb128_signed_value(u64 bits) {
+  u64 sign = (u64)1u << 63;
+
+  if ((bits & sign) == 0u) {
+    return (i64)bits;
+  }
+  if (bits == sign) {
+    return INT64_MIN;
+  }
+  return -(i64)(~bits + 1u);
+}
+
 size_t br_uleb128_encoded_len(uint64_t value) {
   usize n = 1u;
 
@@ -30,14 +47,15 @@ size_t br_uleb128_encoded_len(uint64_t value) {
 
 size_t br_ileb128_encoded_len(int64_t value) {
   /* Walk the same termination rule the encoder uses, without writing bytes. */
+  u64 bits = (u64)value;
   usize n = 0u;
   bool more = true;
 
   while (more) {
-    u8 byte = (u8)(value & 0x7Fu);
-    value >>= 7; /* arithmetic shift preserves the sign */
+    u8 byte = (u8)(bits & 0x7Fu);
+    bits = br__ileb128_shift_right(bits);
     n += 1u;
-    if ((value == 0 && (byte & 0x40u) == 0u) || (value == -1 && (byte & 0x40u) != 0u)) {
+    if ((bits == 0u && (byte & 0x40u) == 0u) || (bits == UINT64_MAX && (byte & 0x40u) != 0u)) {
       more = false;
     }
   }
@@ -67,13 +85,14 @@ br_io_result br_uleb128_encode(uint64_t value, uint8_t *dst, size_t dst_cap) {
 
 br_io_result br_ileb128_encode(int64_t value, uint8_t *dst, size_t dst_cap) {
   u8 tmp[BR_LEB128_MAX_BYTES];
+  u64 bits = (u64)value;
   usize n = 0u;
   bool more = true;
 
   while (more) {
-    u8 byte = (u8)(value & 0x7Fu);
-    value >>= 7; /* arithmetic shift preserves the sign */
-    if ((value == 0 && (byte & 0x40u) == 0u) || (value == -1 && (byte & 0x40u) != 0u)) {
+    u8 byte = (u8)(bits & 0x7Fu);
+    bits = br__ileb128_shift_right(bits);
+    if ((bits == 0u && (byte & 0x40u) == 0u) || (bits == UINT64_MAX && (byte & 0x40u) != 0u)) {
       more = false;
     } else {
       byte |= 0x80u;
@@ -150,7 +169,7 @@ br_ileb128_result br_ileb128_decode(br_bytes_view src) {
       if (shift + 7u < 64u && (byte & 0x40u) != 0u) {
         value |= ~(u64)0u << (shift + 7u);
       }
-      return br__ileb128_result((i64)value, i, BR_STATUS_OK);
+      return br__ileb128_result(br__ileb128_signed_value(value), i, BR_STATUS_OK);
     }
   }
 

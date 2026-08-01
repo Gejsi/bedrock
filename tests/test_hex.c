@@ -207,11 +207,12 @@ static void test_hex_decode_into(void) {
   assert(odd.error_offset == 2u);
   assert(odd.count == 0u);
 
-  /* Bad byte: count 0, offset locates the fault. */
+  /* The first byte is committed before the bad pair; count reports it. */
   bad = br_hex_decode_into(BR_BYTES_LIT("00zz"), dst, sizeof(dst));
   assert(bad.status == BR_STATUS_INVALID_ENCODING);
   assert(bad.error_offset == 2u);
-  assert(bad.count == 0u);
+  assert(bad.count == 1u);
+  assert(dst[0] == 0u);
 
   /* NULL destination with required output is caller misuse. */
   null_dst = br_hex_decode_into(BR_BYTES_LIT("00"), NULL, 4u);

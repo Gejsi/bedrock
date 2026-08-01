@@ -104,7 +104,7 @@ compile only the `src/` subdirectories you need plus their dependencies:
 | `thread` | `sync` |
 | `bytes` + `unicode` (compile together) | `mem`, `io` |
 | `io` | `unicode` |
-| `strings` | `unicode`, `io`, `mem` |
+| `strings` | `unicode`, `io`, `mem`, `strconv` |
 | `bufio` | `bytes`, `io`, `mem`, `strings` |
 | `strconv` | `strings`, `bytes` |
 | `rand` | `math` |
