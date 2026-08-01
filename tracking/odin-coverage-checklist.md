@@ -256,7 +256,7 @@ Summary:
 
 ## `core/os`
 
-Current label: `file slice complete`
+Current label: `file and standard-stream slices complete`
 
 Why this label:
 - The landed surface is a complete cross-platform file-handle workflow rather
@@ -269,12 +269,20 @@ Why this label:
 Current Bedrock files:
 - `include/bedrock/os.h`
 - `include/bedrock/os/file.h`
+- `include/bedrock/os/standard_streams.h`
+- `src/os/error_posix.c`
+- `src/os/error_windows.c`
 - `src/os/file.c`
 - `src/os/file_posix.c`
 - `src/os/file_windows.c`
+- `src/os/standard_streams.c`
+- `src/os/standard_streams_posix.c`
+- `src/os/standard_streams_windows.c`
 - `tests/test_os_file.c`
+- `tests/test_os_standard_streams.c`
 - `spec/modules/os.md`
 - `decisions/ADR-0007-os-errors-and-files.md`
+- `decisions/ADR-0008-borrowed-standard-streams.md`
 
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
@@ -288,7 +296,7 @@ Current Bedrock files:
 | generic stream adaptation | `done` | `src/os/file.c` | Borrowed stream exposes only access-compatible read/write modes plus seek, size, close, destroy, and query. Raw files deliberately do not advertise flush. |
 | file metadata beyond size / exists | `planned` | none | Separate contract needed for portable metadata and symlink behavior. |
 | remove / rename | `planned` | none | Deferred with the broader path-operation slice. |
-| standard streams | `planned` | none | Requires borrowed-native-handle ownership rules. |
+| standard streams | `adapted` | `os/standard_streams.h`, `src/os/standard_streams*.c` | Borrowed, unbuffered byte streams; current native handles are resolved per operation, close is unsupported, and destroy is harmless. Windows terminal text transcoding is intentionally left to a future explicit adapter. |
 | environment | `planned` | none | Get/set/enumeration remain a separate ownership and encoding slice. |
 | process arguments | `planned` | none | Explicit `argc`/`argv` capture versus platform scraping remains undecided. |
 | directory iteration | `planned` | none | Deferred until file and path-operation contracts settle. |

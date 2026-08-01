@@ -263,8 +263,8 @@ outcome.
   prefixes; `'`/`$` excluded; positional args out.
 - `int64_t`/`uint64_t` use `PRId64`/`PRIu64` (the width trap); byte-measured
   widths; `%X` via internal strconv digit-case param; `%p` Bedrock-defined.
-- No writer/stdout sink until os (`br_fprintf`/`br_eprintf` deferred; the stderr
-  convenience cut on maintainer review).
+- `br_stdout` and `br_stderr` now provide writer sinks; formatted writer
+  functions remain deferred with this module.
 
 ## Testing
 

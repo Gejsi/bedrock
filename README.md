@@ -78,6 +78,7 @@ bedrock does not promise a stable ABI across versions.
 | `strings` / `bytes` | views vs owned data, search/split/trim/case/fields, builders (with number writing), readers, allocation-free iterators, C-string interop (`clone_to_cstr`, `BR_SV_FMT` / `BR_SV_ARG`) |
 | `unicode` | strict UTF-8 encode/decode/validate, rune counting; lossless WTF-8 ↔ WTF-16 transcode for OS strings |
 | `io` / `bufio` | generic stream interface, buffered readers and writers |
+| `os` | native files plus borrowed, redirection-aware standard byte streams |
 | `sync` | futex-backed mutexes, rw/recursive locks, condvars, semaphores, wait groups, barriers, once, parker — all zero-value ready |
 | `thread` | create/join/detach/yield over OS threads; double-join, self-join, and detach misuse return status codes instead of undefined behavior |
 | `time` | monotonic ticks, sleep, durations; civil dates and RFC 3339 timestamps with an overflow-safe epoch bridge |
@@ -107,6 +108,7 @@ compile only the `src/` subdirectories you need plus their dependencies:
 | `io` | `unicode` |
 | `strings` | `unicode`, `io`, `mem`, `strconv` |
 | `bufio` | `bytes`, `io`, `mem`, `strings` |
+| `os` | `io`, `mem`, `unicode` |
 | `strconv` | `strings`, `bytes` |
 | `rand` | `math` |
 | `encoding` | `bytes`, `io` |

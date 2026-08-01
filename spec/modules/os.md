@@ -2,9 +2,9 @@
 
 ## Scope
 
-The landed OS foundation is native file handles adapted to `br_stream`.
-Directory operations, metadata, environment, arguments, standard streams, and
-processes remain separate work.
+The landed OS foundation is native file handles and borrowed process standard
+streams adapted to `br_stream`. Directory operations, metadata, environment,
+arguments, and processes remain separate work.
 
 ## Errors
 
@@ -123,3 +123,30 @@ largest count its platform can represent.
 
 The raw file stream does not support `FLUSH`. Buffered writers flush bytes to
 it; durable storage synchronization will be a separate explicit operation.
+
+## Standard Streams
+
+```c
+br_reader br_stdin(void);
+br_writer br_stdout(void);
+br_writer br_stderr(void);
+```
+
+These accessors return borrowed, unbuffered byte streams. The values are
+copyable, allocate no storage, and never own the process descriptor or handle.
+`CLOSE` and `FLUSH` are unsupported; `DESTROY` succeeds without changing the
+underlying process handle.
+
+Each operation resolves the current process standard handle. POSIX uses
+descriptors 0, 1, and 2, while Windows calls `GetStdHandle` for every read or
+write. Redirection completed through `dup2` or `SetStdHandle` after obtaining a
+Bedrock stream is therefore observed.
+
+Standard input supports read; standard output and standard error support
+write. They do not expose seek, size, or positioned operations when redirected
+to a file because their contract remains that of a process standard stream.
+
+The streams are byte-transparent and do not perform Windows console encoding
+conversion. A future terminal-text adapter may add explicit UTF-8/UTF-16
+conversion with caller-owned state. Bedrock also leaves POSIX `SIGPIPE` policy
+to the application.
