@@ -124,6 +124,14 @@ by default and used throughout the implementation; define
 ## Development
 
 Design notes live in `spec/`, port status in `tracking/`, stable decisions in
-`decisions/`. Odin is pinned as the reference in `upstream/odin`, with Rust
-and Go pinned as secondary references. `tracking/odin-suspected-bugs.md`
+`decisions/`. The `upstream/` submodules pin Odin, Go, Rust, and Zig as
+reference source; they are not used by the build or test suite. Clone without
+`--recursive`, then initialize only the reference tree needed for research:
+
+```sh
+git submodule update --init upstream/odin
+```
+
+Do not add `--recursive`: some reference repositories have large nested
+submodules that Bedrock does not use. `tracking/odin-suspected-bugs.md`
 collects upstream bugs found while porting.
