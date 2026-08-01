@@ -52,7 +52,8 @@ make MODE=thread-sanitize test # TSan
 ```
 
 Sources and tests are auto-discovered; adding a file needs no Makefile edit.
-CI runs the full mode matrix on Linux and macOS, plus a Windows debug build.
+CI runs the full Clang mode matrix on Linux and macOS, GCC debug/release builds
+on Linux, and Clang debug/release builds on Windows.
 
 ## Using it in your project
 

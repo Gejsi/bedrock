@@ -25,6 +25,17 @@ jobs:
         run: sudo sysctl -w vm.mmap_rnd_bits=28
       - run: make MODE=${{ matrix.mode }} test
 
+  test-linux-gcc:
+    name: linux (gcc, ${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [debug, release]
+    steps:
+      - uses: actions/checkout@v4
+      - run: make CC=gcc BASE_CFLAGS="-std=c11 -Werror" MODE=${{ matrix.mode }} test
+
   test-macos:
     name: macos (${{ matrix.mode }})
     runs-on: macos-latest
@@ -37,8 +48,12 @@ jobs:
       - run: make MODE=${{ matrix.mode }} test
 
   test-windows:
-    name: windows (debug)
+    name: windows (${{ matrix.mode }})
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [debug, release]
     defaults:
       run:
         shell: msys2 {0}
@@ -50,7 +65,7 @@ jobs:
           update: false
           install: make
           pacboy: clang:p
-      - run: make -k MODE=debug test
+      - run: make -k MODE=${{ matrix.mode }} test
 
   test-c-standard:
     name: c standard (${{ matrix.standard }})
