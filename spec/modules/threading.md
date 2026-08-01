@@ -2,198 +2,213 @@
 
 ## Status
 
-`thread` is a v1 module: a thin, explicit OS-thread wrapper. It excludes thread
-pools, TLS, and cancellation (see Non-Goals). Blocking and coordination live in
-`sync`; this module owns thread lifecycle only.
+`thread` is a thin OS-thread lifecycle module. Blocking and coordination live
+in `sync`; this module owns creation, joining, detaching, naming, stack sizing,
+and yielding.
 
-## Design
-
-A thread handle is a small, CALLER-ALLOCATED struct with an explicit lifecycle,
-matching every other Bedrock handle (`br_bufio_reader`, `br_virtual_arena`). It
-needs no allocator: the OS owns the thread stack, and the handle is a plain
-value the caller places on the stack or embeds in their own struct.
+## Public shape
 
 ```c
 typedef int (*br_thread_fn)(void *arg);
 
 typedef struct br_thread {
-  /* opaque to consumers. Carries ONLY: the native handle (pthread_t / HANDLE),
-     the native thread id (for the self-join guard), and an atomic lifecycle
-     state. It carries NO user data and NO exit code. */
-  ...
+  /* Opaque implementation fields. Do not inspect or copy a live handle. */
+  br_atomic_u32 state;
+  void *control;
 } br_thread;
 
+#define BR_THREAD_INIT ...
+
 typedef struct br_thread_options {
-  size_t stack_size;   /* 0 = OS default */
-  const char *name;    /* best-effort debug name, may be NULL; COPIED at create */
+  size_t stack_size; /* 0 = OS default */
+  const char *name;  /* best-effort debug name, copied at create */
 } br_thread_options;
 
 br_status br_thread_create(br_thread *thread, br_thread_fn fn, void *arg);
 br_status br_thread_create_ex(br_thread *thread, br_thread_fn fn, void *arg,
                               const br_thread_options *options);
-br_status br_thread_join(br_thread *thread, int *exit_code); /* exit_code may be NULL */
+br_status br_thread_join(br_thread *thread, int *exit_code);
 br_status br_thread_detach(br_thread *thread);
 void br_thread_yield(void);
 ```
 
-`br_current_thread_id` is NOT redefined here — it lives in `sync/thread.h`.
-This module reuses it.
+The handle is caller-owned and may live on the stack or inside another object.
+It is platform-independent: native pthread and Windows handles stay in an
+internal control block. A live handle must not be copied or passed to another
+create call. A terminal joined or detached handle may be initialized again by
+`br_thread_create`.
 
-## The core invariant: the spawned thread never touches the handle
+Handle storage must outlive every operation using it. Concurrent join/detach is
+race-safe, but a losing caller can return before the winning caller has
+finished. The creator must therefore wait for all contenders before dropping or
+reusing the handle.
 
-After the startup latch (below), the spawned thread holds NO reference to the
-`br_thread` — it never reads or writes the handle for its name, its exit code,
-its id, or its state. This is what makes a caller-allocated handle safe under
-detach: a detached caller may let its handle leave scope while the thread still
-runs, so any thread-side access to the handle would be a use-after-free into a
-dead frame — at startup (name read), at termination (exit-code write), or
-anytime (state/id). The invariant forbids all of them. Three consequences:
+## Ownership model
 
-1. **Exit codes ride the substrate's native join channel, never the handle.**
-   The user `fn` returns an `int`; the backend transports it through the OS join
-   mechanism. POSIX: the trampoline returns `(void *)(intptr_t)code` and
-   `br_thread_join` recovers it from `pthread_join`'s `retval` and casts back
-   (`int`→`intptr_t`→`int` is exact). Windows: the `_beginthreadex` proc returns
-   `(unsigned)code` and join recovers it via `GetExitCodeThread` after
-   `WaitForSingleObject` (exact for all `int`). The handle never carries the
-   code. A detached thread's exit code is unretrievable by design — consistent,
-   since nobody can join it. (This is the sign/width-safe answer to storing an
-   int through a `void*`: the cast round-trip, not a handle field.)
+The native APIs do not copy a caller's launch object. `pthread_create` and
+`_beginthreadex` copy the pointer value and later pass that same pointer to the
+new thread. Therefore, launch storage must outlive the handoff.
 
-2. **Startup data uses a creator-stack control block + a create-side
-   handshake.** The trampoline needs `{fn, arg, name}`. That block lives on the
-   CREATOR's stack inside `br_thread_create`'s frame; `br_thread_create` does not
-   return until the spawned thread has copied it into the thread's own locals and
-   signaled a one-shot internal semaphore. After create returns, the caller may
-   detach and drop the handle freely — the thread already has everything. No
-   allocator, no handle involvement, no lifetime hazard. This is a
-   create-INTERNAL handshake, not a resurrection of Odin's user-facing
-   create/start two-phase gate (which we deleted): we removed the gate that
-   existed for context injection, and a hidden handshake reappears purely for
-   memory safety. libc's own `pthread_create` solves it the same way — it copies
-   its arguments into the new thread's setup before returning.
+Bedrock allocates one fixed-size control block from its process-heap allocator.
+It contains:
 
-3. **Identity for the self-join guard is written CREATOR-side, never
-   thread-side.** The handle's native id is filled by the creator from the spawn
-   call's out-param (`pthread_create`'s `pthread_t*`; `_beginthreadex`'s
-   `thrdaddr`), so the guard never needs the thread to write its own id into the
-   handle (which on POSIX it would have to, since `gettid` is self-only —
-   another side-door use-after-free, avoided).
+- the native handle
+- `{fn, arg}` and the copied debug name
+- the exact `int` result
+- a two-owner atomic reference count
 
-## Lifecycle state machine
+The handle owns one reference and the worker owns one reference. Native
+creation failure leaves ownership with the creator, which frees the block.
+After successful creation:
 
-A handle is FRESH (joinable) after a successful create, and moves to a terminal
-JOINED or DETACHED. Transitions are atomic (a CAS on an embedded state field),
-so concurrent misuse is race-safe and never undefined:
+- join waits for the worker, reads the result, closes or consumes the native
+  handle, and releases the handle reference
+- detach transfers native cleanup to the OS and releases the handle reference
+- the worker releases its reference when the callback finishes
+- whichever side releases the final reference frees the block
 
-| Call | FRESH | JOINED | DETACHED | zeroed/never-created |
-| --- | --- | --- | --- | --- |
-| join | joins → JOINED, OK | INVALID_STATE | INVALID_STATE | INVALID_STATE |
-| detach | detaches → DETACHED, OK | INVALID_STATE | INVALID_STATE | INVALID_STATE |
-| join on SELF | INVALID_ARGUMENT (deadlock avoidance) | — | — | — |
+The worker never receives a pointer to the public `br_thread`. Consequently, a
+successful detach may be followed immediately by dropping or reusing the
+public handle while the worker continues.
 
-Self-join (a thread joining its own handle) is rejected up front:
-`pthread_equal(pthread_self(), thread->native)` on POSIX, `GetCurrentThreadId()
-== thread->id` on Windows — both reading only creator-written fields (see
-consequence 3 above), no OS join call made. Raw `pthread_join` on self is
-`EDEADLK` or a hang, so Bedrock returns `BR_STATUS_INVALID_ARGUMENT`.
-Double-join, join-after-detach, and double-detach — all undefined in raw
-pthread/Win32 — return `BR_STATUS_INVALID_STATE`. This uniform guarding is the
-module's core value over the raw substrates.
+The internal process-heap allocation is intentional. Passing a user allocator
+would require that allocator to remain alive and support cross-thread freeing.
+The allocation is small compared with the native thread and stack, and thread
+pools amortize it for workloads that submit frequent short tasks.
 
-## Create-failure contract
+## Lifecycle
 
-On failure `br_thread_create[_ex]` leaves `*thread` inert (as if zero-
-initialized) and starts no thread. Status mapping from the substrate:
-- resource exhaustion (pthread `EAGAIN`, Windows thread-creation failure) →
-  `BR_STATUS_OUT_OF_MEMORY` (foundation.md's status for "the system could not
-  provide the resource").
-- invalid arguments (NULL `fn`, NULL `thread`) → `BR_STATUS_INVALID_ARGUMENT`.
-- a name/stack option the platform cannot honor never fails create — options are
-  best-effort (see below).
+The public atomic state follows this internal state machine:
 
-## Zero-value contract
+```text
+INERT -> FRESH
+FRESH -> JOINING -> JOINED
+FRESH -> DETACHING -> DETACHED
+JOINING -> FRESH   (self-join or native failure)
+DETACHING -> FRESH (native failure)
+```
 
-A zero-initialized `br_thread` is INERT: a defined, unstarted state on which
-join/detach return `BR_STATUS_INVALID_STATE`. Unlike a virtual arena, a thread
-is NOT zero-value-ready — it has no lazy form, because spawning requires an
-explicit OS call. A handle is live only after `br_thread_create` returns OK.
+Join and detach first claim the FRESH handle with an atomic compare-exchange.
+Only the winner accesses the control block or native handle. Concurrent losers
+return `BR_STATUS_INVALID_STATE`; they cannot race with native handle
+destruction.
 
-## Exit codes and the entry signature
+A POSIX `pthread_join` failure, `pthread_detach` failure, Windows wait failure,
+or Windows close failure restores FRESH and returns
+`BR_STATUS_INVALID_STATE`. Terminal states are published only after the native
+operation succeeds. POSIX also installs a cleanup handler around the blocking
+join so default deferred cancellation of the joining thread restores FRESH.
+Asynchronous pthread cancellation is outside the contract; Bedrock neither
+enables nor exposes forced cancellation.
 
-`br_thread_fn` is `int(*)(void *)` returning an int exit code, matching C11
-`thrd_start_t`'s shape and validated against pthread's `void*(*)(void*)` and
-Win32's `DWORD(*)(LPVOID)` (int round-trips through both). Richer return values
-go through the user's `arg` struct: the caller puts a result field in the struct
-it passes, the thread writes it, the caller reads it after join. (A typed handle
-return à la Rust's `JoinHandle<T>` needs generics C lacks; the int exit code plus
-the arg-struct idiom is the honest C form.)
+## Self-join identity
 
-## Thread naming (best-effort)
+Join claims JOINING before checking identity, so detach can no longer invalidate
+the target concurrently. POSIX can then safely compare `pthread_t` values with
+`pthread_equal`. Windows workers record their control-block pointer in internal
+C thread-local storage and compare that stable token.
 
-`options.name` is a DEBUG AID, never load-bearing, never fails a create, and is
-COPIED during the startup handshake (so callers may pass a temporary). It is
-applied from INSIDE the entry trampoline as the thread's first act, which
-satisfies macOS uniformly (its `pthread_setname_np` names only the calling
-thread). Per-OS: Linux truncates to 15 bytes + NUL; macOS caps at 64; Windows
-uses `SetThreadDescription`; BSD uses `pthread_set_name_np`. A name that cannot
-be set is ignored.
+This avoids two native-identity hazards:
 
-## Backend
+- POSIX detach cannot invalidate a `pthread_t` before `pthread_equal`
+- Windows numeric thread IDs can be reused after a thread terminates even while
+  its HANDLE remains joinable
 
-POSIX: pthreads (already linked `-pthread`). Windows: `_beginthreadex`, NEVER
-`CreateThread`. A general C library and its users call libc on worker threads,
-and `CreateThread` skips per-thread CRT initialization — corrupting `errno`,
-`strtok`, and locale state and leaking the CRT per-thread block on exit.
-`_beginthreadex` initializes that state, returns a joinable/closeable HANDLE, and
-runs CRT cleanup. This is an intentional deviation from Odin, whose
-`thread_windows.odin` uses `CreateThread` (filed in
-`tracking/odin-suspected-bugs.md`); Odin sidesteps the issue with its own
-runtime, but a C library cannot. C11 `<threads.h>` is rejected as the substrate:
-macOS ships none.
+A rejected self-join restores FRESH and returns
+`BR_STATUS_INVALID_ARGUMENT`, leaving another thread able to join or detach.
 
-## Non-Goals (v1)
+## Results
 
-- **No `is_done`** — Odin ships it; Bedrock deliberately refuses it. Polling
-  whether a thread finished invites busy-wait loops that should be joins or
-  parkers, the result is racy (true says nothing actionable — the thread may
-  still be tearing down), and it has no portable implementation (Win32
-  timeout-0 wait vs no clean pthread equivalent). Callers who need completion
-  signalling join (blocking, correct) or set a `br_atomic` flag in their arg
-  struct (explicit, race-clear). Recorded here as an explicit Odin deviation.
-- **No thread pools** — a later higher-level module over threads + atomics +
-  queues.
-- **No TLS** — bring your own via the arg struct.
-- **No terminate/cancel** — `pthread_cancel` is a documented footgun (async
-  cancellation corrupts held locks and allocator state); cooperative
-  cancellation is the caller's job via an atomic flag in the arg.
-- **No priority** — an options-struct candidate at most, deferred until a
-  consumer needs it.
-- **No implicit allocator, temp-allocator, or context propagation** — the Odin
-  coupling that kept this module deferred.
+The callback's `int` result is stored directly in the control block. Native
+join or wait provides the completion synchronization before
+`br_thread_join` reads it. This preserves every `int` value without relying on
+POSIX integer-to-pointer or Windows unsigned-to-signed conversions.
 
-## Interaction with sync
+Richer results travel through the caller's `arg` object. The worker writes the
+object and the caller reads it after a successful join.
 
-Blocking and coordination are `sync`'s job. To block a thread until signaled,
-use `br_parker` (`sync/extended.h`); for mutual exclusion, `br_mutex` etc. This
-module offers lifecycle only, not coordination, and does not invent a
-thread-level wait.
+The callback must return normally. Calling `pthread_exit`, `_endthreadex`,
+`ExitThread`, or an equivalent native escape bypasses Bedrock's result contract
+and is unsupported.
 
-## Porter notes
+## Creation and options
 
-Headers: `include/bedrock/thread/thread.h` (+ `include/bedrock/thread.h`
-umbrella, registered in `include/bedrock.h`). Impl: `src/thread/thread_posix.c`,
-`src/thread/thread_windows.c`. The entry trampoline: (1) copies `{fn, arg,
-name}` from the creator-stack control block into thread locals, (2) posts the
-handshake semaphore, (3) applies the name to self, (4) calls `fn(arg)`, (5)
-returns the int through the substrate. The trampoline touches the control block
-only in step 1 (before the post) and NEVER touches the `br_thread` handle. The
-creator writes the native id/handle into `*thread` from the spawn out-param.
-The self-join check runs before the join state transition, so a rejected
-self-join leaves the handle FRESH and joinable by another thread. Acceptance: the 24
-raw-pthread sites (test_sync 12, test_sync_futex 9, test_virtual_mem/
-test_mutex_allocator/test_tracking_allocator 1 each, all currently
-`#if !defined(_WIN32)`) convert — thread fns become
-`int f(void *){ ...; return 0; }`, create/join calls become `br_thread_*`, the
-`_WIN32` guards drop — and run platform-uniform under MODE=thread-sanitize
-(join is a happens-before edge on both substrates).
+If `thread` is non-NULL, create initializes it to INERT before validation.
+Creation can fail with:
+
+- `BR_STATUS_INVALID_ARGUMENT` for a NULL handle, NULL callback, or invalid
+  native creation arguments
+- `BR_STATUS_OUT_OF_MEMORY` when the control block or native thread resources
+  cannot be allocated
+- `BR_STATUS_OUT_OF_RANGE` when a requested stack size cannot be represented
+  or accepted by the native API
+- `BR_STATUS_INVALID_STATE` for another unexpected native creation failure
+
+Thread names are copied into the control block and applied by the worker before
+the callback. Naming is only a debugging aid and remains best-effort: Linux
+truncates to 15 bytes plus NUL, macOS caps names at 64 bytes, Windows uses
+`SetThreadDescription`, and BSD uses its pthread naming API.
+
+Stack size is not best-effort. A nonzero request is either installed or create
+fails. Silently using the default stack after the caller requested another size
+would make memory and overflow assumptions unreliable. POSIX installs the value
+with `pthread_attr_setstacksize`; Windows passes it to `_beginthreadex` with
+`STACK_SIZE_PARAM_IS_A_RESERVATION`.
+
+The callback may begin before create returns, matching the native APIs. A
+callback that receives access to its own public handle must synchronize with the
+creator before using it.
+
+## Zero and reuse
+
+`BR_THREAD_INIT` creates an inert handle. An ordinary output variable need not
+be initialized before a valid create call because create uses `atomic_init`.
+Join and detach require either an initialized inert handle or a handle produced
+by create; reading an uninitialized atomic object is not portable C.
+
+A handle can be reused after successful join or detach. It must not be reused
+while FRESH, JOINING, or DETACHING.
+
+## Backends
+
+Linux, macOS, FreeBSD, OpenBSD, and NetBSD use pthreads. Windows uses
+`_beginthreadex`, not `CreateThread`, because threads running C code require
+Microsoft CRT per-thread initialization and cleanup. C11 `<threads.h>` is not
+the substrate because it is unavailable on some supported systems, including
+macOS.
+
+Linux and macOS run the full debug, release, ASan/UBSan, and TSan CI matrix.
+Windows runs a debug CI job. The FreeBSD, OpenBSD, and NetBSD branches are
+implemented against their native pthread declarations but still require target
+CI before Bedrock can claim the same verification level for them. In
+particular, FreeBSD and OpenBSD expose thread naming through `<pthread_np.h>`,
+while NetBSD declares its differently shaped `pthread_setname_np` in
+`<pthread.h>`.
+
+## Deliberate exclusions
+
+- No forced termination. Asynchronous `pthread_cancel` and `TerminateThread`
+  can abandon locks, allocators, TLS, and application invariants.
+- No ambient allocator or Odin runtime-context propagation.
+- No public create/start split. Odin needs that gate to configure language
+  runtime context before execution; Bedrock options are complete at create.
+- No priority until a real caller can define portable fallback and permission
+  semantics.
+- No `is_done` yet. Completion polling needs a concrete consumer and contract.
+- No pool inside this primitive module. A pool is a separate executor over
+  threads, synchronization, and a task queue.
+
+## Odin comparison
+
+Odin's `Thread` is heap-allocated and carries procedure data, user arguments,
+allocator ownership, runtime context, temporary-allocator cleanup, state, and
+native synchronization. It supports suspended create/start, priority,
+`is_done`, forced termination, convenience run helpers, and a task pool.
+
+Bedrock keeps only the parts that form a sound general C lifecycle API:
+caller-owned handles, immediate creation, join, detach, exact integer results,
+name, stack size, and yield. The control block solves native lifetime problems
+without exposing Odin's runtime context or allocator conventions.
+
+The Odin thread pool remains useful source material, but it is not part of the
+primitive thread contract and should not be ported verbatim.

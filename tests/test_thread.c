@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <limits.h>
 #include <string.h>
 
 #include <bedrock.h>
@@ -25,6 +26,10 @@ static int worker_zero(void *arg) {
   return 0;
 }
 
+static int worker_return_value(void *arg) {
+  return *(const int *)arg;
+}
+
 /* For the self-join test: the thread joins its OWN handle and stores the status.
    `done` lets main wait for the self-join attempt to finish BEFORE main joins, so
    main's join can't race ahead and win the CAS (which would turn the worker's
@@ -48,16 +53,46 @@ static int worker_self_join(void *arg) {
    handle has left scope. Uses a heap-free, caller-owned sema that outlives the
    handle. */
 typedef struct detach_state {
-  br_sema started;  /* thread posts when it begins */
-  br_sema release;  /* main posts to let the thread finish */
-  br_sema finished; /* thread posts just before returning */
+  br_sema started; /* thread posts when it begins */
+  br_sema release; /* main posts to let the thread finish */
+  br_atomic_bool finished;
 } detach_state;
 
 static int worker_detached(void *arg) {
   detach_state *s = (detach_state *)arg;
   br_sema_post(&s->started, 1u);
   br_sema_wait(&s->release);
-  br_sema_post(&s->finished, 1u);
+  br_atomic_store_explicit(&s->finished, true, BR_ATOMIC_RELEASE);
+  return 0;
+}
+
+typedef struct lifecycle_race_state {
+  br_thread target;
+  br_sema ready;
+  br_sema start;
+  br_atomic_bool target_finished;
+} lifecycle_race_state;
+
+typedef struct lifecycle_contender {
+  lifecycle_race_state *race;
+  bool join;
+  br_status result;
+} lifecycle_contender;
+
+static int worker_lifecycle_target(void *arg) {
+  lifecycle_race_state *race = (lifecycle_race_state *)arg;
+  br_sema_post(&race->ready, 1u);
+  br_sema_wait(&race->start);
+  br_atomic_store_explicit(&race->target_finished, true, BR_ATOMIC_RELEASE);
+  return 0;
+}
+
+static int worker_lifecycle_contender(void *arg) {
+  lifecycle_contender *contender = (lifecycle_contender *)arg;
+  br_sema_post(&contender->race->ready, 1u);
+  br_sema_wait(&contender->race->start);
+  contender->result = contender->join ? br_thread_join(&contender->race->target, NULL)
+                                      : br_thread_detach(&contender->race->target);
   return 0;
 }
 
@@ -78,7 +113,20 @@ static void test_exit_code_negative(void) {
 
   assert(br_thread_create(&t, worker_return_negative, NULL) == BR_STATUS_OK);
   assert(br_thread_join(&t, &code) == BR_STATUS_OK);
-  assert(code == -42); /* negative round-trips through the substrate channel */
+  assert(code == -42);
+}
+
+static void test_exit_code_extremes(void) {
+  const int values[] = {INT_MIN, INT_MAX};
+  size_t i;
+
+  for (i = 0u; i < sizeof(values) / sizeof(values[0]); ++i) {
+    br_thread t;
+    int code = 0;
+    assert(br_thread_create(&t, worker_return_value, (void *)&values[i]) == BR_STATUS_OK);
+    assert(br_thread_join(&t, &code) == BR_STATUS_OK);
+    assert(code == values[i]);
+  }
 }
 
 static void test_join_null_exit_code(void) {
@@ -88,8 +136,7 @@ static void test_join_null_exit_code(void) {
 }
 
 static void test_zeroed_handle_is_inert(void) {
-  br_thread t;
-  memset(&t, 0, sizeof(t));
+  br_thread t = BR_THREAD_INIT;
   assert(br_thread_join(&t, NULL) == BR_STATUS_INVALID_STATE);
   assert(br_thread_detach(&t) == BR_STATUS_INVALID_STATE);
 }
@@ -147,14 +194,18 @@ static void test_detach_scope_exit_uaf(void) {
   detach_state s;
   br_sema_init(&s.started, 0u);
   br_sema_init(&s.release, 0u);
-  br_sema_init(&s.finished, 0u);
+  br_atomic_init(&s.finished, false);
 
   {
     br_thread t;
     assert(br_thread_create(&t, worker_detached, &s) == BR_STATUS_OK);
     br_sema_wait(&s.started); /* thread is running */
     assert(br_thread_detach(&t) == BR_STATUS_OK);
-    /* t leaves scope here while the thread is still alive and blocked. */
+    /* Reusing the public handle cannot affect the detached worker's independent
+       control block. */
+    assert(br_thread_create(&t, worker_zero, NULL) == BR_STATUS_OK);
+    assert(br_thread_join(&t, NULL) == BR_STATUS_OK);
+    /* t leaves scope here while the original thread is still alive and blocked. */
   }
 
   /* Clobber the stack region the handle occupied, to make any stale thread-side
@@ -169,10 +220,11 @@ static void test_detach_scope_exit_uaf(void) {
   }
 
   br_sema_post(&s.release, 1u); /* let the detached thread run to completion */
-  br_sema_wait(&s.finished);    /* proof it executed after the handle's scope exit */
+  while (!br_atomic_load_explicit(&s.finished, BR_ATOMIC_ACQUIRE)) {
+    br_cpu_relax();
+  }
   br_sema_destroy(&s.started);
   br_sema_destroy(&s.release);
-  br_sema_destroy(&s.finished);
 }
 
 static void test_options_stack_and_name(void) {
@@ -206,16 +258,78 @@ static void test_options_overlong_name(void) {
   assert(code == -42);
 }
 
+static void test_options_invalid_stack_size(void) {
+#if !defined(_WIN32) || SIZE_MAX > UINT32_MAX
+  br_thread t;
+  br_thread_options opts;
+
+  memset(&opts, 0, sizeof(opts));
+#if defined(_WIN32)
+  opts.stack_size = (size_t)UINT32_MAX + 1u;
+  assert(br_thread_create_ex(&t, worker_zero, NULL, &opts) == BR_STATUS_OUT_OF_RANGE);
+  assert(br_thread_join(&t, NULL) == BR_STATUS_INVALID_STATE);
+#else
+  opts.stack_size = 1u;
+  assert(br_thread_create_ex(&t, worker_zero, NULL, &opts) == BR_STATUS_OUT_OF_RANGE);
+  assert(br_thread_join(&t, NULL) == BR_STATUS_INVALID_STATE);
+#endif
+#endif
+}
+
 static void test_create_invalid_args(void) {
   br_thread t;
 
   /* NULL fn -> INVALID_ARGUMENT, handle left inert (join then INVALID_STATE). */
-  memset(&t, 0, sizeof(t));
+  memset(&t, 0xa5, sizeof(t));
   assert(br_thread_create(&t, NULL, NULL) == BR_STATUS_INVALID_ARGUMENT);
   assert(br_thread_join(&t, NULL) == BR_STATUS_INVALID_STATE);
 
   /* NULL thread handle -> INVALID_ARGUMENT. */
   assert(br_thread_create(NULL, worker_zero, NULL) == BR_STATUS_INVALID_ARGUMENT);
+}
+
+static void test_concurrent_join_detach(void) {
+  enum { ITERATIONS = 64 };
+  int iteration;
+
+  for (iteration = 0; iteration < ITERATIONS; ++iteration) {
+    lifecycle_race_state race;
+    lifecycle_contender joiner;
+    lifecycle_contender detacher;
+    br_thread contenders[2];
+
+    assert(br_sema_init(&race.ready, 0u) == BR_STATUS_OK);
+    assert(br_sema_init(&race.start, 0u) == BR_STATUS_OK);
+    br_atomic_init(&race.target_finished, false);
+
+    joiner.race = &race;
+    joiner.join = true;
+    joiner.result = BR_STATUS_INVALID_STATE;
+    detacher.race = &race;
+    detacher.join = false;
+    detacher.result = BR_STATUS_INVALID_STATE;
+
+    assert(br_thread_create(&race.target, worker_lifecycle_target, &race) == BR_STATUS_OK);
+    assert(br_thread_create(&contenders[0], worker_lifecycle_contender, &joiner) == BR_STATUS_OK);
+    assert(br_thread_create(&contenders[1], worker_lifecycle_contender, &detacher) == BR_STATUS_OK);
+
+    br_sema_wait(&race.ready);
+    br_sema_wait(&race.ready);
+    br_sema_wait(&race.ready);
+    br_sema_post(&race.start, 3u);
+
+    assert(br_thread_join(&contenders[0], NULL) == BR_STATUS_OK);
+    assert(br_thread_join(&contenders[1], NULL) == BR_STATUS_OK);
+    while (!br_atomic_load_explicit(&race.target_finished, BR_ATOMIC_ACQUIRE)) {
+      br_cpu_relax();
+    }
+
+    assert((joiner.result == BR_STATUS_OK && detacher.result == BR_STATUS_INVALID_STATE) ||
+           (joiner.result == BR_STATUS_INVALID_STATE && detacher.result == BR_STATUS_OK));
+
+    br_sema_destroy(&race.ready);
+    br_sema_destroy(&race.start);
+  }
 }
 
 static void test_many_threads(void) {
@@ -240,6 +354,7 @@ static void test_many_threads(void) {
 int main(void) {
   test_create_join_exit_code();
   test_exit_code_negative();
+  test_exit_code_extremes();
   test_join_null_exit_code();
   test_zeroed_handle_is_inert();
   test_double_join();
@@ -249,7 +364,9 @@ int main(void) {
   test_detach_scope_exit_uaf();
   test_options_stack_and_name();
   test_options_overlong_name();
+  test_options_invalid_stack_size();
   test_create_invalid_args();
+  test_concurrent_join_detach();
   test_many_threads();
   br_thread_yield(); /* smoke: exercises the yield entry point */
   return 0;

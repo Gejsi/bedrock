@@ -2,44 +2,38 @@
 #define BEDROCK_THREAD_THREAD_H
 
 #include <bedrock/base.h>
-#include <bedrock/sync/primitives.h>
-#include <bedrock/sync/thread.h>
-
-#if !defined(_WIN32)
-#include <pthread.h>
-#endif
+#include <bedrock/sync/atomic.h>
 
 BR_EXTERN_C_BEGIN
 
 /*
 A thin, explicit OS-thread wrapper: thread lifecycle only. Blocking and
 coordination live in the sync module. The handle is caller-allocated (place it
-on the stack or embed it in your own struct); it needs no allocator because the
-OS owns the thread stack.
+on the stack or embed it in your own struct).
 
-The spawned thread holds no reference to this handle after it starts, so a
-detached caller may safely let the handle leave scope while the thread runs.
+The spawned thread never receives a reference to this handle, so a detached
+caller may safely let the handle leave scope while the thread runs.
+
+The handle storage must remain alive until every operation using it has
+returned. In particular, if join and detach race, the losing call may return
+before the winning call has finished using the handle.
 */
 
 /*
 Thread entry point. Returns an int exit code, retrievable via br_thread_join.
 Richer results travel through the `arg` struct (write a field, read it after
-join).
+join). The callback must return normally; calling a platform-native thread-exit
+function bypasses Bedrock's result and cleanup contract.
 */
 typedef int (*br_thread_fn)(void *arg);
 
 typedef struct br_thread {
-  /* Opaque to consumers. Carries ONLY: the native thread handle, the native
-     thread id (for the self-join guard), and an atomic lifecycle state. It
-     carries NO user data and NO exit code. */
+  /* Opaque implementation fields. Do not inspect or copy a live handle. */
   br_atomic_u32 state;
-#if defined(_WIN32)
-  void *native;            /* HANDLE from _beginthreadex */
-  unsigned long native_id; /* thread id from _beginthreadex's thrdaddr out-param */
-#else
-  pthread_t native; /* creator-written; used for the self-join comparison */
-#endif
+  void *control;
 } br_thread;
+
+#define BR_THREAD_INIT {.state = BR_ATOMIC_INIT(0u), .control = NULL}
 
 typedef struct br_thread_options {
   size_t stack_size; /* 0 = OS default */
@@ -50,13 +44,16 @@ typedef struct br_thread_options {
 Spawn a thread running `fn(arg)`. On success `*thread` is a live, joinable
 handle; on failure it is left inert (as if zero-initialized) and no thread
 starts. `fn` and `thread` must be non-NULL (else BR_STATUS_INVALID_ARGUMENT);
-resource exhaustion returns BR_STATUS_OUT_OF_MEMORY.
+resource exhaustion returns BR_STATUS_OUT_OF_MEMORY. `thread` must not already
+identify a live joinable thread. The callback may begin before this function
+returns; it must synchronize with the creator before accessing `thread`.
 */
 br_status br_thread_create(br_thread *thread, br_thread_fn fn, void *arg);
 
 /*
-Like br_thread_create, with options. A stack size or name the platform cannot
-honor never fails the create — options are best-effort.
+Like br_thread_create, with options. Thread names are best-effort. A nonzero
+stack size is load-bearing: unsupported or invalid values fail rather than
+silently falling back to the platform default.
 */
 br_status br_thread_create_ex(br_thread *thread,
                               br_thread_fn fn,

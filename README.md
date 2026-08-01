@@ -52,7 +52,7 @@ make MODE=thread-sanitize test # TSan
 ```
 
 Sources and tests are auto-discovered; adding a file needs no Makefile edit.
-CI runs the full matrix on Linux, macOS, and Windows.
+CI runs the full mode matrix on Linux and macOS, plus a Windows debug build.
 
 ## Using it in your project
 

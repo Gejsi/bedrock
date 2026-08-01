@@ -373,17 +373,21 @@ Summary:
 
 ## `core/thread`
 
-Current label: `v1`
+Current label: `implemented; BSD target verification pending`
 
 Why this label:
-- A thin, explicit OS-thread lifecycle wrapper landed: caller-allocated handle,
+- A thin OS-thread lifecycle wrapper landed: caller-allocated handle,
   create/create_ex/join/detach/yield over pthreads and Win32 `_beginthreadex`.
-- The spawned thread never touches the handle after startup (exit codes ride the
-  substrate's join channel, startup data goes through a creator-stack control
-  block + `br_sema` handshake, and the self-join identity is written creator-side),
-  so a detached handle is safe to drop while the thread runs.
-- Lifecycle misuse is uniformly guarded by an atomic state machine, which is the
-  module's value over the raw substrates.
+- One refcounted internal control block owns launch data, copied name, exact int
+  result, and native handle. The worker never touches the public handle, so a
+  detached handle is safe to drop or reuse while the thread runs.
+- Join and detach claim explicit in-progress states before touching native
+  storage. Native failure restores joinability; self identity uses an internal
+  TLS control token on Windows rather than a reusable numeric id, while POSIX
+  compares the claimed `pthread_t`.
+- Backend source covers Odin's functioning target set: Linux, Darwin, FreeBSD,
+  OpenBSD, NetBSD, and Windows. Linux/Darwin run the full local/CI mode matrix,
+  Windows has debug CI, and the BSD branches still need target CI.
 
 Current Bedrock files:
 - `include/bedrock/thread.h`
@@ -393,15 +397,15 @@ Current Bedrock files:
 
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
-| create / start | `adapted` | `thread/thread.h`, `src/thread/*` | Single `br_thread_create[_ex]`; Odin's two-phase create/start gate (which existed for context injection) is deleted. A create-internal creator-stack handshake reappears purely for memory safety, never exposed. |
-| join | `adapted` | `thread/thread.h`, `src/thread/*` | Joins and reads the int exit code from the substrate join channel. Double-join returns `INVALID_STATE`; self-join returns `INVALID_ARGUMENT` (deadlock avoidance) via creator-side identity comparison before the state transition. |
+| create / start | `adapted` | `thread/thread.h`, `src/thread/*` | Single `br_thread_create[_ex]`; Odin's two-phase create/start gate (which existed for context injection) is deleted. Native APIs receive a refcounted heap control block because they forward, rather than copy, the launch pointer. |
+| join | `adapted` | `thread/thread.h`, `src/thread/*` | Joins and reads the exact int result from the control block. Double-join returns `INVALID_STATE`; self-join returns `INVALID_ARGUMENT` after atomically claiming JOINING (claimed `pthread_t` comparison / Windows TLS control identity). |
 | detach | `adapted` | `thread/thread.h`, `src/thread/*` | Fire-and-forget; the handle may then leave scope safely. Double-detach / join-after-detach return `INVALID_STATE`. |
 | yield | `adapted` | `thread/thread.h`, `src/thread/*` | `sched_yield` / `SwitchToThread`. |
 | thread name | `adapted` | `src/thread/*` | Best-effort debug name, copied at create and applied from inside the trampoline (satisfies macOS's self-only naming); truncates, never fails a create. |
-| exit code | `adapted` | `thread/thread.h`, `src/thread/*` | `int(*)(void*)` return, transported through the substrate (pthread retval round-trip / `GetExitCodeThread`), never the handle. Richer results go through the caller's `arg` struct. |
+| exit code | `adapted` | `thread/thread.h`, `src/thread/*` | `int(*)(void*)` return stored in the refcounted control block, preserving every int without implementation-defined native conversions. Richer results go through the caller's `arg` struct. |
 | `is_done` | `excluded` | none | Deliberate Odin deviation: polling completion invites busy-waits, is racy, and has no portable form. Callers join or set an atomic flag in their arg. |
 | Windows backend | `adapted` | `src/thread/thread_windows.c` | Uses `_beginthreadex`, never `CreateThread` (deliberate Odin deviation: `CreateThread` skips per-thread CRT init that a C library and its callers require). Recorded in `tracking/odin-suspected-bugs.md`. |
-| thread pools / TLS / cancel / priority | `excluded` | none | Out of scope for v1 (see spec Non-Goals); pools are a later module over threads + atomics + queues. |
+| thread pools / TLS / cancel / priority | `excluded` | none | Pools belong in a separate executor module over threads, synchronization, and a task queue; forced cancellation stays excluded because it can abandon locks and allocator state. |
 
 Summary:
 - The 24 raw-pthread test sites across `sync`, `sync_futex`, `virtual_mem`,
