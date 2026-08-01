@@ -178,7 +178,7 @@ static int atomic_recursive_try_worker(void *ctx) {
   spin_until_bool(state->start, true);
   result = br_atomic_recursive_mutex_try_lock(state->mutex);
   if (result) {
-    br_atomic_recursive_mutex_unlock(state->mutex);
+    assert(br_atomic_recursive_mutex_unlock(state->mutex) == BR_STATUS_OK);
   }
   br_atomic_store_explicit(state->result, result, BR_ATOMIC_RELEASE);
   br_atomic_store_explicit(state->done, true, BR_ATOMIC_RELEASE);
@@ -541,18 +541,21 @@ static void test_atomic_recursive_mutex_reentrant(void) {
   br_atomic_recursive_mutex mutex = BR_ATOMIC_RECURSIVE_MUTEX_INIT;
 
   assert(br_current_thread_id() != BR_THREAD_ID_INVALID);
+  assert(br_atomic_recursive_mutex_unlock(NULL) == BR_STATUS_INVALID_ARGUMENT);
+  assert(br_atomic_recursive_mutex_unlock(&mutex) == BR_STATUS_INVALID_STATE);
 
   br_atomic_recursive_mutex_lock(&mutex);
   br_atomic_recursive_mutex_lock(&mutex);
-  br_atomic_recursive_mutex_unlock(&mutex);
-  br_atomic_recursive_mutex_unlock(&mutex);
+  assert(br_atomic_recursive_mutex_unlock(&mutex) == BR_STATUS_OK);
+  assert(br_atomic_recursive_mutex_unlock(&mutex) == BR_STATUS_OK);
+  assert(br_atomic_recursive_mutex_unlock(&mutex) == BR_STATUS_INVALID_STATE);
 
   assert(br_atomic_recursive_mutex_try_lock(&mutex));
   assert(br_atomic_recursive_mutex_try_lock(&mutex));
   assert(!atomic_recursive_try_from_other_thread(&mutex));
-  br_atomic_recursive_mutex_unlock(&mutex);
+  assert(br_atomic_recursive_mutex_unlock(&mutex) == BR_STATUS_OK);
   assert(!atomic_recursive_try_from_other_thread(&mutex));
-  br_atomic_recursive_mutex_unlock(&mutex);
+  assert(br_atomic_recursive_mutex_unlock(&mutex) == BR_STATUS_OK);
   assert(atomic_recursive_try_from_other_thread(&mutex));
 }
 #endif

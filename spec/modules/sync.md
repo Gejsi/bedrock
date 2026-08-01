@@ -115,7 +115,9 @@ the public primitive backend split. Its owner field is atomic to avoid a C data
 race when another thread checks ownership while the current owner unlocks.
 Bedrock also follows the documented recursive try-lock behavior for same-thread
 reentry; the current Odin source appears to call `mutex_try_lock` in that
-branch.
+branch. Recursive unlock returns a status instead of inheriting Odin's assertion:
+null input is `INVALID_ARGUMENT`, and a non-owner or over-unlock is
+`INVALID_STATE` without changing the mutex.
 
 `Atomic_Mutex` keeps Odin's `Unlocked` / `Locked` / `Waiting` futex-state shape,
 but its contention path now follows Rust's futex mutex strategy more closely:

@@ -96,7 +96,12 @@ bool br_atomic_rw_mutex_try_shared_lock(br_atomic_rw_mutex *rw);
 
 void br_atomic_recursive_mutex_init(br_atomic_recursive_mutex *mutex);
 void br_atomic_recursive_mutex_lock(br_atomic_recursive_mutex *mutex);
-void br_atomic_recursive_mutex_unlock(br_atomic_recursive_mutex *mutex);
+
+/*
+Return INVALID_ARGUMENT for a null mutex and INVALID_STATE unless the calling
+thread owns the mutex. A failed unlock leaves the mutex unchanged.
+*/
+br_status br_atomic_recursive_mutex_unlock(br_atomic_recursive_mutex *mutex);
 bool br_atomic_recursive_mutex_try_lock(br_atomic_recursive_mutex *mutex);
 
 void br_atomic_cond_init(br_atomic_cond *cond);

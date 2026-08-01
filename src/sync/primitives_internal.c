@@ -106,11 +106,11 @@ void br_recursive_mutex_lock(br_recursive_mutex *mutex) {
   br_atomic_recursive_mutex_lock(&mutex->impl);
 }
 
-void br_recursive_mutex_unlock(br_recursive_mutex *mutex) {
+br_status br_recursive_mutex_unlock(br_recursive_mutex *mutex) {
   if (mutex == NULL) {
-    return;
+    return BR_STATUS_INVALID_ARGUMENT;
   }
-  br_atomic_recursive_mutex_unlock(&mutex->impl);
+  return br_atomic_recursive_mutex_unlock(&mutex->impl);
 }
 
 bool br_recursive_mutex_try_lock(br_recursive_mutex *mutex) {

@@ -58,7 +58,12 @@ bool br_rw_mutex_try_shared_lock(br_rw_mutex *mutex);
 br_status br_recursive_mutex_init(br_recursive_mutex *mutex);
 void br_recursive_mutex_destroy(br_recursive_mutex *mutex);
 void br_recursive_mutex_lock(br_recursive_mutex *mutex);
-void br_recursive_mutex_unlock(br_recursive_mutex *mutex);
+
+/*
+Return INVALID_ARGUMENT for a null mutex and INVALID_STATE unless the calling
+thread owns the mutex. A failed unlock leaves the mutex unchanged.
+*/
+br_status br_recursive_mutex_unlock(br_recursive_mutex *mutex);
 bool br_recursive_mutex_try_lock(br_recursive_mutex *mutex);
 
 br_status br_cond_init(br_cond *cond);

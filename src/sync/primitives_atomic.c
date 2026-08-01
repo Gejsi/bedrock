@@ -1,5 +1,3 @@
-#include <assert.h>
-
 #include <bedrock/sync/primitives_atomic.h>
 
 #include "primitives_atomic_internal.h"
@@ -243,17 +241,16 @@ void br_atomic_recursive_mutex_lock(br_atomic_recursive_mutex *mutex) {
   mutex->recursion += 1u;
 }
 
-void br_atomic_recursive_mutex_unlock(br_atomic_recursive_mutex *mutex) {
+br_status br_atomic_recursive_mutex_unlock(br_atomic_recursive_mutex *mutex) {
   br_thread_id tid;
 
   if (mutex == NULL) {
-    return;
+    return BR_STATUS_INVALID_ARGUMENT;
   }
 
   tid = br_current_thread_id();
   if (tid != br_atomic_load_explicit(&mutex->owner, BR_ATOMIC_RELAXED)) {
-    assert(false);
-    return;
+    return BR_STATUS_INVALID_STATE;
   }
 
   mutex->recursion -= 1u;
@@ -261,6 +258,7 @@ void br_atomic_recursive_mutex_unlock(br_atomic_recursive_mutex *mutex) {
     br_atomic_store_explicit(&mutex->owner, BR_THREAD_ID_INVALID, BR_ATOMIC_RELEASE);
     br_atomic_mutex_unlock(&mutex->mutex);
   }
+  return BR_STATUS_OK;
 }
 
 bool br_atomic_recursive_mutex_try_lock(br_atomic_recursive_mutex *mutex) {

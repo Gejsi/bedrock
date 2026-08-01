@@ -204,6 +204,18 @@ static int test_ticket_worker(void *ctx) {
   return 0;
 }
 
+typedef struct test_recursive_unlock_state {
+  br_recursive_mutex *mutex;
+  br_status status;
+} test_recursive_unlock_state;
+
+static int test_recursive_unlock_worker(void *ctx) {
+  test_recursive_unlock_state *state = (test_recursive_unlock_state *)ctx;
+
+  state->status = br_recursive_mutex_unlock(state->mutex);
+  return 0;
+}
+
 static void test_sync_mutex_and_generic_lock(void) {
   br_mutex mutex;
   br_status status;
@@ -224,6 +236,8 @@ static void test_sync_mutex_and_generic_lock(void) {
 
 static void test_sync_recursive_mutex(void) {
   br_recursive_mutex mutex;
+  test_recursive_unlock_state unlock_state;
+  br_thread thread;
   br_status status;
 
   status = br_recursive_mutex_init(&mutex);
@@ -232,9 +246,18 @@ static void test_sync_recursive_mutex(void) {
   br_recursive_mutex_lock(&mutex);
   br_recursive_mutex_lock(&mutex);
   assert(br_recursive_mutex_try_lock(&mutex));
-  br_recursive_mutex_unlock(&mutex);
-  br_recursive_mutex_unlock(&mutex);
-  br_recursive_mutex_unlock(&mutex);
+  assert(br_recursive_mutex_unlock(&mutex) == BR_STATUS_OK);
+  assert(br_recursive_mutex_unlock(&mutex) == BR_STATUS_OK);
+
+  unlock_state.mutex = &mutex;
+  unlock_state.status = BR_STATUS_OK;
+  assert(br_thread_create(&thread, test_recursive_unlock_worker, &unlock_state) == BR_STATUS_OK);
+  assert(br_thread_join(&thread, NULL) == BR_STATUS_OK);
+  assert(unlock_state.status == BR_STATUS_INVALID_STATE);
+
+  assert(br_recursive_mutex_unlock(&mutex) == BR_STATUS_OK);
+  assert(br_recursive_mutex_unlock(&mutex) == BR_STATUS_INVALID_STATE);
+  assert(br_recursive_mutex_unlock(NULL) == BR_STATUS_INVALID_ARGUMENT);
 
   br_recursive_mutex_destroy(&mutex);
 }
@@ -259,9 +282,9 @@ static void test_sync_zero_value_public_primitives(void) {
   br_recursive_mutex_lock(&recursive_mutex);
   br_recursive_mutex_lock(&recursive_mutex);
   assert(br_recursive_mutex_try_lock(&recursive_mutex));
-  br_recursive_mutex_unlock(&recursive_mutex);
-  br_recursive_mutex_unlock(&recursive_mutex);
-  br_recursive_mutex_unlock(&recursive_mutex);
+  assert(br_recursive_mutex_unlock(&recursive_mutex) == BR_STATUS_OK);
+  assert(br_recursive_mutex_unlock(&recursive_mutex) == BR_STATUS_OK);
+  assert(br_recursive_mutex_unlock(&recursive_mutex) == BR_STATUS_OK);
 }
 
 static void test_sync_zero_value_extended_primitives(void) {
