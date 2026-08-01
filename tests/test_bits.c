@@ -358,7 +358,7 @@ static void test_mul(void) {
     {
       br_bits_mul_u64_result m64 = br_bits_mul_u64(r1, r2);
 #if defined(__SIZEOF_INT128__)
-      unsigned __int128 e = (unsigned __int128)r1 * (unsigned __int128)r2;
+      br__bits_u128 e = (br__bits_u128)r1 * (br__bits_u128)r2;
       assert(m64.hi == (u64)(e >> 64));
       assert(m64.lo == (u64)e);
 #else
@@ -423,8 +423,8 @@ static void test_div(void) {
     d64 = br_bits_div_u64(hi, lo, y);
     assert(d64.status == BR_STATUS_OK);
     {
-      unsigned __int128 z = ((unsigned __int128)hi << 64) | lo;
-      assert((unsigned __int128)d64.quo * y + d64.rem == z);
+      br__bits_u128 z = ((br__bits_u128)hi << 64) | lo;
+      assert((br__bits_u128)d64.quo * y + d64.rem == z);
       assert(d64.rem < y);
     }
   }

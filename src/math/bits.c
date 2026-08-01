@@ -33,6 +33,10 @@ builtins for clz/ctz are undefined at 0. The public counts/scans are total.
 #endif
 #endif
 
+#if defined(__SIZEOF_INT128__)
+__extension__ typedef unsigned __int128 br__bits_u128;
+#endif
+
 /* Gate the portable helpers so they are not dead code under a native tier
    (-Werror would reject an unused static). Two independent needs:
    - popcount/scan portable path: used only when NO count/scan tier exists
@@ -446,7 +450,7 @@ br_bits_mul_u32_result br_bits_mul_u32(u32 x, u32 y) {
 br_bits_mul_u64_result br_bits_mul_u64(u64 x, u64 y) {
   br_bits_mul_u64_result result;
 #if defined(__SIZEOF_INT128__)
-  unsigned __int128 product = (unsigned __int128)x * (unsigned __int128)y;
+  br__bits_u128 product = (br__bits_u128)x * (br__bits_u128)y;
   result.hi = (u64)(product >> 64);
   result.lo = (u64)product;
 #else
@@ -502,7 +506,7 @@ br_bits_div_u64_result br_bits_div_u64(u64 hi, u64 lo, u64 y) {
 
 #if defined(__SIZEOF_INT128__)
   {
-    unsigned __int128 z = ((unsigned __int128)hi << 64) | (unsigned __int128)lo;
+    br__bits_u128 z = ((br__bits_u128)hi << 64) | (br__bits_u128)lo;
     result.quo = (u64)(z / y);
     result.rem = (u64)(z % y);
   }
