@@ -26,6 +26,11 @@ typedef struct test_no_progress_stream {
   usize calls;
 } test_no_progress_stream;
 
+typedef struct test_lifecycle_stream {
+  br_io_mode calls[3];
+  usize count;
+} test_lifecycle_stream;
+
 static br_i64_result test_memory_stream_proc(
   void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
   test_memory_stream *stream;
@@ -179,6 +184,29 @@ static br_i64_result test_invalid_count_stream_proc(
     case BR_IO_MODE_QUERY:
       return br_stream_query_utility(br_io_mode_bit(BR_IO_MODE_READ) |
                                      br_io_mode_bit(BR_IO_MODE_WRITE));
+    default:
+      return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+  }
+}
+
+static br_i64_result test_lifecycle_stream_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  test_lifecycle_stream *stream;
+
+  BR_UNUSED(data);
+  BR_UNUSED(data_len);
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
+
+  stream = (test_lifecycle_stream *)context;
+  switch (mode) {
+    case BR_IO_MODE_FLUSH:
+    case BR_IO_MODE_CLOSE:
+    case BR_IO_MODE_DESTROY:
+      assert(stream->count < BR_ARRAY_COUNT(stream->calls));
+      stream->calls[stream->count] = mode;
+      stream->count += 1u;
+      return br_i64_result_make(0, BR_STATUS_OK);
     default:
       return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
   }
@@ -626,6 +654,17 @@ static void test_io_invalid_callback_counts(void) {
   assert(io_result.status == BR_STATUS_INVALID_STATE);
 }
 
+static void test_io_destroy_lifecycle(void) {
+  test_lifecycle_stream lifecycle;
+
+  memset(&lifecycle, 0, sizeof(lifecycle));
+  assert(br_destroy(br_stream_make(&lifecycle, test_lifecycle_stream_proc)) == BR_STATUS_OK);
+  assert(lifecycle.count == 3u);
+  assert(lifecycle.calls[0] == BR_IO_MODE_FLUSH);
+  assert(lifecycle.calls[1] == BR_IO_MODE_CLOSE);
+  assert(lifecycle.calls[2] == BR_IO_MODE_DESTROY);
+}
+
 int main(void) {
   test_io_invalid_stream();
   test_io_exact_and_at_least_helpers();
@@ -637,5 +676,6 @@ int main(void) {
   test_io_write_exact_and_at_least_helpers();
   test_io_copy_helpers();
   test_io_invalid_callback_counts();
+  test_io_destroy_lifecycle();
   return 0;
 }

@@ -307,6 +307,31 @@ static void test_bufio_writer_short_write(void) {
   assert(sink.written == 1u);
 }
 
+static void test_bufio_writer_stream_destroy_flushes(void) {
+  br_byte_buffer sink;
+  br_bufio_writer writer;
+  br_bufio_writer_io_result io_result;
+  br_bytes_view view;
+
+  br_byte_buffer_init(&sink, br_allocator_heap());
+  assert(br_bufio_writer_init_with_size(
+           &writer, br_byte_buffer_as_stream(&sink), 16u, br_allocator_heap()) == BR_STATUS_OK);
+
+  io_result = br_bufio_writer_write(&writer, "pending", 7u);
+  assert(io_result.count == 7u);
+  assert(io_result.status == BR_STATUS_OK);
+  assert(br_byte_buffer_len(&sink) == 0u);
+
+  assert(br_destroy(br_bufio_writer_as_stream(&writer)) == BR_STATUS_OK);
+  view = br_byte_buffer_view(&sink);
+  assert(view.len == 7u);
+  assert(memcmp(view.data, "pending", view.len) == 0);
+  assert(writer.buf == NULL);
+  assert(writer.cap == 0u);
+
+  br_byte_buffer_destroy(&sink);
+}
+
 static void test_bufio_writer_read_from(void) {
   br_byte_reader source;
   br_byte_buffer sink;
@@ -418,6 +443,7 @@ int main(void) {
   test_bufio_writer_basic();
   test_bufio_writer_read_from();
   test_bufio_writer_short_write();
+  test_bufio_writer_stream_destroy_flushes();
   test_bufio_read_writer_stream();
   return 0;
 }

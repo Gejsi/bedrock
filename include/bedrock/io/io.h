@@ -256,7 +256,10 @@ Seek using a generic stream.
 br_io_seek_result br_seek(br_stream stream, int64_t offset, br_seek_from whence);
 
 /*
-Close, flush, or destroy a generic stream.
+Close or flush a generic stream.
+
+`br_destroy` attempts to flush and close the stream before dispatching its
+destroy operation. It returns the destroy operation's status.
 */
 br_status br_close(br_stream stream);
 br_status br_flush(br_stream stream);
