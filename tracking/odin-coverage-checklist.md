@@ -244,13 +244,60 @@ Current Bedrock files:
 | generic `read_full` / `read_at_least` / `write_full` / `write_at_least` helpers | `adapted` | `io.h`, `io.c`, `tests/test_io.c` | Landed with Odin-style exact/minimum semantics plus Bedrock `NO_PROGRESS` guards for malformed C callbacks. |
 | generic `copy` / `copy_buffer` helpers | `adapted` | `io.h`, `io.c`, `tests/test_io.c` | Landed with explicit short-write detection. |
 | close / flush / destroy lifecycle operations | `adapted` | `io.h`, `io.c` | Present in the generic stream API; current in-memory streams mostly report unsupported. |
+| native file stream adapter | `adapted` | `os/file.h`, `src/os/file*.c`, `tests/test_os_file.c` | Caller-owned files now expose direct read/write/read_at/write_at/seek/size/close/query operations. Native errors survive the stream boundary. |
 | buffered IO | `adapted` | `bufio/*`, `tests/test_bufio.c` | Core buffered IO has moved into the `bufio` module. |
 | scanners / pipes | `planned` | none | Scanner remains planned; no pipe abstraction has landed. |
 
 Summary:
 - `io` now exists as a real foundational module.
 - Bedrock now follows Odin's single-stream direction more closely than before.
-- The next growth area is further `bufio` expansion and scanner work.
+- Native files now connect the stream and buffered-IO layers to external data.
+- The next IO-specific growth area is scanner work.
+
+## `core/os`
+
+Current label: `file slice complete`
+
+Why this label:
+- The landed surface is a complete cross-platform file-handle workflow rather
+  than a catalogue-wide partial port.
+- POSIX and Windows preserve exact native errors under shared portable status
+  categories.
+- The remaining Odin OS families are intentionally tracked as separate vertical
+  slices instead of being implied by the `os` directory existing.
+
+Current Bedrock files:
+- `include/bedrock/os.h`
+- `include/bedrock/os/file.h`
+- `src/os/file.c`
+- `src/os/file_posix.c`
+- `src/os/file_windows.c`
+- `tests/test_os_file.c`
+- `spec/modules/os.md`
+- `decisions/ADR-0007-os-errors-and-files.md`
+
+| Odin area | Status | Bedrock coverage | Notes |
+| --- | --- | --- | --- |
+| error categories and native error retention | `adapted` | `base.h`, `status.c`, `io.h`, `bufio/*` | `br_error` pairs a portable category with exact `errno` or `GetLastError()` provenance; IO and sticky buffered errors retain both. |
+| file ownership and lifecycle | `adapted` | `os/file.h`, `src/os/file*.c` | Caller-owned, zero-initialized, non-copyable while open. Open failure leaves the object inert; close invalidates it even if native close reports an error. |
+| open flags and permissions | `adapted` | `os/file.h`, `src/os/file*.c` | Read, write, create, truncate, append, and atomic create-new landed. POSIX creation permissions are explicit and umask-filtered; Windows validates but otherwise ignores them. |
+| POSIX paths | `adapted` | `src/os/file_posix.c` | Opaque bytes except NUL, copied to temporary NUL-terminated storage only for the syscall. Descriptors are close-on-exec. |
+| Windows paths | `adapted` | `src/os/file_windows.c`, `unicode/wtf8.h` | Lossless WTF-8 to UTF-16, non-inheritable handles, ordinary long-path absolutization and `\\?\`/`\\?\UNC\` prefixing, existing native namespace paths preserved. |
+| read / write / seek / size | `adapted` | `src/os/file_posix.c`, `src/os/file_windows.c` | Native operations with EINTR handling and platform count caps. Nonempty zero-byte reads report EOF. |
+| positioned read / write | `adapted` | `src/os/file_posix.c`, `src/os/file_windows.c` | POSIX uses `pread`/`pwrite`; Windows uses a second event-backed overlapped handle so positioned calls do not move the sequential cursor. Append files reject explicit-offset writes. |
+| generic stream adaptation | `done` | `src/os/file.c` | Borrowed stream exposes only access-compatible read/write modes plus seek, size, close, destroy, and query. Raw files deliberately do not advertise flush. |
+| file metadata beyond size / exists | `planned` | none | Separate contract needed for portable metadata and symlink behavior. |
+| remove / rename | `planned` | none | Deferred with the broader path-operation slice. |
+| standard streams | `planned` | none | Requires borrowed-native-handle ownership rules. |
+| environment | `planned` | none | Get/set/enumeration remain a separate ownership and encoding slice. |
+| process arguments | `planned` | none | Explicit `argc`/`argv` capture versus platform scraping remains undecided. |
+| directory iteration | `planned` | none | Deferred until file and path-operation contracts settle. |
+| process spawning | `deferred` | none | Fork/exec and CreateProcess require a dedicated process contract; not bundled into the file slice. |
+
+Summary:
+- Real files now drive `io` and `bufio` without a libc adapter.
+- The next OS decision is the path-operation and metadata error contract, not a
+  blind continuation through Odin's package order.
 
 ## `core/bufio`
 
