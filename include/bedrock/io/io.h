@@ -259,7 +259,9 @@ br_io_seek_result br_seek(br_stream stream, int64_t offset, br_seek_from whence)
 Close or flush a generic stream.
 
 `br_destroy` attempts to flush and close the stream before dispatching its
-destroy operation. It returns the destroy operation's status.
+destroy operation, even when an earlier operation fails. Unsupported flush or
+close modes are ignored. It returns the first other flush/close failure, or the
+destroy operation's status when neither failed.
 */
 br_status br_close(br_stream stream);
 br_status br_flush(br_stream stream);

@@ -35,6 +35,9 @@ typedef struct test_no_progress_stream {
 typedef struct test_lifecycle_stream {
   br_io_mode calls[3];
   usize count;
+  br_status flush_status;
+  br_status close_status;
+  br_status destroy_status;
 } test_lifecycle_stream;
 
 static br_i64_result test_memory_stream_proc(
@@ -234,12 +237,20 @@ static br_i64_result test_lifecycle_stream_proc(
   stream = (test_lifecycle_stream *)context;
   switch (mode) {
     case BR_IO_MODE_FLUSH:
+      assert(stream->count < BR_ARRAY_COUNT(stream->calls));
+      stream->calls[stream->count] = mode;
+      stream->count += 1u;
+      return br_i64_result_make(0, stream->flush_status);
     case BR_IO_MODE_CLOSE:
+      assert(stream->count < BR_ARRAY_COUNT(stream->calls));
+      stream->calls[stream->count] = mode;
+      stream->count += 1u;
+      return br_i64_result_make(0, stream->close_status);
     case BR_IO_MODE_DESTROY:
       assert(stream->count < BR_ARRAY_COUNT(stream->calls));
       stream->calls[stream->count] = mode;
       stream->count += 1u;
-      return br_i64_result_make(0, BR_STATUS_OK);
+      return br_i64_result_make(0, stream->destroy_status);
     default:
       return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
   }
@@ -737,6 +748,25 @@ static void test_io_destroy_lifecycle(void) {
   assert(lifecycle.calls[0] == BR_IO_MODE_FLUSH);
   assert(lifecycle.calls[1] == BR_IO_MODE_CLOSE);
   assert(lifecycle.calls[2] == BR_IO_MODE_DESTROY);
+
+  memset(&lifecycle, 0, sizeof(lifecycle));
+  lifecycle.flush_status = BR_STATUS_SHORT_WRITE;
+  lifecycle.close_status = BR_STATUS_INVALID_STATE;
+  assert(br_destroy(br_stream_make(&lifecycle, test_lifecycle_stream_proc)) ==
+         BR_STATUS_SHORT_WRITE);
+  assert(lifecycle.count == 3u);
+
+  memset(&lifecycle, 0, sizeof(lifecycle));
+  lifecycle.flush_status = BR_STATUS_NOT_SUPPORTED;
+  lifecycle.close_status = BR_STATUS_NOT_SUPPORTED;
+  assert(br_destroy(br_stream_make(&lifecycle, test_lifecycle_stream_proc)) == BR_STATUS_OK);
+  assert(lifecycle.count == 3u);
+
+  memset(&lifecycle, 0, sizeof(lifecycle));
+  lifecycle.destroy_status = BR_STATUS_INVALID_STATE;
+  assert(br_destroy(br_stream_make(&lifecycle, test_lifecycle_stream_proc)) ==
+         BR_STATUS_INVALID_STATE);
+  assert(lifecycle.count == 3u);
 }
 
 int main(void) {

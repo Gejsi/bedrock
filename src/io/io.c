@@ -269,9 +269,21 @@ br_status br_flush(br_stream stream) {
 }
 
 br_status br_destroy(br_stream stream) {
-  (void)br_flush(stream);
-  (void)br_close(stream);
-  return br__stream_call(stream, BR_IO_MODE_DESTROY, NULL, 0u, 0, BR_SEEK_FROM_START).status;
+  br_status first_error = BR_STATUS_OK;
+  br_status status;
+
+  status = br_flush(stream);
+  if (status != BR_STATUS_OK && status != BR_STATUS_NOT_SUPPORTED) {
+    first_error = status;
+  }
+
+  status = br_close(stream);
+  if (first_error == BR_STATUS_OK && status != BR_STATUS_OK && status != BR_STATUS_NOT_SUPPORTED) {
+    first_error = status;
+  }
+
+  status = br__stream_call(stream, BR_IO_MODE_DESTROY, NULL, 0u, 0, BR_SEEK_FROM_START).status;
+  return first_error != BR_STATUS_OK ? first_error : status;
 }
 
 br_io_size_result br_size(br_stream stream) {
