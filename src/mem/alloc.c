@@ -156,11 +156,22 @@ static br_alloc_result br__fail_allocator_fn(void *ctx, const br_alloc_request *
 }
 
 br_alloc_result br_allocator_call(br_allocator allocator, const br_alloc_request *req) {
+  br_alloc_result result;
+
+  if (req == NULL) {
+    return br__alloc_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+  }
   if (allocator.fn == NULL) {
     return br__alloc_result(NULL, 0u, BR_STATUS_NOT_SUPPORTED);
   }
 
-  return allocator.fn(allocator.ctx, req);
+  result = allocator.fn(allocator.ctx, req);
+  if (result.status == BR_STATUS_OK && result.ptr == NULL && req->size != 0u &&
+      (req->op == BR_ALLOC_OP_ALLOC || req->op == BR_ALLOC_OP_ALLOC_UNINIT ||
+       req->op == BR_ALLOC_OP_RESIZE || req->op == BR_ALLOC_OP_RESIZE_UNINIT)) {
+    return br__alloc_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+  }
+  return result;
 }
 
 br_alloc_result br_allocator_alloc(br_allocator allocator, usize size, usize alignment) {

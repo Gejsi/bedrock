@@ -8,6 +8,58 @@
 
 #include <bedrock.h>
 
+static br_alloc_result test_broken_allocator_proc(void *ctx, const br_alloc_request *req) {
+  br_alloc_result result;
+
+  BR_UNUSED(ctx);
+  BR_UNUSED(req);
+  result.ptr = NULL;
+  result.size = 0u;
+  result.status = BR_STATUS_OK;
+  return result;
+}
+
+static void test_allocator_result_contract(void) {
+  br_allocator broken;
+  br_alloc_request request;
+  br_alloc_result result;
+  br_bytes_result bytes;
+
+  broken.fn = test_broken_allocator_proc;
+  broken.ctx = NULL;
+
+  result = br_allocator_alloc(broken, 8u, 1u);
+  assert(result.status == BR_STATUS_OUT_OF_MEMORY);
+  assert(result.ptr == NULL);
+  assert(result.size == 0u);
+
+  result = br_allocator_resize_uninit(broken, NULL, 0u, 8u, 1u);
+  assert(result.status == BR_STATUS_OUT_OF_MEMORY);
+  assert(result.ptr == NULL);
+
+  result = br_allocator_alloc(broken, 0u, 1u);
+  assert(result.status == BR_STATUS_OK);
+  assert(result.ptr == NULL);
+
+  result = br_allocator_alloc(br_allocator_null(), 8u, 1u);
+  assert(result.status == BR_STATUS_OUT_OF_MEMORY);
+  assert(result.ptr == NULL);
+
+  bytes = br_bytes_clone(BR_BYTES_LIT("data"), br_allocator_null());
+  assert(bytes.status == BR_STATUS_OUT_OF_MEMORY);
+  assert(bytes.value.data == NULL);
+  assert(bytes.value.len == 0u);
+
+  request.op = BR_ALLOC_OP_RESET;
+  request.ptr = NULL;
+  request.old_size = 0u;
+  request.size = 0u;
+  request.alignment = 0u;
+  result = br_allocator_call(broken, &request);
+  assert(result.status == BR_STATUS_OK);
+  assert(br_allocator_call(broken, NULL).status == BR_STATUS_INVALID_ARGUMENT);
+}
+
 static void test_heap_allocator(void) {
   br_alloc_result alloc;
   br_alloc_result resized;
@@ -102,6 +154,7 @@ static void test_fail_allocator(void) {
 }
 
 int main(void) {
+  test_allocator_result_contract();
   test_heap_allocator();
   test_arena();
   test_vec();

@@ -35,6 +35,13 @@ typedef struct br_allocator {
   void *ctx;
 } br_allocator;
 
+/*
+Dispatch an allocator request.
+
+For nonzero allocation and resize requests, BR_STATUS_OK always carries a
+non-null pointer. If a callback violates that contract, the dispatcher
+normalizes its result to BR_STATUS_OUT_OF_MEMORY.
+*/
 br_alloc_result br_allocator_call(br_allocator allocator, const br_alloc_request *req);
 
 br_alloc_result br_allocator_alloc(br_allocator allocator, size_t size, size_t alignment);

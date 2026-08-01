@@ -74,7 +74,7 @@ Current Bedrock files:
 | --- | --- | --- | --- |
 | allocator dispatch model | `adapted` | `alloc.h`, `alloc.c` | Single allocator object with request/response dispatch, adapted to C. |
 | basic heap allocator | `done` | `alloc.c` | Heap allocator works and is used by current modules. |
-| null allocator | `done` | `alloc.c` | Implemented. |
+| null allocator | `adapted` | `alloc.c` | Nonzero alloc/resize reports `OUT_OF_MEMORY`; free/reset succeeds. The central dispatcher applies the same invariant to custom callbacks so `OK` always carries a non-null pointer for a nonzero allocation, rather than inheriting Odin core's documented `nil` + no-error exception. |
 | fail allocator | `done` | `alloc.c` | Implemented. |
 | fixed-buffer arena | `adapted` | `arena.h`, `arena.c` | Implemented as the first arena shape. |
 | arena mark / rewind | `done` | `arena.h`, `arena.c` | Implemented. |

@@ -84,6 +84,10 @@ The design intent is:
 - one dispatch point
 - explicit op and alignment
 - no hidden global allocator lookup
+- successful nonzero alloc/resize always returns a non-null pointer; dispatch
+  normalizes a broken callback's `OK` + null result to `OUT_OF_MEMORY`
+- the null allocator is suitable for non-owning objects because free/reset are
+  harmless, while any nonzero allocation attempt reports `OUT_OF_MEMORY`
 
 ## Arena Design
 
