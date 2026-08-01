@@ -13,6 +13,7 @@ typedef struct br_bufio_writer {
   br_stream sink;
   br_allocator allocator;
   br_status err;
+  br_native_error err_native;
   bool owns_storage;
   size_t max_consecutive_empty_writes;
 } br_bufio_writer;
@@ -46,7 +47,7 @@ Flush pending bytes, release owned storage, and clear the writer.
 The writer is cleared even when flushing fails, so a failure means buffered
 bytes may have been lost. The underlying sink is not destroyed.
 */
-br_status br_bufio_writer_destroy(br_bufio_writer *writer);
+br_error br_bufio_writer_destroy(br_bufio_writer *writer);
 
 /*
 Discard buffered bytes and any sticky error, release owned storage, and clear
@@ -67,7 +68,7 @@ size_t br_bufio_writer_buffered(const br_bufio_writer *writer);
 /*
 Flush buffered bytes into the underlying sink.
 */
-br_status br_bufio_writer_flush(br_bufio_writer *writer);
+br_error br_bufio_writer_flush(br_bufio_writer *writer);
 
 /*
 Write `src` into the buffered writer.
@@ -77,7 +78,7 @@ than the remaining buffer space.
 */
 br_bufio_writer_io_result
 br_bufio_writer_write(br_bufio_writer *writer, const void *src, size_t src_len);
-br_status br_bufio_writer_write_byte(br_bufio_writer *writer, uint8_t value);
+br_error br_bufio_writer_write_byte(br_bufio_writer *writer, uint8_t value);
 
 /*
 Write one rune as UTF-8. Invalid rune values are encoded as U+FFFD.

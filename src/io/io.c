@@ -19,7 +19,8 @@ static br_io_result br__io_result_from_i64(br_i64_result result, usize requested
     return br_io_result_make(0u, BR_STATUS_INVALID_STATE);
   }
 
-  return br_io_result_make((usize)result.value, result.status);
+  return br_io_result_make_error((usize)result.value,
+                                 br_io_error_make(result.status, result.native_error));
 }
 
 static usize br__utf8_expected_width(u8 byte_value) {
@@ -39,15 +40,15 @@ static usize br__utf8_expected_width(u8 byte_value) {
   return 1u;
 }
 
-static br_status br__short_write_status(br_io_result result, usize expected) {
+static br_error br__short_write_error(br_io_result result, usize expected) {
   if (result.count == expected) {
-    return result.status;
+    return br_io_error_make(result.status, result.native_error);
   }
   if (result.status == BR_STATUS_OK) {
-    return BR_STATUS_SHORT_WRITE;
+    return br_error_make(BR_STATUS_SHORT_WRITE);
   }
 
-  return result.status;
+  return br_io_error_make(result.status, result.native_error);
 }
 
 static br_i64_result br__stream_call(
@@ -67,18 +68,19 @@ static br_io_result br__read_at_fallback(br_stream stream, void *dst, usize dst_
 
   current = br_seek(stream, 0, BR_SEEK_FROM_CURRENT);
   if (current.status != BR_STATUS_OK) {
-    return br_io_result_make(0u, current.status);
+    return br_io_result_make_error(0u, br_io_error_make(current.status, current.native_error));
   }
 
   target = br_seek(stream, offset, BR_SEEK_FROM_START);
   if (target.status != BR_STATUS_OK) {
-    return br_io_result_make(0u, target.status);
+    return br_io_result_make_error(0u, br_io_error_make(target.status, target.native_error));
   }
 
   result = br_read(stream, dst, dst_len);
   restore = br_seek(stream, current.offset, BR_SEEK_FROM_START);
   if (restore.status != BR_STATUS_OK && result.status == BR_STATUS_OK) {
     result.status = restore.status;
+    result.native_error = restore.native_error;
   }
   return result;
 }
@@ -92,18 +94,19 @@ br__write_at_fallback(br_stream stream, const void *src, usize src_len, i64 offs
 
   current = br_seek(stream, 0, BR_SEEK_FROM_CURRENT);
   if (current.status != BR_STATUS_OK) {
-    return br_io_result_make(0u, current.status);
+    return br_io_result_make_error(0u, br_io_error_make(current.status, current.native_error));
   }
 
   target = br_seek(stream, offset, BR_SEEK_FROM_START);
   if (target.status != BR_STATUS_OK) {
-    return br_io_result_make(0u, target.status);
+    return br_io_result_make_error(0u, br_io_error_make(target.status, target.native_error));
   }
 
   result = br_write(stream, src, src_len);
   restore = br_seek(stream, current.offset, BR_SEEK_FROM_START);
   if (restore.status != BR_STATUS_OK && result.status == BR_STATUS_OK) {
     result.status = restore.status;
+    result.native_error = restore.native_error;
   }
   return result;
 }
@@ -121,6 +124,7 @@ br_io_result br_read_at_least(br_stream stream, void *dst, usize dst_len, usize 
   u8 *cursor;
   usize total;
   br_status status;
+  br_native_error native_error;
 
   if (dst == NULL && dst_len > 0u) {
     return br_io_result_make(0u, BR_STATUS_INVALID_ARGUMENT);
@@ -132,6 +136,7 @@ br_io_result br_read_at_least(br_stream stream, void *dst, usize dst_len, usize 
   cursor = (u8 *)dst;
   total = 0u;
   status = BR_STATUS_OK;
+  native_error = BR_NATIVE_ERROR_NONE;
   while (total < min_len && status == BR_STATUS_OK) {
     br_io_result result;
 
@@ -139,6 +144,7 @@ br_io_result br_read_at_least(br_stream stream, void *dst, usize dst_len, usize 
     total += result.count;
     if (result.status != BR_STATUS_OK) {
       status = result.status;
+      native_error = result.native_error;
       break;
     }
     /*
@@ -158,7 +164,7 @@ br_io_result br_read_at_least(br_stream stream, void *dst, usize dst_len, usize 
     return br_io_result_make(total, BR_STATUS_UNEXPECTED_EOF);
   }
 
-  return br_io_result_make(total, status);
+  return br_io_result_make_error(total, br_io_error_make(status, native_error));
 }
 
 br_io_result br_read_full(br_stream stream, void *dst, usize dst_len) {
@@ -179,6 +185,7 @@ br_io_result br_write_at_least(br_stream stream, const void *src, usize src_len,
   const u8 *cursor;
   usize total;
   br_status status;
+  br_native_error native_error;
 
   if (src == NULL && src_len > 0u) {
     return br_io_result_make(0u, BR_STATUS_INVALID_ARGUMENT);
@@ -190,6 +197,7 @@ br_io_result br_write_at_least(br_stream stream, const void *src, usize src_len,
   cursor = (const u8 *)src;
   total = 0u;
   status = BR_STATUS_OK;
+  native_error = BR_NATIVE_ERROR_NONE;
   while (total < min_len && status == BR_STATUS_OK) {
     br_io_result result;
 
@@ -197,6 +205,7 @@ br_io_result br_write_at_least(br_stream stream, const void *src, usize src_len,
     total += result.count;
     if (result.status != BR_STATUS_OK) {
       status = result.status;
+      native_error = result.native_error;
       break;
     }
     /*
@@ -209,7 +218,7 @@ br_io_result br_write_at_least(br_stream stream, const void *src, usize src_len,
     }
   }
 
-  return br_io_result_make(total, status);
+  return br_io_result_make_error(total, br_io_error_make(status, native_error));
 }
 
 br_io_result br_write_full(br_stream stream, const void *src, usize src_len) {
@@ -257,33 +266,45 @@ br_io_seek_result br_seek(br_stream stream, i64 offset, br_seek_from whence) {
   br_i64_result raw;
 
   raw = br__stream_call(stream, BR_IO_MODE_SEEK, NULL, 0u, offset, whence);
-  return br_io_seek_result_make(raw.value, raw.status);
+  return br_io_seek_result_make_error(raw.value, br_io_error_make(raw.status, raw.native_error));
 }
 
-br_status br_close(br_stream stream) {
-  return br__stream_call(stream, BR_IO_MODE_CLOSE, NULL, 0u, 0, BR_SEEK_FROM_START).status;
+br_error br_close(br_stream stream) {
+  br_i64_result result;
+
+  result = br__stream_call(stream, BR_IO_MODE_CLOSE, NULL, 0u, 0, BR_SEEK_FROM_START);
+  return br_io_error_make(result.status, result.native_error);
 }
 
-br_status br_flush(br_stream stream) {
-  return br__stream_call(stream, BR_IO_MODE_FLUSH, NULL, 0u, 0, BR_SEEK_FROM_START).status;
+br_error br_flush(br_stream stream) {
+  br_i64_result result;
+
+  result = br__stream_call(stream, BR_IO_MODE_FLUSH, NULL, 0u, 0, BR_SEEK_FROM_START);
+  return br_io_error_make(result.status, result.native_error);
 }
 
-br_status br_destroy(br_stream stream) {
-  br_status first_error = BR_STATUS_OK;
-  br_status status;
+br_error br_destroy(br_stream stream) {
+  br_error first_error;
+  br_error error;
+  br_i64_result destroy_result;
 
-  status = br_flush(stream);
-  if (status != BR_STATUS_OK && status != BR_STATUS_NOT_SUPPORTED) {
-    first_error = status;
+  first_error = BR_ERROR_OK;
+  error = br_flush(stream);
+  if (error.status != BR_STATUS_OK && error.status != BR_STATUS_NOT_SUPPORTED) {
+    first_error = error;
   }
 
-  status = br_close(stream);
-  if (first_error == BR_STATUS_OK && status != BR_STATUS_OK && status != BR_STATUS_NOT_SUPPORTED) {
-    first_error = status;
+  error = br_close(stream);
+  if (first_error.status == BR_STATUS_OK && error.status != BR_STATUS_OK &&
+      error.status != BR_STATUS_NOT_SUPPORTED) {
+    first_error = error;
   }
 
-  status = br__stream_call(stream, BR_IO_MODE_DESTROY, NULL, 0u, 0, BR_SEEK_FROM_START).status;
-  return first_error != BR_STATUS_OK ? first_error : status;
+  destroy_result = br__stream_call(stream, BR_IO_MODE_DESTROY, NULL, 0u, 0, BR_SEEK_FROM_START);
+  if (first_error.status != BR_STATUS_OK) {
+    return first_error;
+  }
+  return br_io_error_make(destroy_result.status, destroy_result.native_error);
 }
 
 br_io_size_result br_size(br_stream stream) {
@@ -294,22 +315,22 @@ br_io_size_result br_size(br_stream stream) {
 
   raw = br__stream_call(stream, BR_IO_MODE_SIZE, NULL, 0u, 0, BR_SEEK_FROM_START);
   if (raw.status != BR_STATUS_NOT_SUPPORTED) {
-    return br_io_size_result_make(raw.value, raw.status);
+    return br_io_size_result_make_error(raw.value, br_io_error_make(raw.status, raw.native_error));
   }
 
   current = br_seek(stream, 0, BR_SEEK_FROM_CURRENT);
   if (current.status != BR_STATUS_OK) {
-    return br_io_size_result_make(0, current.status);
+    return br_io_size_result_make_error(0, br_io_error_make(current.status, current.native_error));
   }
 
   end = br_seek(stream, 0, BR_SEEK_FROM_END);
   if (end.status != BR_STATUS_OK) {
-    return br_io_size_result_make(0, end.status);
+    return br_io_size_result_make_error(0, br_io_error_make(end.status, end.native_error));
   }
 
   restore = br_seek(stream, current.offset, BR_SEEK_FROM_START);
   if (restore.status != BR_STATUS_OK) {
-    return br_io_size_result_make(0, restore.status);
+    return br_io_size_result_make_error(0, br_io_error_make(restore.status, restore.native_error));
   }
 
   return br_io_size_result_make(end.offset, BR_STATUS_OK);
@@ -321,7 +342,7 @@ br_io_query_result br_query(br_stream stream) {
 
   raw = br__stream_call(stream, BR_IO_MODE_QUERY, NULL, 0u, 0, BR_SEEK_FROM_START);
   if (raw.status != BR_STATUS_OK) {
-    return br_io_query_result_make(0u, raw.status);
+    return br_io_query_result_make_error(0u, br_io_error_make(raw.status, raw.native_error));
   }
   if (raw.value < 0) {
     return br_io_query_result_make(0u, BR_STATUS_INVALID_STATE);
@@ -338,20 +359,21 @@ br_io_byte_result br_read_byte(br_stream stream) {
 
   result = br_read(stream, &byte_value, 1u);
   if (result.count == 1u) {
-    return br_io_byte_result_make(byte_value, result.status);
+    return br_io_byte_result_make_error(byte_value,
+                                        br_io_error_make(result.status, result.native_error));
   }
   if (result.status == BR_STATUS_OK) {
     return br_io_byte_result_make(0u, BR_STATUS_INVALID_STATE);
   }
 
-  return br_io_byte_result_make(0u, result.status);
+  return br_io_byte_result_make_error(0u, br_io_error_make(result.status, result.native_error));
 }
 
-br_status br_write_byte(br_stream stream, u8 value) {
+br_error br_write_byte(br_stream stream, u8 value) {
   br_io_result result;
 
   result = br_write(stream, &value, 1u);
-  return br__short_write_status(result, 1u);
+  return br__short_write_error(result, 1u);
 }
 
 br_io_rune_result br_read_rune(br_stream stream) {
@@ -366,18 +388,21 @@ br_io_rune_result br_read_rune(br_stream stream) {
     if (first.status == BR_STATUS_OK) {
       return br_io_rune_result_make(0, 0u, BR_STATUS_NO_PROGRESS);
     }
-    return br_io_rune_result_make(0, 0u, first.status);
+    return br_io_rune_result_make_error(0, 0u, br_io_error_make(first.status, first.native_error));
   }
   if (buffer[0] < (u8)BR_RUNE_SELF) {
-    return br_io_rune_result_make((br_rune)buffer[0], 1u, first.status);
+    return br_io_rune_result_make_error(
+      (br_rune)buffer[0], 1u, br_io_error_make(first.status, first.native_error));
   }
 
   expected = br__utf8_expected_width(buffer[0]);
   if (expected == 1u) {
-    return br_io_rune_result_make(BR_RUNE_ERROR, 1u, first.status);
+    return br_io_rune_result_make_error(
+      BR_RUNE_ERROR, 1u, br_io_error_make(first.status, first.native_error));
   }
   if (first.status != BR_STATUS_OK) {
-    return br_io_rune_result_make(BR_RUNE_ERROR, 1u, first.status);
+    return br_io_rune_result_make_error(
+      BR_RUNE_ERROR, 1u, br_io_error_make(first.status, first.native_error));
   }
 
   total = 1u;
@@ -389,9 +414,11 @@ br_io_rune_result br_read_rune(br_stream stream) {
     if (tail.status != BR_STATUS_OK) {
       if (total == expected) {
         decoded = br_utf8_decode(br_bytes_view_make(buffer, total));
-        return br_io_rune_result_make(decoded.value, total, tail.status);
+        return br_io_rune_result_make_error(
+          decoded.value, total, br_io_error_make(tail.status, tail.native_error));
       }
-      return br_io_rune_result_make(BR_RUNE_ERROR, total, tail.status);
+      return br_io_rune_result_make_error(
+        BR_RUNE_ERROR, total, br_io_error_make(tail.status, tail.native_error));
     }
     if (tail.count == 0u) {
       return br_io_rune_result_make(BR_RUNE_ERROR, total, BR_STATUS_NO_PROGRESS);
@@ -432,8 +459,18 @@ br_i64_result br_copy_buffer(br_stream dst, br_stream src, void *buffer, usize b
   written = 0;
   for (;;) {
     br_io_result read_result;
+    usize read_len;
+    u64 remaining;
 
-    read_result = br_read(src, scratch, buffer_len);
+    if ((u64)written == (u64)INT64_MAX) {
+      return br_i64_result_make(written, BR_STATUS_OUT_OF_RANGE);
+    }
+    remaining = (u64)INT64_MAX - (u64)written;
+    read_len = buffer_len;
+    if ((u64)read_len > remaining) {
+      read_len = (usize)remaining;
+    }
+    read_result = br_read(src, scratch, read_len);
     if (read_result.count > 0u) {
       br_io_result write_result;
 
@@ -443,10 +480,12 @@ br_i64_result br_copy_buffer(br_stream dst, br_stream src, void *buffer, usize b
         if (write_result.status == BR_STATUS_OK) {
           return br_i64_result_make(written, BR_STATUS_SHORT_WRITE);
         }
-        return br_i64_result_make(written, write_result.status);
+        return br_i64_result_make_error(
+          written, br_io_error_make(write_result.status, write_result.native_error));
       }
       if (write_result.status != BR_STATUS_OK) {
-        return br_i64_result_make(written, write_result.status);
+        return br_i64_result_make_error(
+          written, br_io_error_make(write_result.status, write_result.native_error));
       }
     }
 
@@ -454,7 +493,8 @@ br_i64_result br_copy_buffer(br_stream dst, br_stream src, void *buffer, usize b
       if (read_result.status == BR_STATUS_EOF) {
         return br_i64_result_make(written, BR_STATUS_OK);
       }
-      return br_i64_result_make(written, read_result.status);
+      return br_i64_result_make_error(
+        written, br_io_error_make(read_result.status, read_result.native_error));
     }
     if (read_result.count == 0u) {
       return br_i64_result_make(written, BR_STATUS_INVALID_STATE);

@@ -17,7 +17,7 @@ static br_i64_result br__bufio_read_writer_stream_proc(
   br_io_mode_set modes;
   br_bufio_reader_io_result read_result;
   br_bufio_writer_io_result write_result;
-  br_status status;
+  br_error error;
 
   BR_UNUSED(offset);
   BR_UNUSED(whence);
@@ -25,14 +25,16 @@ static br_i64_result br__bufio_read_writer_stream_proc(
   read_writer = (br_bufio_read_writer *)context;
   switch (mode) {
     case BR_IO_MODE_FLUSH:
-      status = br_bufio_writer_flush(read_writer->writer);
-      return br_i64_result_make(0, status);
+      error = br_bufio_writer_flush(read_writer->writer);
+      return br_i64_result_make_error(0, error);
     case BR_IO_MODE_READ:
       read_result = br_bufio_reader_read(read_writer->reader, data, data_len);
-      return br_i64_result_make((i64)read_result.count, read_result.status);
+      return br_i64_result_make_error(
+        (i64)read_result.count, br_io_error_make(read_result.status, read_result.native_error));
     case BR_IO_MODE_WRITE:
       write_result = br_bufio_writer_write(read_writer->writer, data, data_len);
-      return br_i64_result_make((i64)write_result.count, write_result.status);
+      return br_i64_result_make_error(
+        (i64)write_result.count, br_io_error_make(write_result.status, write_result.native_error));
     case BR_IO_MODE_QUERY:
       modes = br_io_mode_bit(BR_IO_MODE_FLUSH) | br_io_mode_bit(BR_IO_MODE_READ) |
               br_io_mode_bit(BR_IO_MODE_WRITE);

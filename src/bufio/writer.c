@@ -4,6 +4,7 @@ static void br__bufio_writer_clear_state(br_bufio_writer *writer, br_stream sink
   writer->sink = sink;
   writer->n = 0u;
   writer->err = BR_STATUS_OK;
+  writer->err_native = BR_NATIVE_ERROR_NONE;
 }
 
 br_status br_bufio_writer_init(br_bufio_writer *writer, br_stream sink, br_allocator allocator) {
@@ -55,16 +56,16 @@ br_status br_bufio_writer_init_with_buffer(br_bufio_writer *writer,
   return BR_STATUS_OK;
 }
 
-br_status br_bufio_writer_destroy(br_bufio_writer *writer) {
-  br_status status;
+br_error br_bufio_writer_destroy(br_bufio_writer *writer) {
+  br_error error;
 
   if (writer == NULL) {
-    return BR_STATUS_OK;
+    return BR_ERROR_OK;
   }
 
-  status = br_bufio_writer_flush(writer);
+  error = br_bufio_writer_flush(writer);
   br_bufio_writer_discard(writer);
-  return status;
+  return error;
 }
 
 void br_bufio_writer_discard(br_bufio_writer *writer) {
@@ -103,26 +104,28 @@ usize br_bufio_writer_buffered(const br_bufio_writer *writer) {
   return writer != NULL ? writer->n : 0u;
 }
 
-br_status br_bufio_writer_flush(br_bufio_writer *writer) {
+br_error br_bufio_writer_flush(br_bufio_writer *writer) {
   br_io_result result;
 
   if (writer == NULL) {
-    return BR_STATUS_INVALID_ARGUMENT;
+    return br_error_make(BR_STATUS_INVALID_ARGUMENT);
   }
   if (writer->err != BR_STATUS_OK) {
-    return writer->err;
+    return br_io_error_make(writer->err, writer->err_native);
   }
   if (writer->n == 0u) {
-    return BR_STATUS_OK;
+    return BR_ERROR_OK;
   }
 
   result = br_write(writer->sink, writer->buf, writer->n);
   if (result.count > writer->n) {
     writer->err = BR_STATUS_INVALID_STATE;
-    return BR_STATUS_INVALID_STATE;
+    writer->err_native = BR_NATIVE_ERROR_NONE;
+    return br_error_make(BR_STATUS_INVALID_STATE);
   }
   if (result.count < writer->n && result.status == BR_STATUS_OK) {
     result.status = BR_STATUS_SHORT_WRITE;
+    result.native_error = BR_NATIVE_ERROR_NONE;
   }
   if (result.status != BR_STATUS_OK) {
     if (result.count > 0u && result.count < writer->n) {
@@ -130,11 +133,12 @@ br_status br_bufio_writer_flush(br_bufio_writer *writer) {
     }
     writer->n -= result.count;
     writer->err = result.status;
-    return result.status;
+    writer->err_native = result.native_error;
+    return br_io_error_make(result.status, result.native_error);
   }
 
   writer->n = 0u;
-  return BR_STATUS_OK;
+  return BR_ERROR_OK;
 }
 
 br_bufio_writer_io_result
@@ -146,7 +150,7 @@ br_bufio_writer_write(br_bufio_writer *writer, const void *src, usize src_len) {
     return br_io_result_make(0u, BR_STATUS_INVALID_ARGUMENT);
   }
   if (writer->err != BR_STATUS_OK) {
-    return br_io_result_make(0u, writer->err);
+    return br_io_result_make_error(0u, br_io_error_make(writer->err, writer->err_native));
   }
 
   cursor = src;
@@ -160,12 +164,15 @@ br_bufio_writer_write(br_bufio_writer *writer, const void *src, usize src_len) {
       result = br_write(writer->sink, cursor, src_len);
       if (result.count > src_len) {
         writer->err = BR_STATUS_INVALID_STATE;
+        writer->err_native = BR_NATIVE_ERROR_NONE;
         break;
       }
       if (result.count < src_len && result.status == BR_STATUS_OK) {
         writer->err = BR_STATUS_SHORT_WRITE;
+        writer->err_native = BR_NATIVE_ERROR_NONE;
       } else if (result.status != BR_STATUS_OK) {
         writer->err = result.status;
+        writer->err_native = result.native_error;
       }
 
       written += result.count;
@@ -186,7 +193,7 @@ br_bufio_writer_write(br_bufio_writer *writer, const void *src, usize src_len) {
   }
 
   if (writer->err != BR_STATUS_OK) {
-    return br_io_result_make(written, writer->err);
+    return br_io_result_make_error(written, br_io_error_make(writer->err, writer->err_native));
   }
 
   if (src_len > 0u) {
@@ -197,20 +204,25 @@ br_bufio_writer_write(br_bufio_writer *writer, const void *src, usize src_len) {
   return br_io_result_make(written, BR_STATUS_OK);
 }
 
-br_status br_bufio_writer_write_byte(br_bufio_writer *writer, u8 value) {
+br_error br_bufio_writer_write_byte(br_bufio_writer *writer, u8 value) {
   if (writer == NULL) {
-    return BR_STATUS_INVALID_ARGUMENT;
+    return br_error_make(BR_STATUS_INVALID_ARGUMENT);
   }
   if (writer->err != BR_STATUS_OK) {
-    return writer->err;
+    return br_io_error_make(writer->err, writer->err_native);
   }
-  if (br_bufio_writer_available(writer) == 0u && br_bufio_writer_flush(writer) != BR_STATUS_OK) {
-    return writer->err;
+  if (br_bufio_writer_available(writer) == 0u) {
+    br_error error;
+
+    error = br_bufio_writer_flush(writer);
+    if (error.status != BR_STATUS_OK) {
+      return error;
+    }
   }
 
   writer->buf[writer->n] = value;
   writer->n += 1u;
-  return BR_STATUS_OK;
+  return BR_ERROR_OK;
 }
 
 br_bufio_writer_io_result br_bufio_writer_write_rune(br_bufio_writer *writer, br_rune value) {
@@ -221,24 +233,24 @@ br_bufio_writer_io_result br_bufio_writer_write_rune(br_bufio_writer *writer, br
   }
 
   if (value >= 0 && value < BR_RUNE_SELF) {
-    br_status status;
+    br_error error;
 
-    status = br_bufio_writer_write_byte(writer, (u8)value);
-    if (status != BR_STATUS_OK) {
-      return br_io_result_make(0u, status);
+    error = br_bufio_writer_write_byte(writer, (u8)value);
+    if (error.status != BR_STATUS_OK) {
+      return br_io_result_make_error(0u, error);
     }
     return br_io_result_make(1u, BR_STATUS_OK);
   }
   if (writer->err != BR_STATUS_OK) {
-    return br_io_result_make(0u, writer->err);
+    return br_io_result_make_error(0u, br_io_error_make(writer->err, writer->err_native));
   }
 
   if (br_bufio_writer_available(writer) < BR_UTF8_MAX) {
-    br_status status;
+    br_error error;
 
-    status = br_bufio_writer_flush(writer);
-    if (status != BR_STATUS_OK) {
-      return br_io_result_make(0u, status);
+    error = br_bufio_writer_flush(writer);
+    if (error.status != BR_STATUS_OK) {
+      return br_io_result_make_error(0u, error);
     }
     if (br_bufio_writer_available(writer) < BR_UTF8_MAX) {
       encoded = br_utf8_encode(value);
@@ -257,14 +269,14 @@ br_bufio_writer_io_result br_bufio_writer_write_string(br_bufio_writer *writer, 
 }
 
 br_i64_result br_bufio_writer_read_from(br_bufio_writer *writer, br_stream source) {
+  br_error error;
   i64 total;
-  br_status status;
 
   if (writer == NULL) {
     return br_i64_result_make(0, BR_STATUS_INVALID_ARGUMENT);
   }
   if (writer->err != BR_STATUS_OK) {
-    return br_i64_result_make(0, writer->err);
+    return br_i64_result_make_error(0, br_io_error_make(writer->err, writer->err_native));
   }
 
   /*
@@ -273,15 +285,15 @@ br_i64_result br_bufio_writer_read_from(br_bufio_writer *writer, br_stream sourc
   helper always stages through the buffered writer itself.
   */
   total = 0;
-  status = BR_STATUS_OK;
+  error = BR_ERROR_OK;
   for (;;) {
     usize empty_limit;
     usize empty_reads;
 
     if (br_bufio_writer_available(writer) == 0u) {
-      status = br_bufio_writer_flush(writer);
-      if (status != BR_STATUS_OK) {
-        return br_i64_result_make(total, status);
+      error = br_bufio_writer_flush(writer);
+      if (error.status != BR_STATUS_OK) {
+        return br_i64_result_make_error(total, error);
       }
     }
 
@@ -293,12 +305,22 @@ br_i64_result br_bufio_writer_read_from(br_bufio_writer *writer, br_stream sourc
     empty_reads = 0u;
     for (;;) {
       br_io_result read_result;
+      usize read_len;
+      u64 remaining;
 
-      read_result = br_read(source, writer->buf + writer->n, br_bufio_writer_available(writer));
+      if ((u64)total == (u64)INT64_MAX) {
+        return br_i64_result_make(total, BR_STATUS_OUT_OF_RANGE);
+      }
+      remaining = (u64)INT64_MAX - (u64)total;
+      read_len = br_bufio_writer_available(writer);
+      if ((u64)read_len > remaining) {
+        read_len = (usize)remaining;
+      }
+      read_result = br_read(source, writer->buf + writer->n, read_len);
       if (read_result.count > 0u || read_result.status != BR_STATUS_OK) {
         writer->n += read_result.count;
         total += (i64)read_result.count;
-        status = read_result.status;
+        error = br_io_error_make(read_result.status, read_result.native_error);
         break;
       }
 
@@ -308,20 +330,20 @@ br_i64_result br_bufio_writer_read_from(br_bufio_writer *writer, br_stream sourc
       }
     }
 
-    if (status != BR_STATUS_OK) {
+    if (error.status != BR_STATUS_OK) {
       break;
     }
   }
 
-  if (status == BR_STATUS_EOF) {
+  if (error.status == BR_STATUS_EOF) {
     if (br_bufio_writer_available(writer) == 0u) {
-      status = br_bufio_writer_flush(writer);
+      error = br_bufio_writer_flush(writer);
     } else {
-      status = BR_STATUS_OK;
+      error = BR_ERROR_OK;
     }
   }
 
-  return br_i64_result_make(total, status);
+  return br_i64_result_make_error(total, error);
 }
 
 static br_i64_result br__bufio_writer_stream_proc(
@@ -329,7 +351,7 @@ static br_i64_result br__bufio_writer_stream_proc(
   br_bufio_writer *writer;
   br_io_mode_set modes;
   br_bufio_writer_io_result io_result;
-  br_status status;
+  br_error error;
 
   BR_UNUSED(offset);
   BR_UNUSED(whence);
@@ -337,14 +359,15 @@ static br_i64_result br__bufio_writer_stream_proc(
   writer = (br_bufio_writer *)context;
   switch (mode) {
     case BR_IO_MODE_FLUSH:
-      status = br_bufio_writer_flush(writer);
-      return br_i64_result_make(0, status);
+      error = br_bufio_writer_flush(writer);
+      return br_i64_result_make_error(0, error);
     case BR_IO_MODE_WRITE:
       io_result = br_bufio_writer_write(writer, data, data_len);
-      return br_i64_result_make((i64)io_result.count, io_result.status);
+      return br_i64_result_make_error((i64)io_result.count,
+                                      br_io_error_make(io_result.status, io_result.native_error));
     case BR_IO_MODE_DESTROY:
-      status = br_bufio_writer_destroy(writer);
-      return br_i64_result_make(0, status);
+      error = br_bufio_writer_destroy(writer);
+      return br_i64_result_make_error(0, error);
     case BR_IO_MODE_QUERY:
       modes = br_io_mode_bit(BR_IO_MODE_FLUSH) | br_io_mode_bit(BR_IO_MODE_WRITE) |
               br_io_mode_bit(BR_IO_MODE_DESTROY);

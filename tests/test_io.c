@@ -40,6 +40,30 @@ typedef struct test_lifecycle_stream {
   br_status destroy_status;
 } test_lifecycle_stream;
 
+typedef struct test_native_error_stream {
+  br_io_mode fail_mode;
+  br_error error;
+} test_native_error_stream;
+
+static br_i64_result test_native_error_stream_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  test_native_error_stream *stream;
+
+  BR_UNUSED(data);
+  BR_UNUSED(data_len);
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
+
+  stream = (test_native_error_stream *)context;
+  if (mode == stream->fail_mode) {
+    return br_i64_result_make_error(0, stream->error);
+  }
+  if (mode == BR_IO_MODE_QUERY) {
+    return br_stream_query_utility(br_io_mode_bit(stream->fail_mode));
+  }
+  return br_i64_result_make(0, BR_STATUS_OK);
+}
+
 static br_i64_result test_memory_stream_proc(
   void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
   test_memory_stream *stream;
@@ -570,7 +594,7 @@ static void test_io_byte_and_rune_helpers(void) {
   br_string_builder_init(&builder, br_allocator_heap());
   builder_stream = br_string_builder_as_stream(&builder);
 
-  assert(br_write_byte(builder_stream, (u8)'A') == BR_STATUS_OK);
+  assert(br_write_byte(builder_stream, (u8)'A').status == BR_STATUS_OK);
   {
     br_io_result write_result;
 
@@ -743,7 +767,7 @@ static void test_io_destroy_lifecycle(void) {
   test_lifecycle_stream lifecycle;
 
   memset(&lifecycle, 0, sizeof(lifecycle));
-  assert(br_destroy(br_stream_make(&lifecycle, test_lifecycle_stream_proc)) == BR_STATUS_OK);
+  assert(br_destroy(br_stream_make(&lifecycle, test_lifecycle_stream_proc)).status == BR_STATUS_OK);
   assert(lifecycle.count == 3u);
   assert(lifecycle.calls[0] == BR_IO_MODE_FLUSH);
   assert(lifecycle.calls[1] == BR_IO_MODE_CLOSE);
@@ -752,21 +776,56 @@ static void test_io_destroy_lifecycle(void) {
   memset(&lifecycle, 0, sizeof(lifecycle));
   lifecycle.flush_status = BR_STATUS_SHORT_WRITE;
   lifecycle.close_status = BR_STATUS_INVALID_STATE;
-  assert(br_destroy(br_stream_make(&lifecycle, test_lifecycle_stream_proc)) ==
+  assert(br_destroy(br_stream_make(&lifecycle, test_lifecycle_stream_proc)).status ==
          BR_STATUS_SHORT_WRITE);
   assert(lifecycle.count == 3u);
 
   memset(&lifecycle, 0, sizeof(lifecycle));
   lifecycle.flush_status = BR_STATUS_NOT_SUPPORTED;
   lifecycle.close_status = BR_STATUS_NOT_SUPPORTED;
-  assert(br_destroy(br_stream_make(&lifecycle, test_lifecycle_stream_proc)) == BR_STATUS_OK);
+  assert(br_destroy(br_stream_make(&lifecycle, test_lifecycle_stream_proc)).status == BR_STATUS_OK);
   assert(lifecycle.count == 3u);
 
   memset(&lifecycle, 0, sizeof(lifecycle));
   lifecycle.destroy_status = BR_STATUS_INVALID_STATE;
-  assert(br_destroy(br_stream_make(&lifecycle, test_lifecycle_stream_proc)) ==
+  assert(br_destroy(br_stream_make(&lifecycle, test_lifecycle_stream_proc)).status ==
          BR_STATUS_INVALID_STATE);
   assert(lifecycle.count == 3u);
+}
+
+static void test_io_native_error_propagation(void) {
+  test_native_error_stream source;
+  br_stream stream;
+  br_io_result io_result;
+  br_io_seek_result seek_result;
+  br_error error;
+  char byte;
+
+  source.fail_mode = BR_IO_MODE_READ;
+  source.error = br_error_make_native(BR_STATUS_IO_ERROR, BR_ERROR_DOMAIN_POSIX_ERRNO, 1234u);
+  stream = br_stream_make(&source, test_native_error_stream_proc);
+
+  io_result = br_read(stream, &byte, 1u);
+  assert(io_result.status == BR_STATUS_IO_ERROR);
+  assert(io_result.native_error.domain == BR_ERROR_DOMAIN_POSIX_ERRNO);
+  assert(io_result.native_error.code == 1234u);
+
+  io_result = br_read_full(stream, &byte, 1u);
+  assert(io_result.status == BR_STATUS_IO_ERROR);
+  assert(io_result.native_error.domain == BR_ERROR_DOMAIN_POSIX_ERRNO);
+  assert(io_result.native_error.code == 1234u);
+
+  source.fail_mode = BR_IO_MODE_SEEK;
+  seek_result = br_seek(stream, 0, BR_SEEK_FROM_START);
+  assert(seek_result.status == BR_STATUS_IO_ERROR);
+  assert(seek_result.native_error.domain == BR_ERROR_DOMAIN_POSIX_ERRNO);
+  assert(seek_result.native_error.code == 1234u);
+
+  source.fail_mode = BR_IO_MODE_FLUSH;
+  error = br_destroy(stream);
+  assert(error.status == BR_STATUS_IO_ERROR);
+  assert(error.native.domain == BR_ERROR_DOMAIN_POSIX_ERRNO);
+  assert(error.native.code == 1234u);
 }
 
 int main(void) {
@@ -781,5 +840,6 @@ int main(void) {
   test_io_copy_helpers();
   test_io_invalid_callback_counts();
   test_io_destroy_lifecycle();
+  test_io_native_error_propagation();
   return 0;
 }

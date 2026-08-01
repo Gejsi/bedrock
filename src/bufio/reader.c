@@ -1,11 +1,12 @@
 #include <bedrock/bufio/reader.h>
 
 static br_bufio_reader_peek_result br__bufio_reader_peek_result(br_bytes_view value,
-                                                                br_status status) {
+                                                                br_error error) {
   br_bufio_reader_peek_result result;
 
   result.value = value;
-  result.status = status;
+  result.status = error.status;
+  result.native_error = error.native;
   return result;
 }
 
@@ -14,6 +15,7 @@ static void br__bufio_reader_clear_state(br_bufio_reader *reader, br_stream sour
   reader->r = 0u;
   reader->w = 0u;
   reader->err = BR_STATUS_OK;
+  reader->err_native = BR_NATIVE_ERROR_NONE;
   reader->last_byte = -1;
   reader->last_rune_size = -1;
 }
@@ -45,6 +47,7 @@ static br_status br__bufio_reader_fill(br_bufio_reader *reader) {
   }
   if (reader->w >= reader->cap) {
     reader->err = BR_STATUS_BUFFER_FULL;
+    reader->err_native = BR_NATIVE_ERROR_NONE;
     return BR_STATUS_OK;
   }
 
@@ -61,11 +64,13 @@ static br_status br__bufio_reader_fill(br_bufio_reader *reader) {
       reader->w += read_result.count;
       if (read_result.status != BR_STATUS_OK) {
         reader->err = read_result.status;
+        reader->err_native = read_result.native_error;
       }
       return BR_STATUS_OK;
     }
     if (read_result.status != BR_STATUS_OK) {
       reader->err = read_result.status;
+      reader->err_native = read_result.native_error;
       return BR_STATUS_OK;
     }
 
@@ -73,15 +78,17 @@ static br_status br__bufio_reader_fill(br_bufio_reader *reader) {
   }
 
   reader->err = BR_STATUS_NO_PROGRESS;
+  reader->err_native = BR_NATIVE_ERROR_NONE;
   return BR_STATUS_OK;
 }
 
-static br_status br__bufio_reader_consume_err(br_bufio_reader *reader) {
-  br_status err;
+static br_error br__bufio_reader_consume_err(br_bufio_reader *reader) {
+  br_error error;
 
-  err = reader->err;
+  error = br_io_error_make(reader->err, reader->err_native);
   reader->err = BR_STATUS_OK;
-  return err;
+  reader->err_native = BR_NATIVE_ERROR_NONE;
+  return error;
 }
 
 static br_status br__bufio_take_byte_buffer(br_byte_buffer *buffer, br_bytes *bytes) {
@@ -128,8 +135,10 @@ static br_i64_result br__bufio_reader_write_buffer(br_bufio_reader *reader, br_s
   */
   if (result.count < available && result.status == BR_STATUS_OK) {
     result.status = BR_STATUS_SHORT_WRITE;
+    result.native_error = BR_NATIVE_ERROR_NONE;
   }
-  return br_i64_result_make((i64)result.count, result.status);
+  return br_i64_result_make_error((i64)result.count,
+                                  br_io_error_make(result.status, result.native_error));
 }
 
 br_status br_bufio_reader_init(br_bufio_reader *reader, br_stream source, br_allocator allocator) {
@@ -217,10 +226,11 @@ usize br_bufio_reader_buffered(const br_bufio_reader *reader) {
 
 br_bufio_reader_peek_result br_bufio_reader_peek(br_bufio_reader *reader, usize n) {
   usize available;
-  br_status status;
+  br_error error;
 
   if (reader == NULL) {
-    return br__bufio_reader_peek_result(br_bytes_view_make(NULL, 0u), BR_STATUS_INVALID_ARGUMENT);
+    return br__bufio_reader_peek_result(br_bytes_view_make(NULL, 0u),
+                                        br_error_make(BR_STATUS_INVALID_ARGUMENT));
   }
 
   reader->last_byte = -1;
@@ -232,26 +242,26 @@ br_bufio_reader_peek_result br_bufio_reader_peek(br_bufio_reader *reader, usize 
 
     fill_status = br__bufio_reader_fill(reader);
     if (fill_status != BR_STATUS_OK) {
-      return br__bufio_reader_peek_result(br_bytes_view_make(NULL, 0u), fill_status);
+      return br__bufio_reader_peek_result(br_bytes_view_make(NULL, 0u), br_error_make(fill_status));
     }
   }
 
   available = br_bufio_reader_buffered(reader);
   if (n > reader->cap) {
     return br__bufio_reader_peek_result(br_bytes_view_make(reader->buf + reader->r, available),
-                                        BR_STATUS_BUFFER_FULL);
+                                        br_error_make(BR_STATUS_BUFFER_FULL));
   }
 
-  status = BR_STATUS_OK;
+  error = BR_ERROR_OK;
   if (available < n) {
     n = available;
-    status = br__bufio_reader_consume_err(reader);
-    if (status == BR_STATUS_OK) {
-      status = BR_STATUS_BUFFER_FULL;
+    error = br__bufio_reader_consume_err(reader);
+    if (error.status == BR_STATUS_OK) {
+      error = br_error_make(BR_STATUS_BUFFER_FULL);
     }
   }
 
-  return br__bufio_reader_peek_result(br_bytes_view_make(reader->buf + reader->r, n), status);
+  return br__bufio_reader_peek_result(br_bytes_view_make(reader->buf + reader->r, n), error);
 }
 
 br_bufio_reader_io_result br_bufio_reader_discard(br_bufio_reader *reader, usize n) {
@@ -275,14 +285,14 @@ br_bufio_reader_io_result br_bufio_reader_discard(br_bufio_reader *reader, usize
     skip = br_bufio_reader_buffered(reader);
     if (skip == 0u) {
       if (reader->err != BR_STATUS_OK) {
-        return br_io_result_make(discarded, br__bufio_reader_consume_err(reader));
+        return br_io_result_make_error(discarded, br__bufio_reader_consume_err(reader));
       }
       if (br__bufio_reader_fill(reader) != BR_STATUS_OK) {
         return br_io_result_make(discarded, BR_STATUS_INVALID_STATE);
       }
       skip = br_bufio_reader_buffered(reader);
       if (skip == 0u && reader->err != BR_STATUS_OK) {
-        return br_io_result_make(discarded, br__bufio_reader_consume_err(reader));
+        return br_io_result_make_error(discarded, br__bufio_reader_consume_err(reader));
       }
     }
 
@@ -307,12 +317,12 @@ br_bufio_reader_io_result br_bufio_reader_read(br_bufio_reader *reader, void *ds
     if (br_bufio_reader_buffered(reader) > 0u) {
       return br_io_result_make(0u, BR_STATUS_OK);
     }
-    return br_io_result_make(0u, br__bufio_reader_consume_err(reader));
+    return br_io_result_make_error(0u, br__bufio_reader_consume_err(reader));
   }
 
   if (reader->r == reader->w) {
     if (reader->err != BR_STATUS_OK) {
-      return br_io_result_make(0u, br__bufio_reader_consume_err(reader));
+      return br_io_result_make_error(0u, br__bufio_reader_consume_err(reader));
     }
 
     if (dst_len >= reader->cap) {
@@ -328,11 +338,13 @@ br_bufio_reader_io_result br_bufio_reader_read(br_bufio_reader *reader, void *ds
     reader->w = 0u;
     read_result = br_read(reader->source, reader->buf, reader->cap);
     if (read_result.count == 0u) {
-      return br_io_result_make(0u, read_result.status);
+      return br_io_result_make_error(
+        0u, br_io_error_make(read_result.status, read_result.native_error));
     }
     reader->w = read_result.count;
     if (read_result.status != BR_STATUS_OK) {
       reader->err = read_result.status;
+      reader->err_native = read_result.native_error;
     }
   }
 
@@ -354,7 +366,7 @@ br_bufio_reader_byte_result br_bufio_reader_read_byte(br_bufio_reader *reader) {
   reader->last_rune_size = -1;
   while (reader->r == reader->w) {
     if (reader->err != BR_STATUS_OK) {
-      return br_io_byte_result_make(0u, br__bufio_reader_consume_err(reader));
+      return br_io_byte_result_make_error(0u, br__bufio_reader_consume_err(reader));
     }
     if (br__bufio_reader_fill(reader) != BR_STATUS_OK) {
       return br_io_byte_result_make(0u, BR_STATUS_INVALID_STATE);
@@ -404,7 +416,7 @@ br_bufio_reader_rune_result br_bufio_reader_read_rune(br_bufio_reader *reader) {
 
   reader->last_rune_size = -1;
   if (reader->r == reader->w) {
-    return br_io_rune_result_make(0, 0u, br__bufio_reader_consume_err(reader));
+    return br_io_rune_result_make_error(0, 0u, br__bufio_reader_consume_err(reader));
   }
 
   value = (br_rune)reader->buf[reader->r];
@@ -441,14 +453,15 @@ br_bufio_reader_slice_result br_bufio_reader_read_slice(br_bufio_reader *reader,
   usize search_from;
 
   if (reader == NULL) {
-    return br__bufio_reader_peek_result(br_bytes_view_make(NULL, 0u), BR_STATUS_INVALID_ARGUMENT);
+    return br__bufio_reader_peek_result(br_bytes_view_make(NULL, 0u),
+                                        br_error_make(BR_STATUS_INVALID_ARGUMENT));
   }
 
   search_from = 0u;
   for (;;) {
     isize index;
     br_bytes_view line;
-    br_status status;
+    br_error error;
 
     index = br_bytes_index_byte(br_bytes_view_make(reader->buf + reader->r + search_from,
                                                    reader->w - reader->r - search_from),
@@ -463,18 +476,18 @@ br_bufio_reader_slice_result br_bufio_reader_read_slice(br_bufio_reader *reader,
         reader->last_byte = line.data[len - 1u];
         reader->last_rune_size = -1;
       }
-      return br__bufio_reader_peek_result(line, BR_STATUS_OK);
+      return br__bufio_reader_peek_result(line, BR_ERROR_OK);
     }
 
     if (reader->err != BR_STATUS_OK) {
       line = br_bytes_view_make(reader->buf + reader->r, reader->w - reader->r);
       reader->r = reader->w;
-      status = br__bufio_reader_consume_err(reader);
+      error = br__bufio_reader_consume_err(reader);
       if (line.len > 0u) {
         reader->last_byte = line.data[line.len - 1u];
         reader->last_rune_size = -1;
       }
-      return br__bufio_reader_peek_result(line, status);
+      return br__bufio_reader_peek_result(line, error);
     }
 
     if (br_bufio_reader_buffered(reader) >= reader->cap) {
@@ -484,29 +497,31 @@ br_bufio_reader_slice_result br_bufio_reader_read_slice(br_bufio_reader *reader,
         reader->last_byte = line.data[line.len - 1u];
         reader->last_rune_size = -1;
       }
-      return br__bufio_reader_peek_result(line, BR_STATUS_BUFFER_FULL);
+      return br__bufio_reader_peek_result(line, br_error_make(BR_STATUS_BUFFER_FULL));
     }
 
     search_from = br_bufio_reader_buffered(reader);
     if (br__bufio_reader_fill(reader) != BR_STATUS_OK) {
-      return br__bufio_reader_peek_result(br_bytes_view_make(NULL, 0u), BR_STATUS_INVALID_STATE);
+      return br__bufio_reader_peek_result(br_bytes_view_make(NULL, 0u),
+                                          br_error_make(BR_STATUS_INVALID_STATE));
     }
   }
 }
 
-br_bytes_result
+br_bufio_reader_bytes_result
 br_bufio_reader_read_bytes(br_bufio_reader *reader, u8 delim, br_allocator allocator) {
   br_byte_buffer buffer;
   br_bytes bytes;
-  br_status final_status;
+  br_error final_error;
   br_status take_status;
 
   if (reader == NULL) {
-    return (br_bytes_result){br_bytes_make(NULL, 0u), BR_STATUS_INVALID_ARGUMENT};
+    return (br_bufio_reader_bytes_result){
+      br_bytes_make(NULL, 0u), BR_STATUS_INVALID_ARGUMENT, BR_NATIVE_ERROR_NONE};
   }
 
   br_byte_buffer_init(&buffer, allocator);
-  final_status = BR_STATUS_OK;
+  final_error = BR_ERROR_OK;
   for (;;) {
     br_bufio_reader_slice_result slice_result;
     br_byte_buffer_io_result write_result;
@@ -516,7 +531,8 @@ br_bufio_reader_read_bytes(br_bufio_reader *reader, u8 delim, br_allocator alloc
       write_result = br_byte_buffer_write(&buffer, slice_result.value);
       if (write_result.status != BR_STATUS_OK) {
         br_byte_buffer_destroy(&buffer);
-        return (br_bytes_result){br_bytes_make(NULL, 0u), write_result.status};
+        return (br_bufio_reader_bytes_result){
+          br_bytes_make(NULL, 0u), write_result.status, BR_NATIVE_ERROR_NONE};
       }
     }
 
@@ -524,24 +540,27 @@ br_bufio_reader_read_bytes(br_bufio_reader *reader, u8 delim, br_allocator alloc
       continue;
     }
 
-    final_status = slice_result.status;
+    final_error = br_io_error_make(slice_result.status, slice_result.native_error);
     break;
   }
 
   take_status = br__bufio_take_byte_buffer(&buffer, &bytes);
   if (take_status != BR_STATUS_OK) {
-    return (br_bytes_result){br_bytes_make(NULL, 0u), take_status};
+    return (br_bufio_reader_bytes_result){
+      br_bytes_make(NULL, 0u), take_status, BR_NATIVE_ERROR_NONE};
   }
-  return (br_bytes_result){bytes, final_status};
+  return (br_bufio_reader_bytes_result){bytes, final_error.status, final_error.native};
 }
 
-br_string_result
+br_bufio_reader_string_result
 br_bufio_reader_read_string(br_bufio_reader *reader, u8 delim, br_allocator allocator) {
-  br_bytes_result bytes_result;
+  br_bufio_reader_bytes_result bytes_result;
 
   bytes_result = br_bufio_reader_read_bytes(reader, delim, allocator);
-  return (br_string_result){br_string_make(bytes_result.value.data, bytes_result.value.len),
-                            bytes_result.status};
+  return (br_bufio_reader_string_result){
+    br_string_make(bytes_result.value.data, bytes_result.value.len),
+    bytes_result.status,
+    bytes_result.native_error};
 }
 
 br_i64_result br_bufio_reader_write_to(br_bufio_reader *reader, br_stream sink) {
@@ -555,11 +574,13 @@ br_i64_result br_bufio_reader_write_to(br_bufio_reader *reader, br_stream sink) 
   written_result = br__bufio_reader_write_buffer(reader, sink);
   total = written_result.value;
   if (written_result.status != BR_STATUS_OK) {
-    return br_i64_result_make(total, written_result.status);
+    return br_i64_result_make_error(
+      total, br_io_error_make(written_result.status, written_result.native_error));
   }
   if (br_bufio_reader_buffered(reader) == 0u && reader->err != BR_STATUS_OK) {
-    br_status status = br__bufio_reader_consume_err(reader);
-    return br_i64_result_make(total, status == BR_STATUS_EOF ? BR_STATUS_OK : status);
+    br_error error = br__bufio_reader_consume_err(reader);
+    return error.status == BR_STATUS_EOF ? br_i64_result_make(total, BR_STATUS_OK)
+                                         : br_i64_result_make_error(total, error);
   }
 
   if (br_bufio_reader_buffered(reader) < reader->cap) {
@@ -577,11 +598,13 @@ br_i64_result br_bufio_reader_write_to(br_bufio_reader *reader, br_stream sink) 
     written_result = br__bufio_reader_write_buffer(reader, sink);
     total += written_result.value;
     if (written_result.status != BR_STATUS_OK) {
-      return br_i64_result_make(total, written_result.status);
+      return br_i64_result_make_error(
+        total, br_io_error_make(written_result.status, written_result.native_error));
     }
     if (br_bufio_reader_buffered(reader) == 0u && reader->err != BR_STATUS_OK) {
-      br_status status = br__bufio_reader_consume_err(reader);
-      return br_i64_result_make(total, status == BR_STATUS_EOF ? BR_STATUS_OK : status);
+      br_error error = br__bufio_reader_consume_err(reader);
+      return error.status == BR_STATUS_EOF ? br_i64_result_make(total, BR_STATUS_OK)
+                                           : br_i64_result_make_error(total, error);
     }
 
     fill_status = br__bufio_reader_fill(reader);
@@ -592,9 +615,10 @@ br_i64_result br_bufio_reader_write_to(br_bufio_reader *reader, br_stream sink) 
 
   if (reader->err == BR_STATUS_EOF) {
     reader->err = BR_STATUS_OK;
+    reader->err_native = BR_NATIVE_ERROR_NONE;
   }
 
-  return br_i64_result_make(total, br__bufio_reader_consume_err(reader));
+  return br_i64_result_make_error(total, br__bufio_reader_consume_err(reader));
 }
 
 static br_i64_result br__bufio_reader_stream_proc(
@@ -610,7 +634,8 @@ static br_i64_result br__bufio_reader_stream_proc(
   switch (mode) {
     case BR_IO_MODE_READ:
       io_result = br_bufio_reader_read(reader, data, data_len);
-      return br_i64_result_make((i64)io_result.count, io_result.status);
+      return br_i64_result_make_error((i64)io_result.count,
+                                      br_io_error_make(io_result.status, io_result.native_error));
     case BR_IO_MODE_DESTROY:
       br_bufio_reader_destroy(reader);
       return br_i64_result_make(0, BR_STATUS_OK);

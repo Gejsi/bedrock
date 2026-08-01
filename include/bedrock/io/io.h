@@ -12,6 +12,7 @@ Shared byte-count plus status result used by Bedrock IO operations.
 typedef struct br_io_result {
   size_t count;
   br_status status;
+  br_native_error native_error;
 } br_io_result;
 
 /*
@@ -20,6 +21,7 @@ Shared 64-bit integer plus status result used by stream procedures.
 typedef struct br_i64_result {
   int64_t value;
   br_status status;
+  br_native_error native_error;
 } br_i64_result;
 
 /*
@@ -28,6 +30,7 @@ Shared seek result used by Bedrock IO operations.
 typedef struct br_io_seek_result {
   int64_t offset;
   br_status status;
+  br_native_error native_error;
 } br_io_seek_result;
 
 /*
@@ -36,17 +39,20 @@ Shared size result used by Bedrock IO operations.
 typedef struct br_io_size_result {
   int64_t size;
   br_status status;
+  br_native_error native_error;
 } br_io_size_result;
 
 typedef struct br_io_byte_result {
   uint8_t value;
   br_status status;
+  br_native_error native_error;
 } br_io_byte_result;
 
 typedef struct br_io_rune_result {
   br_rune value;
   size_t width;
   br_status status;
+  br_native_error native_error;
 } br_io_rune_result;
 
 /*
@@ -82,6 +88,7 @@ BR_STATIC_ASSERT(BR_IO_MODE_COUNT <= 64, "br_io_mode_set must fit all io mode bi
 typedef struct br_io_query_result {
   br_io_mode_set modes;
   br_status status;
+  br_native_error native_error;
 } br_io_query_result;
 
 typedef br_i64_result (*br_stream_proc)(
@@ -105,6 +112,16 @@ static inline br_io_result br_io_result_make(size_t count, br_status status) {
 
   result.count = count;
   result.status = status;
+  result.native_error = BR_NATIVE_ERROR_NONE;
+  return result;
+}
+
+static inline br_io_result br_io_result_make_error(size_t count, br_error error) {
+  br_io_result result;
+
+  result.count = count;
+  result.status = error.status;
+  result.native_error = error.native;
   return result;
 }
 
@@ -113,6 +130,16 @@ static inline br_i64_result br_i64_result_make(int64_t value, br_status status) 
 
   result.value = value;
   result.status = status;
+  result.native_error = BR_NATIVE_ERROR_NONE;
+  return result;
+}
+
+static inline br_i64_result br_i64_result_make_error(int64_t value, br_error error) {
+  br_i64_result result;
+
+  result.value = value;
+  result.status = error.status;
+  result.native_error = error.native;
   return result;
 }
 
@@ -121,6 +148,16 @@ static inline br_io_seek_result br_io_seek_result_make(int64_t offset, br_status
 
   result.offset = offset;
   result.status = status;
+  result.native_error = BR_NATIVE_ERROR_NONE;
+  return result;
+}
+
+static inline br_io_seek_result br_io_seek_result_make_error(int64_t offset, br_error error) {
+  br_io_seek_result result;
+
+  result.offset = offset;
+  result.status = error.status;
+  result.native_error = error.native;
   return result;
 }
 
@@ -129,6 +166,16 @@ static inline br_io_size_result br_io_size_result_make(int64_t size, br_status s
 
   result.size = size;
   result.status = status;
+  result.native_error = BR_NATIVE_ERROR_NONE;
+  return result;
+}
+
+static inline br_io_size_result br_io_size_result_make_error(int64_t size, br_error error) {
+  br_io_size_result result;
+
+  result.size = size;
+  result.status = error.status;
+  result.native_error = error.native;
   return result;
 }
 
@@ -137,6 +184,16 @@ static inline br_io_byte_result br_io_byte_result_make(uint8_t value, br_status 
 
   result.value = value;
   result.status = status;
+  result.native_error = BR_NATIVE_ERROR_NONE;
+  return result;
+}
+
+static inline br_io_byte_result br_io_byte_result_make_error(uint8_t value, br_error error) {
+  br_io_byte_result result;
+
+  result.value = value;
+  result.status = error.status;
+  result.native_error = error.native;
   return result;
 }
 
@@ -147,6 +204,18 @@ br_io_rune_result_make(br_rune value, size_t width, br_status status) {
   result.value = value;
   result.width = width;
   result.status = status;
+  result.native_error = BR_NATIVE_ERROR_NONE;
+  return result;
+}
+
+static inline br_io_rune_result
+br_io_rune_result_make_error(br_rune value, size_t width, br_error error) {
+  br_io_rune_result result;
+
+  result.value = value;
+  result.width = width;
+  result.status = error.status;
+  result.native_error = error.native;
   return result;
 }
 
@@ -155,7 +224,26 @@ static inline br_io_query_result br_io_query_result_make(br_io_mode_set modes, b
 
   result.modes = modes;
   result.status = status;
+  result.native_error = BR_NATIVE_ERROR_NONE;
   return result;
+}
+
+static inline br_io_query_result br_io_query_result_make_error(br_io_mode_set modes,
+                                                               br_error error) {
+  br_io_query_result result;
+
+  result.modes = modes;
+  result.status = error.status;
+  result.native_error = error.native;
+  return result;
+}
+
+static inline br_error br_io_error_make(br_status status, br_native_error native_error) {
+  br_error error;
+
+  error.status = status;
+  error.native = status == BR_STATUS_OK ? BR_NATIVE_ERROR_NONE : native_error;
+  return error;
 }
 
 static inline br_io_mode_set br_io_mode_bit(br_io_mode mode) {
@@ -261,11 +349,11 @@ Close or flush a generic stream.
 `br_destroy` attempts to flush and close the stream before dispatching its
 destroy operation, even when an earlier operation fails. Unsupported flush or
 close modes are ignored. It returns the first other flush/close failure, or the
-destroy operation's status when neither failed.
+destroy operation's error when neither failed.
 */
-br_status br_close(br_stream stream);
-br_status br_flush(br_stream stream);
-br_status br_destroy(br_stream stream);
+br_error br_close(br_stream stream);
+br_error br_flush(br_stream stream);
+br_error br_destroy(br_stream stream);
 
 /*
 Return the size of a generic stream. If `SIZE` is unsupported and `SEEK`
@@ -286,7 +374,7 @@ br_io_byte_result br_read_byte(br_stream stream);
 /*
 Write one byte to a generic stream.
 */
-br_status br_write_byte(br_stream stream, uint8_t value);
+br_error br_write_byte(br_stream stream, uint8_t value);
 
 /*
 Read and decode one UTF-8 rune from a generic stream.

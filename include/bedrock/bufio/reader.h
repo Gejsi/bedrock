@@ -15,6 +15,7 @@ typedef struct br_bufio_reader {
   br_stream source;
   br_allocator allocator;
   br_status err;
+  br_native_error err_native;
   bool owns_storage;
   ptrdiff_t last_byte;
   ptrdiff_t last_rune_size;
@@ -28,9 +29,22 @@ typedef br_io_rune_result br_bufio_reader_rune_result;
 typedef struct br_bufio_reader_peek_result {
   br_bytes_view value;
   br_status status;
+  br_native_error native_error;
 } br_bufio_reader_peek_result;
 
 typedef br_bufio_reader_peek_result br_bufio_reader_slice_result;
+
+typedef struct br_bufio_reader_bytes_result {
+  br_bytes value;
+  br_status status;
+  br_native_error native_error;
+} br_bufio_reader_bytes_result;
+
+typedef struct br_bufio_reader_string_result {
+  br_string value;
+  br_status status;
+  br_native_error native_error;
+} br_bufio_reader_string_result;
 
 /*
 Initialize a heap-backed buffered reader using the default buffer size.
@@ -105,7 +119,7 @@ exactly `value.len` bytes and can be released with `br_bytes_free`.
 If the source ends after yielding bytes but before `delim`, `value` contains
 that final unterminated record and the status is `BR_STATUS_EOF`.
 */
-br_bytes_result
+br_bufio_reader_bytes_result
 br_bufio_reader_read_bytes(br_bufio_reader *reader, uint8_t delim, br_allocator allocator);
 
 /*
@@ -115,7 +129,7 @@ exactly `value.len` bytes and can be released with `br_string_free`.
 If the source ends after yielding bytes but before `delim`, `value` contains
 that final unterminated record and the status is `BR_STATUS_EOF`.
 */
-br_string_result
+br_bufio_reader_string_result
 br_bufio_reader_read_string(br_bufio_reader *reader, uint8_t delim, br_allocator allocator);
 
 /*

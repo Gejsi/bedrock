@@ -16,6 +16,10 @@ typedef struct test_bufio_data_error_reader {
   usize reads;
 } test_bufio_data_error_reader;
 
+typedef struct test_bufio_native_error_stream {
+  br_io_mode fail_mode;
+} test_bufio_native_error_stream;
+
 typedef struct test_bufio_strict_allocation {
   void *ptr;
   usize size;
@@ -176,6 +180,26 @@ static br_i64_result test_bufio_data_error_reader_proc(
   }
 }
 
+static br_i64_result test_bufio_native_error_stream_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  test_bufio_native_error_stream *stream;
+
+  BR_UNUSED(data);
+  BR_UNUSED(data_len);
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
+
+  stream = (test_bufio_native_error_stream *)context;
+  if (mode == stream->fail_mode) {
+    return br_i64_result_make_error(
+      0, br_error_make_native(BR_STATUS_IO_ERROR, BR_ERROR_DOMAIN_WIN32, 5u));
+  }
+  if (mode == BR_IO_MODE_QUERY) {
+    return br_stream_query_utility(br_io_mode_bit(stream->fail_mode));
+  }
+  return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+}
+
 static void test_bufio_reader_basic(void) {
   br_byte_reader source;
   br_bufio_reader reader;
@@ -234,8 +258,8 @@ static void test_bufio_reader_runes_and_lines(void) {
   br_bufio_reader string_reader;
   br_bufio_reader_rune_result rune_result;
   br_bufio_reader_slice_result slice_result;
-  br_bytes_result bytes_result;
-  br_string_result string_result;
+  br_bufio_reader_bytes_result bytes_result;
+  br_bufio_reader_string_result string_result;
   u8 backing[4];
 
   br_string_reader_init(&rune_source, br_string_view_make(utf8_word, BR_ARRAY_COUNT(utf8_word)));
@@ -329,8 +353,8 @@ static void test_bufio_owned_result_sizes(void) {
   br_allocator allocator;
   br_byte_reader source;
   br_bufio_reader reader;
-  br_bytes_result bytes_result;
-  br_string_result string_result;
+  br_bufio_reader_bytes_result bytes_result;
+  br_bufio_reader_string_result string_result;
   u8 backing[4];
 
   memset(&strict, 0, sizeof(strict));
@@ -445,7 +469,7 @@ static void test_bufio_writer_basic(void) {
   assert(br_bufio_writer_buffered(&writer) == 2u);
   assert(br_bufio_writer_available(&writer) == 2u);
 
-  assert(br_bufio_writer_write_byte(&writer, (u8)'c') == BR_STATUS_OK);
+  assert(br_bufio_writer_write_byte(&writer, (u8)'c').status == BR_STATUS_OK);
 
   io_result = br_bufio_writer_write_rune(&writer, (br_rune)0x00e4);
   assert(io_result.count == 2u);
@@ -464,7 +488,7 @@ static void test_bufio_writer_basic(void) {
   assert((query_result.modes & br_io_mode_bit(BR_IO_MODE_WRITE)) != 0u);
   assert((query_result.modes & br_io_mode_bit(BR_IO_MODE_FLUSH)) != 0u);
 
-  assert(br_bufio_writer_flush(&writer) == BR_STATUS_OK);
+  assert(br_bufio_writer_flush(&writer).status == BR_STATUS_OK);
   view = br_byte_buffer_view(&sink);
   assert(view.len == BR_ARRAY_COUNT(expected));
   assert(memcmp(view.data, expected, view.len) == 0);
@@ -489,11 +513,11 @@ static void test_bufio_writer_short_write(void) {
   assert(io_result.count == 4u);
   assert(io_result.status == BR_STATUS_OK);
 
-  assert(br_bufio_writer_flush(&writer) == BR_STATUS_SHORT_WRITE);
+  assert(br_bufio_writer_flush(&writer).status == BR_STATUS_SHORT_WRITE);
   assert(br_bufio_writer_buffered(&writer) == 3u);
-  assert(br_bufio_writer_write_byte(&writer, (u8)'!') == BR_STATUS_SHORT_WRITE);
+  assert(br_bufio_writer_write_byte(&writer, (u8)'!').status == BR_STATUS_SHORT_WRITE);
   assert(sink.written == 1u);
-  assert(br_bufio_writer_destroy(&writer) == BR_STATUS_SHORT_WRITE);
+  assert(br_bufio_writer_destroy(&writer).status == BR_STATUS_SHORT_WRITE);
   assert(sink.written == 1u);
 }
 
@@ -515,7 +539,7 @@ static void test_bufio_writer_destroy_flushes(void) {
   assert(io_result.status == BR_STATUS_OK);
   assert(br_byte_buffer_len(&sink) == 0u);
 
-  assert(br_bufio_writer_destroy(&writer) == BR_STATUS_OK);
+  assert(br_bufio_writer_destroy(&writer).status == BR_STATUS_OK);
   view = br_byte_buffer_view(&sink);
   assert(br_bytes_equal(view, BR_BYTES_LIT("pending")));
   assert(writer.buf == NULL);
@@ -533,13 +557,13 @@ static void test_bufio_writer_destroy_flushes(void) {
   assert(io_result.count == 7u);
   assert(io_result.status == BR_STATUS_OK);
 
-  assert(br_bufio_writer_destroy(&writer) == BR_STATUS_SHORT_WRITE);
+  assert(br_bufio_writer_destroy(&writer).status == BR_STATUS_SHORT_WRITE);
   assert(short_sink.written == 1u);
   assert(strict.size_errors == 0u);
   assert(strict.allocation_count == 0u);
   assert(writer.buf == NULL);
   assert(writer.cap == 0u);
-  assert(br_bufio_writer_destroy(NULL) == BR_STATUS_OK);
+  assert(br_bufio_writer_destroy(NULL).status == BR_STATUS_OK);
 }
 
 static void test_bufio_writer_discard(void) {
@@ -584,7 +608,7 @@ static void test_bufio_writer_stream_destroy_flushes(void) {
   assert(io_result.status == BR_STATUS_OK);
   assert(br_byte_buffer_len(&sink) == 0u);
 
-  assert(br_destroy(br_bufio_writer_as_stream(&writer)) == BR_STATUS_OK);
+  assert(br_destroy(br_bufio_writer_as_stream(&writer)).status == BR_STATUS_OK);
   view = br_byte_buffer_view(&sink);
   assert(view.len == 7u);
   assert(memcmp(view.data, "pending", view.len) == 0);
@@ -606,7 +630,7 @@ static void test_bufio_writer_stream_destroy_flushes(void) {
     io_result = br_bufio_writer_write(&writer, "fail", 4u);
     assert(io_result.count == 4u);
     assert(io_result.status == BR_STATUS_OK);
-    assert(br_destroy(br_bufio_writer_as_stream(&writer)) == BR_STATUS_SHORT_WRITE);
+    assert(br_destroy(br_bufio_writer_as_stream(&writer)).status == BR_STATUS_SHORT_WRITE);
     assert(short_sink.written == 1u);
     assert(writer.buf == NULL);
     assert(writer.cap == 0u);
@@ -635,7 +659,7 @@ static void test_bufio_writer_read_from(void) {
   view = br_byte_buffer_view(&sink);
   assert(view.len == 4u);
   assert(memcmp(view.data, "abcd", 4u) == 0);
-  assert(br_bufio_writer_flush(&writer) == BR_STATUS_OK);
+  assert(br_bufio_writer_flush(&writer).status == BR_STATUS_OK);
   view = br_byte_buffer_view(&sink);
   assert(view.len == 6u);
   assert(memcmp(view.data, "abcdef", 6u) == 0);
@@ -696,13 +720,56 @@ static void test_bufio_read_writer_stream(void) {
   io_result = br_write(stream, "xy", 2u);
   assert(io_result.count == 2u);
   assert(io_result.status == BR_STATUS_OK);
-  assert(br_flush(stream) == BR_STATUS_OK);
+  assert(br_flush(stream).status == BR_STATUS_OK);
 
   view = br_byte_buffer_view(&sink);
   assert(view.len == 2u);
   assert(memcmp(view.data, "xy", 2u) == 0);
 
   br_byte_buffer_destroy(&sink);
+}
+
+static void test_bufio_native_error_propagation(void) {
+  test_bufio_native_error_stream source;
+  br_bufio_reader reader;
+  br_bufio_reader_byte_result byte_result;
+  br_bufio_reader_bytes_result bytes_result;
+  br_bufio_writer writer;
+  br_bufio_writer_io_result write_result;
+  br_error error;
+  u8 backing[4];
+
+  source.fail_mode = BR_IO_MODE_READ;
+  assert(
+    br_bufio_reader_init_with_buffer(&reader,
+                                     br_stream_make(&source, test_bufio_native_error_stream_proc),
+                                     backing,
+                                     BR_ARRAY_COUNT(backing)) == BR_STATUS_OK);
+  byte_result = br_bufio_reader_read_byte(&reader);
+  assert(byte_result.status == BR_STATUS_IO_ERROR);
+  assert(byte_result.native_error.domain == BR_ERROR_DOMAIN_WIN32);
+  assert(byte_result.native_error.code == 5u);
+
+  br_bufio_reader_reset(&reader, br_stream_make(&source, test_bufio_native_error_stream_proc));
+  bytes_result = br_bufio_reader_read_bytes(&reader, (u8)'\n', br_allocator_heap());
+  assert(bytes_result.status == BR_STATUS_IO_ERROR);
+  assert(bytes_result.native_error.domain == BR_ERROR_DOMAIN_WIN32);
+  assert(bytes_result.native_error.code == 5u);
+  assert(br_bytes_free(bytes_result.value, br_allocator_heap()) == BR_STATUS_OK);
+
+  source.fail_mode = BR_IO_MODE_WRITE;
+  assert(
+    br_bufio_writer_init_with_buffer(&writer,
+                                     br_stream_make(&source, test_bufio_native_error_stream_proc),
+                                     backing,
+                                     BR_ARRAY_COUNT(backing)) == BR_STATUS_OK);
+  write_result = br_bufio_writer_write(&writer, "data", 4u);
+  assert(write_result.status == BR_STATUS_OK);
+  error = br_bufio_writer_flush(&writer);
+  assert(error.status == BR_STATUS_IO_ERROR);
+  assert(error.native.domain == BR_ERROR_DOMAIN_WIN32);
+  assert(error.native.code == 5u);
+  br_bufio_writer_discard(&writer);
 }
 
 static void test_bufio_init_validation(void) {
@@ -729,5 +796,6 @@ int main(void) {
   test_bufio_writer_discard();
   test_bufio_writer_stream_destroy_flushes();
   test_bufio_read_writer_stream();
+  test_bufio_native_error_propagation();
   return 0;
 }
