@@ -3,11 +3,7 @@
 enum { BR__BYTE_BUFFER_MIN_CAPACITY = 64 };
 
 static br_byte_buffer_io_result br__byte_buffer_io_result(usize count, br_status status) {
-  br_byte_buffer_io_result result;
-
-  result.count = count;
-  result.status = status;
-  return result;
+  return br_io_result_make(count, status);
 }
 
 static br_byte_buffer_byte_result br__byte_buffer_byte_result(u8 value, br_status status) {
@@ -212,9 +208,13 @@ br_status br_byte_buffer_truncate(br_byte_buffer *buffer, usize n) {
 }
 
 br_byte_buffer_io_result br_byte_buffer_write(br_byte_buffer *buffer, br_bytes_view src) {
+  const u8 *src_data;
+  usize src_offset;
+  bool aliases_buffer;
+  bool will_compact;
   br_status status;
 
-  if (buffer == NULL) {
+  if (buffer == NULL || (src.data == NULL && src.len > 0u)) {
     return br__byte_buffer_io_result(0u, BR_STATUS_INVALID_ARGUMENT);
   }
   if (src.len == 0u) {
@@ -222,12 +222,39 @@ br_byte_buffer_io_result br_byte_buffer_write(br_byte_buffer *buffer, br_bytes_v
     return br__byte_buffer_io_result(0u, BR_STATUS_OK);
   }
 
+  src_data = src.data;
+  src_offset = 0u;
+  aliases_buffer = false;
+  if (buffer->data != NULL) {
+    uintptr_t base_addr = (uintptr_t)buffer->data;
+    uintptr_t src_addr = (uintptr_t)src.data;
+
+    if (src_addr >= base_addr && src_addr - base_addr < buffer->cap) {
+      src_offset = (usize)(src_addr - base_addr);
+      if (src_offset > buffer->len || src.len > buffer->len - src_offset) {
+        return br__byte_buffer_io_result(0u, BR_STATUS_INVALID_ARGUMENT);
+      }
+      aliases_buffer = true;
+    }
+  }
+
+  will_compact = src.len > buffer->cap - buffer->len;
+  if (aliases_buffer && will_compact) {
+    if (src_offset < buffer->off) {
+      return br__byte_buffer_io_result(0u, BR_STATUS_INVALID_ARGUMENT);
+    }
+    src_offset -= buffer->off;
+  }
+
   status = br__byte_buffer_grow(buffer, src.len);
   if (status != BR_STATUS_OK) {
     return br__byte_buffer_io_result(0u, status);
   }
+  if (aliases_buffer) {
+    src_data = buffer->data + src_offset;
+  }
 
-  memcpy(buffer->data + buffer->len, src.data, src.len);
+  memcpy(buffer->data + buffer->len, src_data, src.len);
   buffer->len += src.len;
   buffer->can_unread_byte = false;
   return br__byte_buffer_io_result(src.len, BR_STATUS_OK);
@@ -259,6 +286,7 @@ br_bytes_view br_byte_buffer_next(br_byte_buffer *buffer, usize n) {
     return br_bytes_view_make(NULL, 0u);
   }
 
+  buffer->can_unread_byte = false;
   unread_len = br__byte_buffer_unread_len(buffer);
   if (n > unread_len) {
     n = unread_len;
@@ -266,10 +294,7 @@ br_bytes_view br_byte_buffer_next(br_byte_buffer *buffer, usize n) {
 
   result = br_bytes_view_make(buffer->data + buffer->off, n);
   buffer->off += n;
-  buffer->can_unread_byte = false;
-  if (buffer->off == buffer->len) {
-    br__byte_buffer_clear_state(buffer);
-  }
+  buffer->can_unread_byte = n > 0u;
   return result;
 }
 
@@ -280,6 +305,7 @@ br_byte_buffer_io_result br_byte_buffer_read(br_byte_buffer *buffer, void *dst, 
   if (buffer == NULL || (dst == NULL && dst_len > 0u)) {
     return br__byte_buffer_io_result(0u, BR_STATUS_INVALID_ARGUMENT);
   }
+  buffer->can_unread_byte = false;
   if (dst_len == 0u) {
     return br__byte_buffer_io_result(0u, BR_STATUS_OK);
   }
@@ -348,10 +374,16 @@ static br_i64_result br__byte_buffer_stream_proc(
       io_result = br_byte_buffer_write(buffer, br_bytes_view_make(data, data_len));
       return br_i64_result_make((i64)io_result.count, io_result.status);
     case BR_IO_MODE_SIZE:
+      if ((u64)br_byte_buffer_len(buffer) > (u64)INT64_MAX) {
+        return br_i64_result_make(0, BR_STATUS_OUT_OF_RANGE);
+      }
       return br_i64_result_make((i64)br_byte_buffer_len(buffer), BR_STATUS_OK);
+    case BR_IO_MODE_DESTROY:
+      br_byte_buffer_destroy(buffer);
+      return br_i64_result_make(0, BR_STATUS_OK);
     case BR_IO_MODE_QUERY:
       modes = br_io_mode_bit(BR_IO_MODE_READ) | br_io_mode_bit(BR_IO_MODE_WRITE) |
-              br_io_mode_bit(BR_IO_MODE_SIZE);
+              br_io_mode_bit(BR_IO_MODE_SIZE) | br_io_mode_bit(BR_IO_MODE_DESTROY);
       return br_stream_query_utility(modes);
     default:
       return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);

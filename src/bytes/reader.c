@@ -1,11 +1,7 @@
 #include <bedrock/bytes/reader.h>
 
 static br_byte_reader_io_result br__byte_reader_io_result(usize count, br_status status) {
-  br_byte_reader_io_result result;
-
-  result.count = count;
-  result.status = status;
-  return result;
+  return br_io_result_make(count, status);
 }
 
 static br_byte_reader_byte_result br__byte_reader_byte_result(u8 value, br_status status) {
@@ -17,19 +13,26 @@ static br_byte_reader_byte_result br__byte_reader_byte_result(u8 value, br_statu
 }
 
 static br_byte_reader_seek_result br__byte_reader_seek_result(i64 offset, br_status status) {
-  br_byte_reader_seek_result result;
-
-  result.offset = offset;
-  result.status = status;
-  return result;
+  return br_io_seek_result_make(offset, status);
 }
 
-static bool br__byte_reader_add_offset(i64 base, i64 offset, i64 *absolute) {
-  if ((offset > 0 && base > INT64_MAX - offset) || (offset < 0 && base < INT64_MIN - offset)) {
-    return false;
+static bool br__byte_reader_add_offset(usize base, i64 offset, usize *absolute) {
+  if (offset >= 0) {
+    u64 positive_offset = (u64)offset;
+
+    if (positive_offset > (u64)SIZE_MAX - (u64)base) {
+      return false;
+    }
+    *absolute = base + (usize)positive_offset;
+  } else {
+    u64 magnitude = (u64)(-(offset + 1)) + 1u;
+
+    if (magnitude > (u64)base) {
+      return false;
+    }
+    *absolute = base - (usize)magnitude;
   }
 
-  *absolute = base + offset;
   return true;
 }
 
@@ -66,14 +69,10 @@ br_bytes_view br_byte_reader_view(const br_byte_reader *reader) {
 }
 
 usize br_byte_reader_len(const br_byte_reader *reader) {
-  if (reader == NULL || reader->index >= (i64)reader->source.len) {
+  if (reader == NULL || reader->index >= reader->source.len) {
     return 0u;
   }
-  if (reader->index < 0) {
-    return reader->source.len;
-  }
-
-  return reader->source.len - (usize)reader->index;
+  return reader->source.len - reader->index;
 }
 
 usize br_byte_reader_size(const br_byte_reader *reader) {
@@ -89,13 +88,13 @@ br_byte_reader_io_result br_byte_reader_read(br_byte_reader *reader, void *dst, 
   if (dst_len == 0u) {
     return br__byte_reader_io_result(0u, BR_STATUS_OK);
   }
-  if (reader->index >= (i64)reader->source.len) {
+  if (reader->index >= reader->source.len) {
     return br__byte_reader_io_result(0u, BR_STATUS_EOF);
   }
 
-  count = br_min_size(dst_len, reader->source.len - (usize)reader->index);
-  memcpy(dst, reader->source.data + (usize)reader->index, count);
-  reader->index += (i64)count;
+  count = br_min_size(dst_len, reader->source.len - reader->index);
+  memcpy(dst, reader->source.data + reader->index, count);
+  reader->index += count;
   return br__byte_reader_io_result(count, BR_STATUS_OK);
 }
 
@@ -112,7 +111,7 @@ br_byte_reader_read_at(const br_byte_reader *reader, void *dst, usize dst_len, i
   if (offset < 0) {
     return br__byte_reader_io_result(0u, BR_STATUS_INVALID_ARGUMENT);
   }
-  if (offset >= (i64)reader->source.len) {
+  if ((u64)offset >= (u64)reader->source.len) {
     return br__byte_reader_io_result(0u, BR_STATUS_EOF);
   }
 
@@ -128,12 +127,12 @@ br_byte_reader_byte_result br_byte_reader_read_byte(br_byte_reader *reader) {
   if (reader == NULL) {
     return br__byte_reader_byte_result(0u, BR_STATUS_INVALID_ARGUMENT);
   }
-  if (reader->index >= (i64)reader->source.len) {
+  if (reader->index >= reader->source.len) {
     return br__byte_reader_byte_result(0u, BR_STATUS_EOF);
   }
 
   reader->index += 1;
-  return br__byte_reader_byte_result(reader->source.data[(usize)reader->index - 1u], BR_STATUS_OK);
+  return br__byte_reader_byte_result(reader->source.data[reader->index - 1u], BR_STATUS_OK);
 }
 
 br_status br_byte_reader_unread_byte(br_byte_reader *reader) {
@@ -150,7 +149,8 @@ br_status br_byte_reader_unread_byte(br_byte_reader *reader) {
 
 br_byte_reader_seek_result
 br_byte_reader_seek(br_byte_reader *reader, i64 offset, br_seek_from whence) {
-  i64 absolute;
+  usize base;
+  usize absolute;
 
   if (reader == NULL) {
     return br__byte_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);
@@ -158,29 +158,24 @@ br_byte_reader_seek(br_byte_reader *reader, i64 offset, br_seek_from whence) {
 
   switch (whence) {
     case BR_SEEK_FROM_START:
-      absolute = offset;
+      base = 0u;
       break;
     case BR_SEEK_FROM_CURRENT:
-      if (!br__byte_reader_add_offset(reader->index, offset, &absolute)) {
-        return br__byte_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);
-      }
+      base = reader->index;
       break;
     case BR_SEEK_FROM_END:
-      if ((uint64_t)reader->source.len > (uint64_t)INT64_MAX ||
-          !br__byte_reader_add_offset((i64)reader->source.len, offset, &absolute)) {
-        return br__byte_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);
-      }
+      base = reader->source.len;
       break;
     default:
       return br__byte_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);
   }
 
-  if (absolute < 0) {
+  if (!br__byte_reader_add_offset(base, offset, &absolute) || (u64)absolute > (u64)INT64_MAX) {
     return br__byte_reader_seek_result(0, BR_STATUS_INVALID_ARGUMENT);
   }
 
   reader->index = absolute;
-  return br__byte_reader_seek_result(absolute, BR_STATUS_OK);
+  return br__byte_reader_seek_result((i64)absolute, BR_STATUS_OK);
 }
 
 static br_i64_result br__byte_reader_stream_proc(
@@ -202,6 +197,9 @@ static br_i64_result br__byte_reader_stream_proc(
       seek_result = br_byte_reader_seek(reader, offset, whence);
       return br_i64_result_make(seek_result.offset, seek_result.status);
     case BR_IO_MODE_SIZE:
+      if ((u64)br_byte_reader_size(reader) > (u64)INT64_MAX) {
+        return br_i64_result_make(0, BR_STATUS_OUT_OF_RANGE);
+      }
       return br_i64_result_make((i64)br_byte_reader_size(reader), BR_STATUS_OK);
     case BR_IO_MODE_QUERY:
       modes = br_io_mode_bit(BR_IO_MODE_READ) | br_io_mode_bit(BR_IO_MODE_READ_AT) |

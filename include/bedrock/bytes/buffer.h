@@ -37,6 +37,12 @@ br_bytes_view br_byte_buffer_view(const br_byte_buffer *buffer);
 br_status br_byte_buffer_reserve(br_byte_buffer *buffer, size_t additional);
 br_status br_byte_buffer_truncate(br_byte_buffer *buffer, size_t n);
 
+/*
+Append `src` to the buffer.
+
+`src` may be the unread view returned by `br_byte_buffer_view`, or a subview of
+it. Any such view is invalidated by this call.
+*/
 br_byte_buffer_io_result br_byte_buffer_write(br_byte_buffer *buffer, br_bytes_view src);
 br_status br_byte_buffer_write_byte(br_byte_buffer *buffer, uint8_t byte_value);
 

@@ -14,7 +14,7 @@ supports random-access reads without changing the main cursor.
 */
 typedef struct br_byte_reader {
   br_bytes_view source;
-  int64_t index;
+  size_t index;
 } br_byte_reader;
 
 typedef br_io_result br_byte_reader_io_result;

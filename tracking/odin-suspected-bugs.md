@@ -224,3 +224,22 @@ and deliberately not copy this.
 - Bedrock: `br_rfc3339_parse` reads up to nine fractional digits into the
   nanosecond field and accepts-but-ignores digits beyond nanosecond
   resolution (documented), per `spec/modules/time.md`.
+
+## `core/bytes` buffer self-append use-after-free
+
+- File: `core/bytes/buffer.odin`
+- Area: `_buffer_grow` plus `buffer_write` (:108-135, :166-172)
+- Issue: `buffer_write(b, buffer_to_bytes(b))` passes a slice backed by
+  `b.buf`. When the append must grow the dynamic array, `_buffer_grow` can
+  reallocate `b.buf` before `buffer_write` copies from the source slice. The
+  source still points into the freed allocation.
+- Expected: detect a source slice that aliases `b.buf` and rebase it after
+  compaction/reallocation, or preserve the source before growing.
+- Effect: heap use-after-free on a natural self-append operation. Confirmed
+  with AddressSanitizer using a 64-byte buffer after consuming one byte; the
+  63-byte unread view is invalidated by the growth reallocation and then read
+  by `copy`.
+- Bedrock: `br_byte_buffer_write` detects views into its own allocation,
+  validates that they refer to initialized bytes, and rebases unread views
+  after compaction or reallocation. The self-append case is covered by
+  `tests/test_byte_buffer.c`.

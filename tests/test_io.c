@@ -497,6 +497,7 @@ static void test_io_byte_buffer_stream(void) {
   assert((query_result.modes & br_io_mode_bit(BR_IO_MODE_READ)) != 0u);
   assert((query_result.modes & br_io_mode_bit(BR_IO_MODE_WRITE)) != 0u);
   assert((query_result.modes & br_io_mode_bit(BR_IO_MODE_SIZE)) != 0u);
+  assert((query_result.modes & br_io_mode_bit(BR_IO_MODE_DESTROY)) != 0u);
 
   io_result = br_write(stream, "hello", 5u);
   assert(io_result.count == 5u);
@@ -524,7 +525,29 @@ static void test_io_byte_buffer_stream(void) {
   assert(io_result.status == BR_STATUS_OK);
   assert(memcmp(buffer, "world", 5u) == 0);
 
-  br_byte_buffer_destroy(&concrete);
+  assert(br_destroy(stream).status == BR_STATUS_OK);
+  assert(concrete.data == NULL);
+  assert(concrete.len == 0u);
+  assert(concrete.cap == 0u);
+}
+
+static void test_io_oversized_byte_buffer_stream(void) {
+#if SIZE_MAX > INT64_MAX
+  u8 first;
+  br_byte_buffer concrete;
+  br_io_size_result size_result;
+
+  first = 0u;
+  concrete.data = &first;
+  concrete.len = (size_t)INT64_MAX + (size_t)1u;
+  concrete.cap = concrete.len;
+  concrete.off = 0u;
+  concrete.allocator = br_allocator_null();
+  concrete.can_unread_byte = false;
+
+  size_result = br_size(br_byte_buffer_as_stream(&concrete));
+  assert(size_result.status == BR_STATUS_OUT_OF_RANGE);
+#endif
 }
 
 static void test_io_string_streams(void) {
@@ -907,6 +930,7 @@ int main(void) {
   test_io_stream_fallbacks();
   test_io_byte_reader_stream();
   test_io_byte_buffer_stream();
+  test_io_oversized_byte_buffer_stream();
   test_io_string_streams();
   test_io_byte_and_rune_helpers();
   test_io_write_exact_and_at_least_helpers();

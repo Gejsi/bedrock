@@ -16,6 +16,8 @@ static void test_byte_reader_basic_read(void) {
   io_result = br_byte_reader_read(&reader, scratch, 2u);
   assert(io_result.status == BR_STATUS_OK);
   assert(io_result.count == 2u);
+  assert(io_result.native_error.domain == BR_ERROR_DOMAIN_NONE);
+  assert(io_result.native_error.code == 0u);
   assert(br_bytes_equal(br_bytes_view_make(scratch, 2u), BR_BYTES_LIT("ab")));
   assert(br_bytes_equal(br_byte_reader_view(&reader), BR_BYTES_LIT("cdef")));
 
@@ -71,6 +73,8 @@ static void test_byte_reader_seek_semantics(void) {
   seek_result = br_byte_reader_seek(&reader, 3, BR_SEEK_FROM_START);
   assert(seek_result.status == BR_STATUS_OK);
   assert(seek_result.offset == 3);
+  assert(seek_result.native_error.domain == BR_ERROR_DOMAIN_NONE);
+  assert(seek_result.native_error.code == 0u);
   assert(br_bytes_equal(br_byte_reader_view(&reader), BR_BYTES_LIT("def")));
 
   assert(br_byte_reader_unread_byte(&reader) == BR_STATUS_OK);
@@ -117,9 +121,31 @@ static void test_byte_reader_seek_semantics(void) {
   assert(seek_result.status == BR_STATUS_INVALID_ARGUMENT);
 }
 
+static void test_byte_reader_oversized_view(void) {
+#if SIZE_MAX > INT64_MAX
+  u8 first;
+  br_byte_reader reader;
+  br_byte_reader_byte_result byte_result;
+  br_io_size_result size_result;
+
+  first = 42u;
+  br_byte_reader_init(&reader, br_bytes_view_make(&first, (size_t)INT64_MAX + (size_t)1u));
+
+  assert(br_byte_reader_len(&reader) == (size_t)INT64_MAX + (size_t)1u);
+  byte_result = br_byte_reader_read_byte(&reader);
+  assert(byte_result.status == BR_STATUS_OK);
+  assert(byte_result.value == 42u);
+  assert(br_byte_reader_len(&reader) == (size_t)INT64_MAX);
+
+  size_result = br_size(br_byte_reader_as_stream(&reader));
+  assert(size_result.status == BR_STATUS_OUT_OF_RANGE);
+#endif
+}
+
 int main(void) {
   test_byte_reader_basic_read();
   test_byte_reader_read_at_and_partial_rules();
   test_byte_reader_seek_semantics();
+  test_byte_reader_oversized_view();
   return 0;
 }
