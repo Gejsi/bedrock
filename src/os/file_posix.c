@@ -7,6 +7,7 @@
 #endif
 
 #include "file_internal.h"
+#include "error_internal.h"
 
 #if !defined(_WIN32)
 
@@ -19,90 +20,6 @@
 #include <unistd.h>
 
 #include <bedrock/mem/alloc.h>
-
-static br_status br__file_status_from_errno(int error) {
-  switch (error) {
-    case EINVAL:
-      return BR_STATUS_INVALID_ARGUMENT;
-    case ENOENT:
-      return BR_STATUS_NOT_FOUND;
-    case EACCES:
-    case EPERM:
-      return BR_STATUS_PERMISSION_DENIED;
-    case EEXIST:
-      return BR_STATUS_ALREADY_EXISTS;
-    case ENOTDIR:
-      return BR_STATUS_NOT_A_DIRECTORY;
-#ifdef EISDIR
-    case EISDIR:
-      return BR_STATUS_IS_A_DIRECTORY;
-#endif
-#ifdef ENOTEMPTY
-    case ENOTEMPTY:
-      return BR_STATUS_DIRECTORY_NOT_EMPTY;
-#endif
-    case EROFS:
-      return BR_STATUS_READ_ONLY_FILESYSTEM;
-    case ENOSPC:
-      return BR_STATUS_NO_SPACE;
-#ifdef EDQUOT
-    case EDQUOT:
-      return BR_STATUS_QUOTA_EXCEEDED;
-#endif
-    case EFBIG:
-      return BR_STATUS_FILE_TOO_LARGE;
-    case EMFILE:
-    case ENFILE:
-      return BR_STATUS_TOO_MANY_OPEN_FILES;
-    case ENOMEM:
-      return BR_STATUS_RESOURCE_EXHAUSTED;
-    case ENAMETOOLONG:
-      return BR_STATUS_PATH_TOO_LONG;
-    case EBUSY:
-#if defined(ETXTBSY) && ETXTBSY != EBUSY
-    case ETXTBSY:
-#endif
-      return BR_STATUS_BUSY;
-    case EXDEV:
-      return BR_STATUS_CROSS_DEVICE;
-    case EPIPE:
-      return BR_STATUS_BROKEN_PIPE;
-    case EAGAIN:
-#if defined(EWOULDBLOCK) && EWOULDBLOCK != EAGAIN
-    case EWOULDBLOCK:
-#endif
-      return BR_STATUS_WOULD_BLOCK;
-#ifdef ETIMEDOUT
-    case ETIMEDOUT:
-      return BR_STATUS_TIMED_OUT;
-#endif
-    case ESPIPE:
-      return BR_STATUS_NOT_SEEKABLE;
-#ifdef EOVERFLOW
-    case EOVERFLOW:
-      return BR_STATUS_OUT_OF_RANGE;
-#endif
-#ifdef ENOSYS
-    case ENOSYS:
-      return BR_STATUS_NOT_SUPPORTED;
-#endif
-#ifdef ENOTSUP
-    case ENOTSUP:
-      return BR_STATUS_NOT_SUPPORTED;
-#endif
-#if defined(EOPNOTSUPP) && (!defined(ENOTSUP) || EOPNOTSUPP != ENOTSUP)
-    case EOPNOTSUPP:
-      return BR_STATUS_NOT_SUPPORTED;
-#endif
-    default:
-      return BR_STATUS_IO_ERROR;
-  }
-}
-
-static br_error br__file_errno_error(int error) {
-  return br_error_make_native(
-    br__file_status_from_errno(error), BR_ERROR_DOMAIN_POSIX_ERRNO, (uint32_t)error);
-}
 
 static int br__file_fd(const br_file *file) {
   return (int)(file->handle - 1u);
@@ -182,7 +99,7 @@ br_error br__file_platform_open(br_file *file, br_string_view path, br_file_open
   if (fd < 0) {
     int native_error = errno;
     br__file_posix_path_free(native_path, path.len);
-    return br__file_errno_error(native_error);
+    return br__os_error_from_errno(native_error);
   }
   br__file_posix_path_free(native_path, path.len);
 
@@ -196,14 +113,14 @@ br_error br__file_platform_open(br_file *file, br_string_view path, br_file_open
     if (descriptor_flags < 0) {
       int native_error = errno;
       (void)close(fd);
-      return br__file_errno_error(native_error);
+      return br__os_error_from_errno(native_error);
     }
 
     while (fcntl(fd, F_SETFD, descriptor_flags | FD_CLOEXEC) < 0) {
       if (errno != EINTR) {
         int native_error = errno;
         (void)close(fd);
-        return br__file_errno_error(native_error);
+        return br__os_error_from_errno(native_error);
       }
     }
   }
@@ -213,7 +130,7 @@ br_error br__file_platform_open(br_file *file, br_string_view path, br_file_open
     if (errno != EINTR) {
       int native_error = errno;
       (void)close(fd);
-      return br__file_errno_error(native_error);
+      return br__os_error_from_errno(native_error);
     }
   }
   if (S_ISDIR(info.st_mode)) {
@@ -237,7 +154,7 @@ br_error br__file_platform_close(br_file *file) {
   file->flags = 0u;
   result = close(fd);
   if (result < 0) {
-    return br__file_errno_error(errno);
+    return br__os_error_from_errno(errno);
   }
   return BR_ERROR_OK;
 }
@@ -250,7 +167,7 @@ br_i64_result br__file_platform_read(br_file *file, void *dst, size_t len) {
   } while (count < 0 && errno == EINTR);
 
   if (count < 0) {
-    return br_i64_result_make_error(0, br__file_errno_error(errno));
+    return br_i64_result_make_error(0, br__os_error_from_errno(errno));
   }
   if (count == 0) {
     return br_i64_result_make(0, BR_STATUS_EOF);
@@ -275,7 +192,7 @@ br_i64_result br__file_platform_read_at(br_file *file, void *dst, size_t len, in
   } while (count < 0 && errno == EINTR);
 
   if (count < 0) {
-    return br_i64_result_make_error(0, br__file_errno_error(errno));
+    return br_i64_result_make_error(0, br__os_error_from_errno(errno));
   }
   if (count == 0) {
     return br_i64_result_make(0, BR_STATUS_EOF);
@@ -291,7 +208,7 @@ br_i64_result br__file_platform_write(br_file *file, const void *src, size_t len
   } while (count < 0 && errno == EINTR);
 
   if (count < 0) {
-    return br_i64_result_make_error(0, br__file_errno_error(errno));
+    return br_i64_result_make_error(0, br__os_error_from_errno(errno));
   }
   return br_i64_result_make((int64_t)count, BR_STATUS_OK);
 }
@@ -314,7 +231,7 @@ br__file_platform_write_at(br_file *file, const void *src, size_t len, int64_t o
   } while (count < 0 && errno == EINTR);
 
   if (count < 0) {
-    return br_i64_result_make_error(0, br__file_errno_error(errno));
+    return br_i64_result_make_error(0, br__os_error_from_errno(errno));
   }
   return br_i64_result_make((int64_t)count, BR_STATUS_OK);
 }
@@ -348,7 +265,7 @@ br_i64_result br__file_platform_seek(br_file *file, int64_t offset, br_seek_from
   } while (result < 0 && errno == EINTR);
 
   if (result < 0) {
-    return br_i64_result_make_error(0, br__file_errno_error(errno));
+    return br_i64_result_make_error(0, br__os_error_from_errno(errno));
   }
   if ((uintmax_t)result > (uintmax_t)INT64_MAX) {
     return br_i64_result_make(0, BR_STATUS_OUT_OF_RANGE);
@@ -365,7 +282,7 @@ br_i64_result br__file_platform_size(br_file *file) {
   } while (result < 0 && errno == EINTR);
 
   if (result < 0) {
-    return br_i64_result_make_error(0, br__file_errno_error(errno));
+    return br_i64_result_make_error(0, br__os_error_from_errno(errno));
   }
   if (info.st_size < 0 || (uintmax_t)info.st_size > (uintmax_t)INT64_MAX) {
     return br_i64_result_make(0, BR_STATUS_OUT_OF_RANGE);
