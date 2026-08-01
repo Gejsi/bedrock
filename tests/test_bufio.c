@@ -8,9 +8,20 @@ typedef struct test_bufio_no_progress_reader {
 } test_bufio_no_progress_reader;
 
 typedef struct test_bufio_short_sink {
+  u8 data[64];
   usize max_per_write;
   usize written;
+  usize calls;
 } test_bufio_short_sink;
+
+typedef struct test_bufio_progress_error_sink {
+  u8 data[64];
+  usize max_per_write;
+  usize fail_after;
+  usize written;
+  usize calls;
+  br_error error;
+} test_bufio_progress_error_sink;
 
 typedef struct test_bufio_data_error_reader {
   usize reads;
@@ -139,7 +150,6 @@ static br_i64_result test_bufio_short_sink_proc(
   test_bufio_short_sink *sink;
   usize count;
 
-  BR_UNUSED(data);
   BR_UNUSED(offset);
   BR_UNUSED(whence);
 
@@ -147,7 +157,40 @@ static br_i64_result test_bufio_short_sink_proc(
   switch (mode) {
     case BR_IO_MODE_WRITE:
       count = br_min_size(data_len, sink->max_per_write);
+      assert(sink->written + count <= BR_ARRAY_COUNT(sink->data));
+      memcpy(sink->data + sink->written, data, count);
       sink->written += count;
+      sink->calls += 1u;
+      return br_i64_result_make((i64)count, BR_STATUS_OK);
+    case BR_IO_MODE_QUERY:
+      return br_stream_query_utility(br_io_mode_bit(BR_IO_MODE_WRITE));
+    default:
+      return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+  }
+}
+
+static br_i64_result test_bufio_progress_error_sink_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  test_bufio_progress_error_sink *sink;
+  usize count;
+  usize remaining;
+
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
+
+  sink = (test_bufio_progress_error_sink *)context;
+  switch (mode) {
+    case BR_IO_MODE_WRITE:
+      remaining = sink->fail_after - sink->written;
+      count = br_min_size(data_len, sink->max_per_write);
+      count = br_min_size(count, remaining);
+      assert(sink->written + count <= BR_ARRAY_COUNT(sink->data));
+      memcpy(sink->data + sink->written, data, count);
+      sink->written += count;
+      sink->calls += 1u;
+      if (sink->written == sink->fail_after) {
+        return br_i64_result_make_error((i64)count, sink->error);
+      }
       return br_i64_result_make((i64)count, BR_STATUS_OK);
     case BR_IO_MODE_QUERY:
       return br_stream_query_utility(br_io_mode_bit(BR_IO_MODE_WRITE));
@@ -425,13 +468,15 @@ static void test_bufio_reader_write_to(void) {
          BR_STATUS_OK);
   peek_result = br_bufio_reader_peek(&reader, 1u);
   assert(peek_result.status == BR_STATUS_OK);
+  memset(&short_sink, 0, sizeof(short_sink));
   short_sink.max_per_write = 1u;
-  short_sink.written = 0u;
   write_result =
     br_bufio_reader_write_to(&reader, br_stream_make(&short_sink, test_bufio_short_sink_proc));
-  assert(write_result.value == 1);
-  assert(write_result.status == BR_STATUS_SHORT_WRITE);
-  assert(short_sink.written == 1u);
+  assert(write_result.value == 4);
+  assert(write_result.status == BR_STATUS_OK);
+  assert(short_sink.written == 4u);
+  assert(short_sink.calls == 4u);
+  assert(memcmp(short_sink.data, "abcd", 4u) == 0);
 
   memset(&data_error_source, 0, sizeof(data_error_source));
   br_byte_buffer_init(&sink, br_allocator_heap());
@@ -496,7 +541,7 @@ static void test_bufio_writer_basic(void) {
   br_byte_buffer_destroy(&sink);
 }
 
-static void test_bufio_writer_short_write(void) {
+static void test_bufio_writer_partial_writes(void) {
   test_bufio_short_sink sink;
   br_bufio_writer writer;
   br_bufio_writer_io_result io_result;
@@ -513,12 +558,119 @@ static void test_bufio_writer_short_write(void) {
   assert(io_result.count == 4u);
   assert(io_result.status == BR_STATUS_OK);
 
-  assert(br_bufio_writer_flush(&writer).status == BR_STATUS_SHORT_WRITE);
-  assert(br_bufio_writer_buffered(&writer) == 3u);
-  assert(br_bufio_writer_write_byte(&writer, (u8)'!').status == BR_STATUS_SHORT_WRITE);
-  assert(sink.written == 1u);
-  assert(br_bufio_writer_destroy(&writer).status == BR_STATUS_SHORT_WRITE);
-  assert(sink.written == 1u);
+  assert(br_bufio_writer_flush(&writer).status == BR_STATUS_OK);
+  assert(br_bufio_writer_buffered(&writer) == 0u);
+  assert(sink.written == 4u);
+  assert(sink.calls == 4u);
+  assert(memcmp(sink.data, "abcd", 4u) == 0);
+
+  io_result = br_bufio_writer_write(&writer, "efghij", 6u);
+  assert(io_result.count == 6u);
+  assert(io_result.status == BR_STATUS_OK);
+  assert(br_bufio_writer_buffered(&writer) == 0u);
+  assert(sink.written == 10u);
+  assert(sink.calls == 10u);
+  assert(memcmp(sink.data, "abcdefghij", 10u) == 0);
+
+  assert(br_bufio_writer_write_byte(&writer, (u8)'!').status == BR_STATUS_OK);
+  assert(br_bufio_writer_destroy(&writer).status == BR_STATUS_OK);
+  assert(sink.written == 11u);
+  assert(sink.calls == 11u);
+  assert(memcmp(sink.data, "abcdefghij!", 11u) == 0);
+
+  memset(&sink, 0, sizeof(sink));
+  assert(br_bufio_writer_init_with_buffer(&writer,
+                                          br_stream_make(&sink, test_bufio_short_sink_proc),
+                                          backing,
+                                          BR_ARRAY_COUNT(backing)) == BR_STATUS_OK);
+  io_result = br_bufio_writer_write(&writer, "abcd", 4u);
+  assert(io_result.count == 4u);
+  assert(io_result.status == BR_STATUS_OK);
+  assert(br_bufio_writer_flush(&writer).status == BR_STATUS_NO_PROGRESS);
+  assert(br_bufio_writer_buffered(&writer) == 4u);
+  assert(sink.calls == 1u);
+  assert(br_bufio_writer_write_byte(&writer, (u8)'!').status == BR_STATUS_NO_PROGRESS);
+  assert(br_bufio_writer_destroy(&writer).status == BR_STATUS_NO_PROGRESS);
+  assert(sink.calls == 1u);
+}
+
+static void test_bufio_write_errors_after_progress(void) {
+  test_bufio_progress_error_sink sink;
+  br_byte_reader source;
+  br_bufio_reader reader;
+  br_bufio_reader_peek_result peek_result;
+  br_i64_result transfer_result;
+  br_bufio_writer writer;
+  br_bufio_writer_io_result write_result;
+  br_error error;
+  u8 reader_backing[4];
+  u8 writer_backing[4];
+
+  memset(&sink, 0, sizeof(sink));
+  sink.max_per_write = 1u;
+  sink.fail_after = 2u;
+  sink.error = br_error_make_native(BR_STATUS_IO_ERROR, BR_ERROR_DOMAIN_POSIX_ERRNO, 55u);
+
+  br_byte_reader_init(&source, BR_BYTES_LIT("abcd"));
+  assert(br_bufio_reader_init_with_buffer(&reader,
+                                          br_byte_reader_as_stream(&source),
+                                          reader_backing,
+                                          BR_ARRAY_COUNT(reader_backing)) == BR_STATUS_OK);
+  peek_result = br_bufio_reader_peek(&reader, 1u);
+  assert(peek_result.status == BR_STATUS_OK);
+  transfer_result =
+    br_bufio_reader_write_to(&reader, br_stream_make(&sink, test_bufio_progress_error_sink_proc));
+  assert(transfer_result.value == 2);
+  assert(transfer_result.status == BR_STATUS_IO_ERROR);
+  assert(transfer_result.native_error.domain == BR_ERROR_DOMAIN_POSIX_ERRNO);
+  assert(transfer_result.native_error.code == 55u);
+  assert(sink.calls == 2u);
+  assert(memcmp(sink.data, "ab", 2u) == 0);
+  assert(br_bufio_reader_buffered(&reader) == 2u);
+  peek_result = br_bufio_reader_peek(&reader, 2u);
+  assert(peek_result.status == BR_STATUS_OK);
+  assert(br_bytes_equal(peek_result.value, BR_BYTES_LIT("cd")));
+
+  memset(&sink, 0, sizeof(sink));
+  sink.max_per_write = 1u;
+  sink.fail_after = 2u;
+  sink.error = br_error_make_native(BR_STATUS_IO_ERROR, BR_ERROR_DOMAIN_POSIX_ERRNO, 55u);
+  assert(
+    br_bufio_writer_init_with_buffer(&writer,
+                                     br_stream_make(&sink, test_bufio_progress_error_sink_proc),
+                                     writer_backing,
+                                     BR_ARRAY_COUNT(writer_backing)) == BR_STATUS_OK);
+  write_result = br_bufio_writer_write(&writer, "abcd", 4u);
+  assert(write_result.count == 4u);
+  assert(write_result.status == BR_STATUS_OK);
+  error = br_bufio_writer_flush(&writer);
+  assert(error.status == BR_STATUS_IO_ERROR);
+  assert(error.native.domain == BR_ERROR_DOMAIN_POSIX_ERRNO);
+  assert(error.native.code == 55u);
+  assert(sink.calls == 2u);
+  assert(memcmp(sink.data, "ab", 2u) == 0);
+  assert(br_bufio_writer_buffered(&writer) == 2u);
+  assert(memcmp(writer.buf, "cd", 2u) == 0);
+  br_bufio_writer_discard(&writer);
+
+  memset(&sink, 0, sizeof(sink));
+  sink.max_per_write = 1u;
+  sink.fail_after = 2u;
+  sink.error = br_error_make_native(BR_STATUS_IO_ERROR, BR_ERROR_DOMAIN_POSIX_ERRNO, 55u);
+  assert(
+    br_bufio_writer_init_with_buffer(&writer,
+                                     br_stream_make(&sink, test_bufio_progress_error_sink_proc),
+                                     writer_backing,
+                                     BR_ARRAY_COUNT(writer_backing)) == BR_STATUS_OK);
+  write_result = br_bufio_writer_write(&writer, "abcdef", 6u);
+  assert(write_result.count == 2u);
+  assert(write_result.status == BR_STATUS_IO_ERROR);
+  assert(write_result.native_error.domain == BR_ERROR_DOMAIN_POSIX_ERRNO);
+  assert(write_result.native_error.code == 55u);
+  assert(sink.calls == 2u);
+  assert(memcmp(sink.data, "ab", 2u) == 0);
+  assert(br_bufio_writer_buffered(&writer) == 0u);
+  br_bufio_writer_discard(&writer);
 }
 
 static void test_bufio_writer_destroy_flushes(void) {
@@ -557,8 +709,10 @@ static void test_bufio_writer_destroy_flushes(void) {
   assert(io_result.count == 7u);
   assert(io_result.status == BR_STATUS_OK);
 
-  assert(br_bufio_writer_destroy(&writer).status == BR_STATUS_SHORT_WRITE);
-  assert(short_sink.written == 1u);
+  assert(br_bufio_writer_destroy(&writer).status == BR_STATUS_OK);
+  assert(short_sink.written == 7u);
+  assert(short_sink.calls == 7u);
+  assert(memcmp(short_sink.data, "pending", 7u) == 0);
   assert(strict.size_errors == 0u);
   assert(strict.allocation_count == 0u);
   assert(writer.buf == NULL);
@@ -630,8 +784,10 @@ static void test_bufio_writer_stream_destroy_flushes(void) {
     io_result = br_bufio_writer_write(&writer, "fail", 4u);
     assert(io_result.count == 4u);
     assert(io_result.status == BR_STATUS_OK);
-    assert(br_destroy(br_bufio_writer_as_stream(&writer)).status == BR_STATUS_SHORT_WRITE);
-    assert(short_sink.written == 1u);
+    assert(br_destroy(br_bufio_writer_as_stream(&writer)).status == BR_STATUS_OK);
+    assert(short_sink.written == 4u);
+    assert(short_sink.calls == 4u);
+    assert(memcmp(short_sink.data, "fail", 4u) == 0);
     assert(writer.buf == NULL);
     assert(writer.cap == 0u);
   }
@@ -791,7 +947,8 @@ int main(void) {
   test_bufio_reader_write_to();
   test_bufio_writer_basic();
   test_bufio_writer_read_from();
-  test_bufio_writer_short_write();
+  test_bufio_writer_partial_writes();
+  test_bufio_write_errors_after_progress();
   test_bufio_writer_destroy_flushes();
   test_bufio_writer_discard();
   test_bufio_writer_stream_destroy_flushes();

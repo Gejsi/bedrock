@@ -117,15 +117,11 @@ br_error br_bufio_writer_flush(br_bufio_writer *writer) {
     return BR_ERROR_OK;
   }
 
-  result = br_write(writer->sink, writer->buf, writer->n);
+  result = br_write_full(writer->sink, writer->buf, writer->n);
   if (result.count > writer->n) {
     writer->err = BR_STATUS_INVALID_STATE;
     writer->err_native = BR_NATIVE_ERROR_NONE;
     return br_error_make(BR_STATUS_INVALID_STATE);
-  }
-  if (result.count < writer->n && result.status == BR_STATUS_OK) {
-    result.status = BR_STATUS_SHORT_WRITE;
-    result.native_error = BR_NATIVE_ERROR_NONE;
   }
   if (result.status != BR_STATUS_OK) {
     if (result.count > 0u && result.count < writer->n) {
@@ -161,16 +157,13 @@ br_bufio_writer_write(br_bufio_writer *writer, const void *src, usize src_len) {
     if (br_bufio_writer_buffered(writer) == 0u) {
       br_io_result result;
 
-      result = br_write(writer->sink, cursor, src_len);
+      result = br_write_full(writer->sink, cursor, src_len);
       if (result.count > src_len) {
         writer->err = BR_STATUS_INVALID_STATE;
         writer->err_native = BR_NATIVE_ERROR_NONE;
         break;
       }
-      if (result.count < src_len && result.status == BR_STATUS_OK) {
-        writer->err = BR_STATUS_SHORT_WRITE;
-        writer->err_native = BR_NATIVE_ERROR_NONE;
-      } else if (result.status != BR_STATUS_OK) {
+      if (result.status != BR_STATUS_OK) {
         writer->err = result.status;
         writer->err_native = result.native_error;
       }

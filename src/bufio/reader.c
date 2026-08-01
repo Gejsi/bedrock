@@ -122,21 +122,17 @@ static br_status br__bufio_take_byte_buffer(br_byte_buffer *buffer, br_bytes *by
   return BR_STATUS_OK;
 }
 
-static br_i64_result br__bufio_reader_write_buffer(br_bufio_reader *reader, br_stream sink) {
+static br_i64_result
+br__bufio_reader_write_buffer(br_bufio_reader *reader, br_stream sink, u64 max_len) {
   usize available;
   br_io_result result;
 
   available = br_bufio_reader_buffered(reader);
-  result = br_write(sink, reader->buf + reader->r, available);
-  reader->r += result.count;
-  /*
-  Odin's io.write already reports short writes as errors. Bedrock's generic
-  br_write is looser, so bufio normalizes a short successful chunk here.
-  */
-  if (result.count < available && result.status == BR_STATUS_OK) {
-    result.status = BR_STATUS_SHORT_WRITE;
-    result.native_error = BR_NATIVE_ERROR_NONE;
+  if ((u64)available > max_len) {
+    available = (usize)max_len;
   }
+  result = br_write_full(sink, reader->buf + reader->r, available);
+  reader->r += result.count;
   return br_i64_result_make_error((i64)result.count,
                                   br_io_error_make(result.status, result.native_error));
 }
@@ -571,7 +567,7 @@ br_i64_result br_bufio_reader_write_to(br_bufio_reader *reader, br_stream sink) 
     return br_i64_result_make(0, BR_STATUS_INVALID_ARGUMENT);
   }
 
-  written_result = br__bufio_reader_write_buffer(reader, sink);
+  written_result = br__bufio_reader_write_buffer(reader, sink, (u64)INT64_MAX);
   total = written_result.value;
   if (written_result.status != BR_STATUS_OK) {
     return br_i64_result_make_error(
@@ -581,6 +577,9 @@ br_i64_result br_bufio_reader_write_to(br_bufio_reader *reader, br_stream sink) 
     br_error error = br__bufio_reader_consume_err(reader);
     return error.status == BR_STATUS_EOF ? br_i64_result_make(total, BR_STATUS_OK)
                                          : br_i64_result_make_error(total, error);
+  }
+  if ((u64)total == (u64)INT64_MAX) {
+    return br_i64_result_make(total, BR_STATUS_OUT_OF_RANGE);
   }
 
   if (br_bufio_reader_buffered(reader) < reader->cap) {
@@ -594,8 +593,10 @@ br_i64_result br_bufio_reader_write_to(br_bufio_reader *reader, br_stream sink) 
 
   while (reader->r < reader->w) {
     br_status fill_status;
+    u64 remaining;
 
-    written_result = br__bufio_reader_write_buffer(reader, sink);
+    remaining = (u64)INT64_MAX - (u64)total;
+    written_result = br__bufio_reader_write_buffer(reader, sink, remaining);
     total += written_result.value;
     if (written_result.status != BR_STATUS_OK) {
       return br_i64_result_make_error(
@@ -605,6 +606,9 @@ br_i64_result br_bufio_reader_write_to(br_bufio_reader *reader, br_stream sink) 
       br_error error = br__bufio_reader_consume_err(reader);
       return error.status == BR_STATUS_EOF ? br_i64_result_make(total, BR_STATUS_OK)
                                            : br_i64_result_make_error(total, error);
+    }
+    if ((u64)total == (u64)INT64_MAX) {
+      return br_i64_result_make(total, BR_STATUS_OUT_OF_RANGE);
     }
 
     fill_status = br__bufio_reader_fill(reader);

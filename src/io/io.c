@@ -40,17 +40,6 @@ static usize br__utf8_expected_width(u8 byte_value) {
   return 1u;
 }
 
-static br_error br__short_write_error(br_io_result result, usize expected) {
-  if (result.count == expected) {
-    return br_io_error_make(result.status, result.native_error);
-  }
-  if (result.status == BR_STATUS_OK) {
-    return br_error_make(BR_STATUS_SHORT_WRITE);
-  }
-
-  return br_io_error_make(result.status, result.native_error);
-}
-
 static br_i64_result br__stream_call(
   br_stream stream, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
   if (stream.procedure == NULL) {
@@ -372,8 +361,8 @@ br_io_byte_result br_read_byte(br_stream stream) {
 br_error br_write_byte(br_stream stream, u8 value) {
   br_io_result result;
 
-  result = br_write(stream, &value, 1u);
-  return br__short_write_error(result, 1u);
+  result = br_write_full(stream, &value, 1u);
+  return br_io_error_make(result.status, result.native_error);
 }
 
 br_io_rune_result br_read_rune(br_stream stream) {
@@ -431,14 +420,9 @@ br_io_rune_result br_read_rune(br_stream stream) {
 
 br_io_result br_write_rune(br_stream stream, br_rune value) {
   br_utf8_encode_result encoded;
-  br_io_result result;
 
   encoded = br_utf8_encode(value);
-  result = br_write(stream, encoded.bytes, encoded.len);
-  if (result.count < encoded.len && result.status == BR_STATUS_OK) {
-    result.status = BR_STATUS_SHORT_WRITE;
-  }
-  return result;
+  return br_write_full(stream, encoded.bytes, encoded.len);
 }
 
 br_i64_result br_copy(br_stream dst, br_stream src) {
@@ -474,15 +458,8 @@ br_i64_result br_copy_buffer(br_stream dst, br_stream src, void *buffer, usize b
     if (read_result.count > 0u) {
       br_io_result write_result;
 
-      write_result = br_write(dst, scratch, read_result.count);
+      write_result = br_write_full(dst, scratch, read_result.count);
       written += (i64)write_result.count;
-      if (write_result.count < read_result.count) {
-        if (write_result.status == BR_STATUS_OK) {
-          return br_i64_result_make(written, BR_STATUS_SHORT_WRITE);
-        }
-        return br_i64_result_make_error(
-          written, br_io_error_make(write_result.status, write_result.native_error));
-      }
       if (write_result.status != BR_STATUS_OK) {
         return br_i64_result_make_error(
           written, br_io_error_make(write_result.status, write_result.native_error));

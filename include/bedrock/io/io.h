@@ -311,6 +311,10 @@ br_io_result br_read_full(br_stream stream, void *dst, size_t dst_len);
 
 /*
 Write bytes using a generic stream.
+
+A successful call may accept fewer than `src_len` bytes. Use `br_write_full`
+when the whole input must be accepted before returning. A failing call may
+still report `count > 0`; those bytes were accepted before the reported error.
 */
 br_io_result br_write(br_stream stream, const void *src, size_t src_len);
 

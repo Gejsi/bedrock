@@ -10,9 +10,18 @@ typedef struct test_memory_stream {
 } test_memory_stream;
 
 typedef struct test_short_writer {
+  u8 data[32];
   usize max_per_write;
   usize written;
+  usize calls;
 } test_short_writer;
+
+typedef struct test_progress_error_writer {
+  u8 data[32];
+  usize fail_after;
+  usize written;
+  br_error error;
+} test_progress_error_writer;
 
 typedef struct test_limited_reader {
   const u8 *data;
@@ -187,7 +196,6 @@ static br_i64_result test_short_writer_proc(
   test_short_writer *writer;
   usize count;
 
-  BR_UNUSED(data);
   BR_UNUSED(offset);
   BR_UNUSED(whence);
 
@@ -195,7 +203,36 @@ static br_i64_result test_short_writer_proc(
   switch (mode) {
     case BR_IO_MODE_WRITE:
       count = br_min_size(data_len, writer->max_per_write);
+      assert(writer->written + count <= BR_ARRAY_COUNT(writer->data));
+      memcpy(writer->data + writer->written, data, count);
       writer->written += count;
+      writer->calls += 1u;
+      return br_i64_result_make((i64)count, BR_STATUS_OK);
+    case BR_IO_MODE_QUERY:
+      return br_stream_query_utility(br_io_mode_bit(BR_IO_MODE_WRITE));
+    default:
+      return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+  }
+}
+
+static br_i64_result test_progress_error_writer_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  test_progress_error_writer *writer;
+  usize count;
+
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
+
+  writer = (test_progress_error_writer *)context;
+  switch (mode) {
+    case BR_IO_MODE_WRITE:
+      count = br_min_size(data_len, writer->fail_after - writer->written);
+      assert(writer->written + count <= BR_ARRAY_COUNT(writer->data));
+      memcpy(writer->data + writer->written, data, count);
+      writer->written += count;
+      if (writer->written == writer->fail_after) {
+        return br_i64_result_make_error((i64)count, writer->error);
+      }
       return br_i64_result_make((i64)count, BR_STATUS_OK);
     case BR_IO_MODE_QUERY:
       return br_stream_query_utility(br_io_mode_bit(BR_IO_MODE_WRITE));
@@ -668,35 +705,54 @@ static void test_io_byte_and_rune_helpers(void) {
 }
 
 static void test_io_write_exact_and_at_least_helpers(void) {
+  static const u8 encoded_a_umlaut[] = {0xc3u, 0xa4u};
   test_short_writer short_writer;
   test_no_progress_stream stuck_writer;
   br_io_result io_result;
+  br_error error;
 
+  memset(&short_writer, 0, sizeof(short_writer));
   short_writer.max_per_write = 2u;
-  short_writer.written = 0u;
   io_result =
     br_write_at_least(br_stream_make(&short_writer, test_short_writer_proc), "hello", 5u, 4u);
   assert(io_result.count == 4u);
   assert(io_result.status == BR_STATUS_OK);
   assert(short_writer.written == 4u);
+  assert(short_writer.calls == 2u);
+  assert(memcmp(short_writer.data, "hell", 4u) == 0);
 
+  memset(&short_writer, 0, sizeof(short_writer));
   short_writer.max_per_write = 2u;
-  short_writer.written = 0u;
   io_result = br_write_full(br_stream_make(&short_writer, test_short_writer_proc), "hello", 5u);
   assert(io_result.count == 5u);
   assert(io_result.status == BR_STATUS_OK);
   assert(short_writer.written == 5u);
+  assert(short_writer.calls == 3u);
+  assert(memcmp(short_writer.data, "hello", 5u) == 0);
 
   io_result =
     br_write_at_least(br_stream_make(&short_writer, test_short_writer_proc), "abc", 3u, 4u);
   assert(io_result.count == 0u);
   assert(io_result.status == BR_STATUS_SHORT_BUFFER);
 
+  memset(&short_writer, 0, sizeof(short_writer));
+  short_writer.max_per_write = 1u;
+  io_result = br_write_rune(br_stream_make(&short_writer, test_short_writer_proc), (br_rune)0x00e4);
+  assert(io_result.count == BR_ARRAY_COUNT(encoded_a_umlaut));
+  assert(io_result.status == BR_STATUS_OK);
+  assert(short_writer.calls == BR_ARRAY_COUNT(encoded_a_umlaut));
+  assert(memcmp(short_writer.data, encoded_a_umlaut, BR_ARRAY_COUNT(encoded_a_umlaut)) == 0);
+
   stuck_writer.mode = BR_IO_MODE_WRITE;
   stuck_writer.calls = 0u;
   io_result = br_write_full(br_stream_make(&stuck_writer, test_no_progress_stream_proc), "a", 1u);
   assert(io_result.count == 0u);
   assert(io_result.status == BR_STATUS_NO_PROGRESS);
+  assert(stuck_writer.calls == 1u);
+
+  stuck_writer.calls = 0u;
+  error = br_write_byte(br_stream_make(&stuck_writer, test_no_progress_stream_proc), (u8)'a');
+  assert(error.status == BR_STATUS_NO_PROGRESS);
   assert(stuck_writer.calls == 1u);
 }
 
@@ -709,6 +765,7 @@ static void test_io_copy_helpers(void) {
   br_bytes_view view;
   u8 scratch[3];
   test_short_writer short_writer;
+  test_progress_error_writer failing_writer;
 
   br_byte_reader_init(&src_reader, BR_BYTES_LIT("copy me"));
   br_byte_buffer_init(&dst_buffer, br_allocator_heap());
@@ -739,12 +796,28 @@ static void test_io_copy_helpers(void) {
   assert(copy_result.status == BR_STATUS_INVALID_ARGUMENT);
 
   br_byte_reader_init(&src_reader, BR_BYTES_LIT("abcdef"));
+  memset(&short_writer, 0, sizeof(short_writer));
   short_writer.max_per_write = 1u;
-  short_writer.written = 0u;
   copy_result = br_copy(br_stream_make(&short_writer, test_short_writer_proc),
                         br_byte_reader_as_stream(&src_reader));
-  assert(copy_result.value == 1);
-  assert(copy_result.status == BR_STATUS_SHORT_WRITE);
+  assert(copy_result.value == 6);
+  assert(copy_result.status == BR_STATUS_OK);
+  assert(short_writer.written == 6u);
+  assert(short_writer.calls == 6u);
+  assert(memcmp(short_writer.data, "abcdef", 6u) == 0);
+
+  br_byte_reader_init(&src_reader, BR_BYTES_LIT("abcdef"));
+  memset(&failing_writer, 0, sizeof(failing_writer));
+  failing_writer.fail_after = 2u;
+  failing_writer.error = br_error_make_native(BR_STATUS_IO_ERROR, BR_ERROR_DOMAIN_POSIX_ERRNO, 77u);
+  copy_result = br_copy(br_stream_make(&failing_writer, test_progress_error_writer_proc),
+                        br_byte_reader_as_stream(&src_reader));
+  assert(copy_result.value == 2);
+  assert(copy_result.status == BR_STATUS_IO_ERROR);
+  assert(copy_result.native_error.domain == BR_ERROR_DOMAIN_POSIX_ERRNO);
+  assert(copy_result.native_error.code == 77u);
+  assert(failing_writer.written == 2u);
+  assert(memcmp(failing_writer.data, "ab", 2u) == 0);
 }
 
 static void test_io_invalid_callback_counts(void) {
