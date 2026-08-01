@@ -19,8 +19,9 @@ Bedrock's buddy allocator, with these design choices:
 - initialization reports statuses rather than aborting
 - the generic allocator adapter supports alloc/free/resize/reset only (no
   feature/info queries)
-- all allocations use the allocator's fixed initialization alignment, so the
-  generic allocator adapter ignores per-request alignments
+- all allocations use the allocator's fixed initialization alignment; generic
+  requests up to that alignment are supported and stronger requests report
+  `BR_STATUS_NOT_SUPPORTED`
 */
 
 br_status

@@ -267,6 +267,25 @@ br__buddy_alloc_internal(br_buddy_allocator *buddy, usize size, bool zeroed) {
   return br__buddy_result((u8 *)(void *)found + buddy->alignment, size, BR_STATUS_OK);
 }
 
+static br_alloc_result
+br__buddy_alloc_for_request(br_buddy_allocator *buddy, usize size, usize alignment, bool zeroed) {
+  br_status status;
+
+  status = br__buddy_validate_initialized(buddy);
+  if (status != BR_STATUS_OK) {
+    return br__buddy_result(NULL, 0u, status);
+  }
+  status = br__buddy_validate_request_alignment(&alignment);
+  if (status != BR_STATUS_OK) {
+    return br__buddy_result(NULL, 0u, status);
+  }
+  if (size != 0u && alignment > buddy->alignment) {
+    return br__buddy_result(NULL, 0u, BR_STATUS_NOT_SUPPORTED);
+  }
+
+  return br__buddy_alloc_internal(buddy, size, zeroed);
+}
+
 static br_alloc_result br__buddy_resize_internal(br_buddy_allocator *buddy,
                                                  void *ptr,
                                                  usize old_size,
@@ -286,6 +305,9 @@ static br_alloc_result br__buddy_resize_internal(br_buddy_allocator *buddy,
   }
   if (br__buddy_validate_request_alignment(&alignment) != BR_STATUS_OK) {
     return br__buddy_result(NULL, 0u, BR_STATUS_INVALID_ARGUMENT);
+  }
+  if (new_size != 0u && alignment > buddy->alignment) {
+    return br__buddy_result(NULL, 0u, BR_STATUS_NOT_SUPPORTED);
   }
   if (ptr == NULL) {
     return br__buddy_alloc_internal(buddy, new_size, zeroed);
@@ -338,9 +360,9 @@ static br_alloc_result br__buddy_allocator_fn(void *ctx, const br_alloc_request 
 
   switch (req->op) {
     case BR_ALLOC_OP_ALLOC:
-      return br__buddy_alloc_internal(buddy, req->size, true);
+      return br__buddy_alloc_for_request(buddy, req->size, req->alignment, true);
     case BR_ALLOC_OP_ALLOC_UNINIT:
-      return br__buddy_alloc_internal(buddy, req->size, false);
+      return br__buddy_alloc_for_request(buddy, req->size, req->alignment, false);
     case BR_ALLOC_OP_RESIZE:
       return br__buddy_resize_internal(
         buddy, req->ptr, req->old_size, req->size, req->alignment, true);

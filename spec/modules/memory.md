@@ -197,8 +197,9 @@ Important Bedrock-specific deviations from Odin for now:
 - initialization reports statuses instead of Odin's assertion-heavy diagnostics
 - the generic allocator adapter currently targets Bedrock's alloc/free/resize/reset
   ABI, not Odin's richer query-features/query-info modes
-- the generic allocator adapter ignores per-request alignment and always uses
-  the allocator's fixed initialization alignment
+- the generic allocator adapter supports requested alignments up to the
+  allocator's fixed initialization alignment; stronger requests report
+  `BR_STATUS_NOT_SUPPORTED`
 
 ## Compat Allocator Design
 

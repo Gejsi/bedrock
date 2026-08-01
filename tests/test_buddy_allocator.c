@@ -83,6 +83,45 @@ static void test_buddy_allocator_adapter_resize(void) {
   assert(br_allocator_free(allocator, grown.ptr, grown.size) == BR_STATUS_OK);
 }
 
+static void test_buddy_allocator_adapter_alignment(void) {
+  br_buddy_allocator buddy;
+  br_allocator allocator;
+  br_alloc_result allocation;
+  br_alloc_result resized;
+  static _Alignas(64) u8 buffer[256];
+
+  memset(&buddy, 0, sizeof(buddy));
+  assert(br_buddy_allocator_init(&buddy, buffer, sizeof(buffer), 16u) == BR_STATUS_OK);
+  allocator = br_buddy_allocator_allocator(&buddy);
+
+  allocation = br_allocator_alloc(allocator, 16u, 24u);
+  assert(allocation.status == BR_STATUS_INVALID_ARGUMENT);
+  assert(allocation.ptr == NULL);
+
+  allocation = br_allocator_alloc(allocator, 16u, 64u);
+  assert(allocation.status == BR_STATUS_NOT_SUPPORTED);
+  assert(allocation.ptr == NULL);
+
+  allocation = br_allocator_alloc(allocator, 16u, 16u);
+  assert(allocation.status == BR_STATUS_OK);
+  assert((((uptr)allocation.ptr) & 15u) == 0u);
+  memset(allocation.ptr, 0x5a, allocation.size);
+
+  resized = br_allocator_resize(allocator, allocation.ptr, allocation.size, 32u, 64u);
+  assert(resized.status == BR_STATUS_NOT_SUPPORTED);
+  assert(resized.ptr == NULL);
+  assert(((u8 *)allocation.ptr)[0] == 0x5au);
+  assert(br_allocator_free(allocator, allocation.ptr, allocation.size) == BR_STATUS_OK);
+
+  memset(&buddy, 0, sizeof(buddy));
+  assert(br_buddy_allocator_init(&buddy, buffer, sizeof(buffer), 64u) == BR_STATUS_OK);
+  allocator = br_buddy_allocator_allocator(&buddy);
+  allocation = br_allocator_alloc(allocator, 16u, 64u);
+  assert(allocation.status == BR_STATUS_OK);
+  assert((((uptr)allocation.ptr) & 63u) == 0u);
+  assert(br_allocator_free(allocator, allocation.ptr, allocation.size) == BR_STATUS_OK);
+}
+
 static void test_buddy_invalid_pointer_free(void) {
   br_buddy_allocator buddy;
   static _Alignas(64) u8 buffer[256];
@@ -96,6 +135,7 @@ int main(void) {
   test_buddy_init_validation();
   test_buddy_basic_alloc_and_coalescence();
   test_buddy_allocator_adapter_resize();
+  test_buddy_allocator_adapter_alignment();
   test_buddy_invalid_pointer_free();
   return 0;
 }
