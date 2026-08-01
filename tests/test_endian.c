@@ -265,7 +265,7 @@ static void test_bounds_reject(void) {
 }
 
 static void test_null_and_empty(void) {
-  uint8_t buf[8];
+  uint8_t buf[8] = {0};
   uint32_t g32 = 7u;
 
   /* NULL out pointer is caller misuse -> false, no crash. */
