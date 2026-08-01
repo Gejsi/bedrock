@@ -46,14 +46,25 @@ int main(void) {
 
 ```sh
 make test                      # debug build, runs every test
+make examples                  # build user-facing examples
 make MODE=release              # optimized static library
 make MODE=sanitize test        # ASan + UBSan
 make MODE=thread-sanitize test # TSan
 ```
 
-Sources and tests are auto-discovered; adding a file needs no Makefile edit.
-CI runs the full Clang mode matrix on Linux and macOS, GCC debug/release builds
-on Linux, and Clang debug/release builds on Windows.
+Sources and tests are auto-discovered by the library build. Examples own their
+build under `examples/`. CI runs the full Clang mode matrix on Linux and macOS,
+GCC debug/release builds on Linux, and Clang debug/release builds on Windows.
+
+## Examples
+
+Examples are complete programs under `examples/`. The line filter reads
+`keep|skip,integer` records from standard input and sums the kept values:
+
+```sh
+printf 'keep,10\nskip,100\nkeep,-3\n' | build/debug/examples/line_filter
+# total=7
+```
 
 ## Using it in your project
 

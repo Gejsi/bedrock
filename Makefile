@@ -13,7 +13,7 @@ MODE ?= debug
 
 SRC_DIR := src
 TEST_DIR := tests
-FORMAT_DIRS := include src tests
+FORMAT_DIRS := include src tests examples
 BUILD_ROOT := build/$(MODE)
 OBJ_DIR := $(BUILD_ROOT)/obj
 BIN_DIR := $(BUILD_ROOT)/bin
@@ -99,11 +99,23 @@ TEST_BINS := $(patsubst $(TEST_DIR)/%.c,$(BIN_DIR)/%,$(TEST_FILES))
 LIB_DEPS := $(LIB_OBJS:.o=.d)
 TEST_DEPS := $(addsuffix .d,$(TEST_BINS))
 
-.PHONY: all clean test check debug release sanitize asan thread-sanitize tsan format check-format print-config
+EXAMPLES_MAKE = $(MAKE) -C examples \
+	CC="$(CC)" \
+	MODE="$(MODE)" \
+	CPPFLAGS="$(CPPFLAGS) -I$(abspath include)" \
+	CFLAGS="$(CFLAGS)" \
+	LDFLAGS="$(LDFLAGS)" \
+	BEDROCK_LIB="$(abspath $(LIB_TARGET))" \
+	BUILD_DIR="$(abspath $(BUILD_ROOT)/examples)"
+
+.PHONY: all clean examples test check debug release sanitize asan thread-sanitize tsan format check-format print-config
 
 all: $(LIB_TARGET)
 
 check: test
+
+examples: $(LIB_TARGET)
+	$(EXAMPLES_MAKE) all
 
 debug:
 	$(MAKE) MODE=debug all
