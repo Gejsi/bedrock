@@ -60,7 +60,8 @@ Path arguments are length-delimited byte views:
 
 - POSIX treats them as opaque bytes and rejects only malformed views, interior
   NUL, and unrepresentable lengths.
-- Windows requires well-formed WTF-8 and converts it losslessly to UTF-16.
+- Windows requires well-formed WTF-8, converts it losslessly to UTF-16, and
+  internally extends ordinary paths beyond the legacy path limit.
 
 This matches Zig, Go, and Rust and gives the existing WTF-8 module its intended
 OS-path consumer. Odin's strict-UTF-8 Windows conversion is not copied because
@@ -79,8 +80,12 @@ handle even when the native close reports an error, preventing accidental reuse
 of a descriptor or handle whose ownership is ambiguous.
 
 The stream implements native positioned operations instead of the generic
-seek/read/restore fallback. Append handles reject positioned writes because
-they cannot honor both append-only and explicit-offset semantics.
+seek/read/restore fallback. POSIX uses `pread` and `pwrite`. Windows owns a
+second non-inheritable `FILE_FLAG_OVERLAPPED` handle and gives each positioned
+call its own event, keeping the primary handle's cursor independent without
+serializing unrelated positioned calls. Append handles reject positioned
+writes because they cannot honor both append-only and explicit-offset
+semantics.
 
 Raw file streams do not advertise `FLUSH`: moving bytes from user-space buffers
 is a buffered-writer concern, while durability is a separate future `sync`

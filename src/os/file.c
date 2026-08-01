@@ -3,8 +3,8 @@
 #include "file_internal.h"
 
 #define BR__FILE_OPEN_ALL                                                                          \
-  (BR_FILE_OPEN_READ | BR_FILE_OPEN_WRITE | BR_FILE_OPEN_CREATE | BR_FILE_OPEN_TRUNCATE |          \
-   BR_FILE_OPEN_APPEND | BR_FILE_OPEN_CREATE_NEW)
+  ((br_file_open_flags)(BR_FILE_OPEN_READ | BR_FILE_OPEN_WRITE | BR_FILE_OPEN_CREATE |             \
+                        BR_FILE_OPEN_TRUNCATE | BR_FILE_OPEN_APPEND | BR_FILE_OPEN_CREATE_NEW))
 
 static bool br__file_path_has_nul(br_string_view path) {
   size_t i;
@@ -44,7 +44,7 @@ br_error br_file_open(br_file *file, br_string_view path, br_file_open_options o
       (flags & BR_FILE_OPEN_WRITE) == 0u) {
     return br_error_make(BR_STATUS_INVALID_ARGUMENT);
   }
-  if (options.create_permissions > 0777u) {
+  if (options.create_permissions > 07777u) {
     return br_error_make(BR_STATUS_INVALID_ARGUMENT);
   }
 
@@ -53,11 +53,13 @@ br_error br_file_open(br_file *file, br_string_view path, br_file_open_options o
   }
 
   file->handle = 0u;
+  file->positioned_handle = 0u;
   file->flags = 0u;
   options.flags = flags;
   error = br__file_platform_open(file, path, options);
   if (error.status != BR_STATUS_OK) {
     file->handle = 0u;
+    file->positioned_handle = 0u;
     file->flags = 0u;
   }
   return error;

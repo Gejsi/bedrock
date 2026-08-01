@@ -33,17 +33,18 @@ static inline br_file_open_options br_file_open_options_make(br_file_open_flags 
 typedef struct br_file {
   /* Opaque implementation fields. Do not inspect or copy an open handle. */
   uintptr_t handle;
+  uintptr_t positioned_handle;
   br_file_open_flags flags;
 } br_file;
 
-#define BR_FILE_INIT {0u, 0u}
+#define BR_FILE_INIT {0u, 0u, 0u}
 
 /*
 Open `path` into an inert, initialized file handle.
 
 POSIX paths are opaque bytes except NUL. Windows paths are well-formed WTF-8.
-On success, the file owns one native descriptor or handle. On failure it
-remains inert. An open file must not be copied.
+On success, the file owns its native resources. On failure it remains inert.
+An open file must not be copied.
 */
 br_error br_file_open(br_file *file, br_string_view path, br_file_open_options options);
 

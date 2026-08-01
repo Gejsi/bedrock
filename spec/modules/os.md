@@ -33,6 +33,7 @@ underlying stream error becomes sticky.
 typedef struct br_file {
   /* Opaque implementation fields. Do not inspect or copy an open handle. */
   uintptr_t handle;
+  uintptr_t positioned_handle;
   uint32_t flags;
 } br_file;
 
@@ -50,7 +51,9 @@ is valid only while the file object remains alive and open.
 
 Opening into a live object and closing an inert object return
 `BR_STATUS_INVALID_STATE`. Open failure leaves the object inert. Close makes it
-inert even if the native close operation reports an error.
+inert even if a native close operation reports an error. POSIX owns one file
+descriptor. Windows may own a second non-inheritable handle dedicated to
+positioned I/O; close releases both.
 
 ## Open Options
 
@@ -66,8 +69,9 @@ Supported flags:
 At least one of read or write is required. Append and truncate require write.
 Create-new means atomic create-and-fail-if-present and implies create.
 
-`create_permissions` is used only when POSIX creates a file and is filtered by
-the process umask. The default is `0666`. Windows ignores this field because
+`create_permissions` must fit in the portable POSIX mode-bit mask `07777`. It is
+used only when POSIX creates a file and is filtered by the process umask. The
+default is `0666`. Windows validates but otherwise ignores this field because
 its access-control model is not representable as POSIX mode bits.
 
 POSIX descriptors are close-on-exec. Windows handles are non-inheritable and
@@ -82,7 +86,10 @@ On POSIX, every byte except NUL is accepted; no UTF-8 validation occurs. On
 Windows, the bytes must be well-formed WTF-8 and are converted losslessly to a
 NUL-terminated UTF-16 path. Malformed views and interior NUL return
 `BR_STATUS_INVALID_ARGUMENT`; malformed WTF-8 returns
-`BR_STATUS_INVALID_ENCODING`.
+`BR_STATUS_INVALID_ENCODING`. Ordinary Windows paths that would reach the
+legacy path limit are normalized and made absolute, then receive the `\\?\`
+drive prefix or `\\?\UNC\` network prefix. Existing extended and device
+namespace paths are preserved.
 
 ## Stream Behavior
 
@@ -100,6 +107,11 @@ The borrowed file stream supports:
 `WRITE_AT` on an append file returns `BR_STATUS_INVALID_STATE`; it must not
 return `BR_STATUS_NOT_SUPPORTED`, because that would activate the generic
 seek/write fallback.
+
+A Windows file uses a separate `FILE_FLAG_OVERLAPPED` handle for positioned
+operations. Each call has its own event-backed `OVERLAPPED` request, so
+`READ_AT` and `WRITE_AT` do not alter the sequential stream cursor and
+independent positioned calls can overlap safely.
 
 A zero-length read or write returns success without a native call. A nonempty
 read that reaches end of file with no bytes returns `BR_STATUS_EOF`. Partial
