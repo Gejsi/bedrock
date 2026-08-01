@@ -135,3 +135,9 @@ git submodule update --init upstream/odin
 Do not add `--recursive`: some reference repositories have large nested
 submodules that Bedrock does not use. `tracking/odin-suspected-bugs.md`
 collects upstream bugs found while porting.
+
+## License
+
+Bedrock is available under the [MIT License](LICENSE). Adapted third-party
+code and test data retain their original notices in
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES).
