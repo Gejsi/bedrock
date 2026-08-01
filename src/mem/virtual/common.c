@@ -14,7 +14,7 @@ br_vm_region_result br__vm_region_result(u8 *data, usize size, br_status status)
 }
 
 usize br__vm_cached_page_size(void) {
-  static atomic_size_t cached_page_size = ATOMIC_VAR_INIT(0u);
+  static atomic_size_t cached_page_size = 0u;
   usize page_size;
   usize expected;
 

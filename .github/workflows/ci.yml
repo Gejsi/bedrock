@@ -52,6 +52,17 @@ jobs:
           pacboy: clang:p
       - run: make -k MODE=debug test
 
+  test-c-standard:
+    name: c standard (${{ matrix.standard }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        standard: [c11, c17, c23]
+    steps:
+      - uses: actions/checkout@v4
+      - run: make BASE_CFLAGS="-std=${{ matrix.standard }} -Werror" MODE=debug test
+
   format:
     name: clang-format
     runs-on: ubuntu-latest

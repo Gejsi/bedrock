@@ -37,7 +37,7 @@ enum {
   BR_ATOMIC_SEQ_CST = memory_order_seq_cst,
 };
 
-#define BR_ATOMIC_INIT(value) ATOMIC_VAR_INIT(value)
+#define BR_ATOMIC_INIT(value) (value)
 #define br_atomic(T) _Atomic(T)
 
 typedef br_atomic(bool) br_atomic_bool;
