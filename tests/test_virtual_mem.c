@@ -186,6 +186,73 @@ static void test_virtual_arena_growing(void) {
   br_virtual_arena_destroy(&arena);
 }
 
+static void test_virtual_arena_rollback_retains_storage_contents(void) {
+  br_virtual_arena arena;
+  br_virtual_arena_mark mark;
+  br_virtual_arena_temp_result temp;
+  br_alloc_result allocation;
+  br_alloc_result reused;
+  usize page_size = br_vm_page_size();
+
+  if (page_size == 0u) {
+    return;
+  }
+
+  br_virtual_arena_init(&arena);
+  arena.default_commit_size = page_size;
+  assert(br_virtual_arena_init_static(&arena, page_size * 2u, page_size) == BR_STATUS_OK);
+
+  allocation = br_virtual_arena_alloc_uninit(&arena, 64u, 16u);
+  assert(allocation.status == BR_STATUS_OK);
+  memset(allocation.ptr, 0xa5, allocation.size);
+
+  br_virtual_arena_reset(&arena);
+  reused = br_virtual_arena_alloc_uninit(&arena, allocation.size, 16u);
+  assert(reused.status == BR_STATUS_OK);
+  assert(reused.ptr == allocation.ptr);
+  for (usize i = 0u; i < reused.size; ++i) {
+    assert(((u8 *)reused.ptr)[i] == 0xa5u);
+  }
+
+  memset(reused.ptr, 0x5a, reused.size);
+  br_virtual_arena_reset(&arena);
+  reused = br_virtual_arena_alloc(&arena, allocation.size, 16u);
+  assert(reused.status == BR_STATUS_OK);
+  assert(reused.ptr == allocation.ptr);
+  for (usize i = 0u; i < reused.size; ++i) {
+    assert(((u8 *)reused.ptr)[i] == 0u);
+  }
+
+  mark = br_virtual_arena_mark_save(&arena);
+  allocation = br_virtual_arena_alloc_uninit(&arena, 64u, 16u);
+  assert(allocation.status == BR_STATUS_OK);
+  memset(allocation.ptr, 0x3c, allocation.size);
+
+  assert(br_virtual_arena_rewind(&arena, mark) == BR_STATUS_OK);
+  reused = br_virtual_arena_alloc_uninit(&arena, allocation.size, 16u);
+  assert(reused.status == BR_STATUS_OK);
+  assert(reused.ptr == allocation.ptr);
+  for (usize i = 0u; i < reused.size; ++i) {
+    assert(((u8 *)reused.ptr)[i] == 0x3cu);
+  }
+
+  temp = br_virtual_arena_temp_begin(&arena);
+  assert(temp.status == BR_STATUS_OK);
+  allocation = br_virtual_arena_alloc_uninit(&arena, 64u, 16u);
+  assert(allocation.status == BR_STATUS_OK);
+  memset(allocation.ptr, 0xc3, allocation.size);
+
+  assert(br_virtual_arena_temp_end(temp.value) == BR_STATUS_OK);
+  reused = br_virtual_arena_alloc_uninit(&arena, allocation.size, 16u);
+  assert(reused.status == BR_STATUS_OK);
+  assert(reused.ptr == allocation.ptr);
+  for (usize i = 0u; i < reused.size; ++i) {
+    assert(((u8 *)reused.ptr)[i] == 0xc3u);
+  }
+
+  br_virtual_arena_destroy(&arena);
+}
+
 static void test_virtual_arena_resize_realigns_equal_and_shrunk_allocations(void) {
   br_virtual_arena arena;
   br_allocator allocator;
@@ -634,6 +701,7 @@ int main(void) {
   test_vm_reserve_commit_release();
   test_virtual_arena_static();
   test_virtual_arena_growing();
+  test_virtual_arena_rollback_retains_storage_contents();
   test_virtual_arena_resize_realigns_equal_and_shrunk_allocations();
   test_virtual_arena_temp_end();
   test_virtual_arena_temp_ignore();

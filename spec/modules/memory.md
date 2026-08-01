@@ -273,6 +273,11 @@ Important Bedrock-specific deviations from Odin for now:
   a filesystem-touching API does not belong in the memory module. It will
   return in a future `os`/file module. Only the pure virtual-memory primitives
   (reserve/commit/decommit/release/protect) remain here
+- reset, rewind, and temp-end invalidate allocations without clearing retained
+  storage, matching Bedrock's fixed and dynamic arenas. This intentionally
+  differs from Odin's eager rollback clearing: Odin routes `Alloc` and
+  `Alloc_Non_Zeroed` through the same bump path, while Bedrock charges zeroing
+  only to `br_virtual_arena_alloc`; `_alloc_uninit` makes no content guarantee
 - `virtual/arena_util.odin` style typed convenience helpers now exist as
   C-friendly raw helpers plus typed assignment macros instead of a literal
   syntax port

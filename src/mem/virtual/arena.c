@@ -668,8 +668,7 @@ static void br__virtual_arena_reset_unlocked(br_virtual_arena *arena) {
       while (arena->curr_block != NULL && arena->curr_block->prev != NULL) {
         br__virtual_arena_free_last_block(arena);
       }
-      if (arena->curr_block != NULL && arena->curr_block->used != 0u) {
-        memset(arena->curr_block->base, 0, arena->curr_block->used);
+      if (arena->curr_block != NULL) {
         arena->curr_block->used = 0u;
       }
       arena->total_used = 0u;
@@ -679,8 +678,7 @@ static void br__virtual_arena_reset_unlocked(br_virtual_arena *arena) {
       break;
 
     case BR_VIRTUAL_ARENA_KIND_STATIC:
-      if (arena->curr_block != NULL && arena->curr_block->used != 0u) {
-        memset(arena->curr_block->base, 0, arena->curr_block->used);
+      if (arena->curr_block != NULL) {
         arena->curr_block->used = 0u;
       }
       arena->total_used = 0u;
@@ -784,7 +782,6 @@ static br_status br__virtual_arena_rewind_unlocked(br_virtual_arena *arena,
 
       old_used = arena->curr_block->used;
       if (old_used > mark.used) {
-        memset(arena->curr_block->base + mark.used, 0, old_used - mark.used);
         arena->curr_block->used = mark.used;
         arena->total_used -= old_used - mark.used;
       }
@@ -798,7 +795,6 @@ static br_status br__virtual_arena_rewind_unlocked(br_virtual_arena *arena,
 
       old_used = arena->curr_block->used;
       if (old_used > mark.used) {
-        memset(arena->curr_block->base + mark.used, 0, old_used - mark.used);
         arena->curr_block->used = mark.used;
         arena->total_used -= old_used - mark.used;
       }
@@ -899,7 +895,6 @@ static br_status br__virtual_arena_temp_end_unlocked(br_virtual_arena_temp temp)
 
   old_used = arena->curr_block->used;
   if (old_used > temp.used) {
-    memset(arena->curr_block->base + temp.used, 0, old_used - temp.used);
     arena->curr_block->used = temp.used;
     arena->total_used -= old_used - temp.used;
   }

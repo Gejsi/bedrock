@@ -76,9 +76,19 @@ br_status br_virtual_arena_init_growing(br_virtual_arena *arena, size_t reserved
 br_status
 br_virtual_arena_init_static(br_virtual_arena *arena, size_t reserved, size_t commit_size);
 
+/*
+Reset invalidates every allocation. Growing arenas release all blocks except
+the first; static arenas retain their block. Retained committed storage is not
+cleared or decommitted: `br_virtual_arena_alloc` zeroes each requested payload,
+while `br_virtual_arena_alloc_uninit` may expose bytes from an earlier use.
+*/
 void br_virtual_arena_reset(br_virtual_arena *arena);
 void br_virtual_arena_destroy(br_virtual_arena *arena);
 
+/*
+Rewind and temp-end follow the same retained-storage rule as reset: allocations
+after the saved position are invalidated without clearing their bytes.
+*/
 br_virtual_arena_mark br_virtual_arena_mark_save(br_virtual_arena *arena);
 br_status br_virtual_arena_rewind(br_virtual_arena *arena, br_virtual_arena_mark mark);
 
