@@ -33,6 +33,12 @@ Bedrock's scratch allocator, with these design choices:
 - copy paths use explicit `min(old_size, new_size)` semantics
 */
 
+/*
+Initialize `scratch`, overwriting any prior bytes. The storage need not be
+zero-initialized. On failure, `scratch` is left in a valid zero state.
+
+Do not reinitialize a live scratch allocator; destroy it first.
+*/
 br_status br_scratch_init(br_scratch *scratch, size_t size, br_allocator backup_allocator);
 void br_scratch_destroy(br_scratch *scratch);
 void br_scratch_free_all(br_scratch *scratch);

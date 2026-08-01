@@ -301,11 +301,12 @@ static br_allocator_fn br__scratch_allocator_fn_ptr(void) {
 br_status br_scratch_init(br_scratch *scratch, usize size, br_allocator backup_allocator) {
   br_alloc_result result;
 
-  if (scratch == NULL || size == 0u) {
+  if (scratch == NULL) {
     return BR_STATUS_INVALID_ARGUMENT;
   }
-  if (scratch->data != NULL) {
-    return BR_STATUS_INVALID_STATE;
+  *scratch = (br_scratch){0};
+  if (size == 0u) {
+    return BR_STATUS_INVALID_ARGUMENT;
   }
 
   if (backup_allocator.fn == NULL) {

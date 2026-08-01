@@ -3,6 +3,23 @@
 
 #include <bedrock.h>
 
+static void test_scratch_init_overwrites_storage(void) {
+  br_scratch scratch;
+
+  memset(&scratch, 0xa5, sizeof(scratch));
+  assert(br_scratch_init(&scratch, 128u, br_allocator_heap()) == BR_STATUS_OK);
+  assert(scratch.data != NULL);
+  assert(scratch.capacity >= 128u);
+  assert(scratch.curr_offset == 0u);
+  assert(scratch.leaked_allocations == NULL);
+  br_scratch_destroy(&scratch);
+
+  memset(&scratch, 0xa5, sizeof(scratch));
+  assert(br_scratch_init(&scratch, 0u, br_allocator_heap()) == BR_STATUS_INVALID_ARGUMENT);
+  assert(scratch.data == NULL);
+  assert(scratch.backup_allocator.fn == NULL);
+}
+
 static void test_scratch_alloc_and_free_last(void) {
   br_scratch scratch;
   br_alloc_result a;
@@ -150,6 +167,7 @@ static void test_scratch_free_all(void) {
 }
 
 int main(void) {
+  test_scratch_init_overwrites_storage();
   test_scratch_alloc_and_free_last();
   test_scratch_non_last_free_is_noop();
   test_scratch_leaked_allocation();

@@ -44,6 +44,12 @@ Bedrock's dynamic arena, with these design choices:
   callers may retry the operation, and generic `RESET` reports the failure
 */
 
+/*
+Initialize `arena`, overwriting any prior bytes. The storage need not be
+zero-initialized. On failure, `arena` is left in a valid zero state.
+
+Do not reinitialize a live dynamic arena; destroy it first.
+*/
 br_status br_dynamic_arena_init(br_dynamic_arena *arena,
                                 br_allocator block_allocator,
                                 br_allocator array_allocator,

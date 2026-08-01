@@ -124,6 +124,8 @@ Important Bedrock-specific deviations from Odin for now:
   `br_allocator_heap()` when unset
 - no warning logger callback when scratch spills into the backup allocator
 - misuse returns statuses instead of Odin's assertion/panic-heavy diagnostics
+- explicit initialization accepts uninitialized storage and leaves a valid zero
+  state on failure; a live allocator must be destroyed before reinitialization
 
 ## Stack Design
 
@@ -164,6 +166,8 @@ Important Bedrock-specific deviations from Odin for now:
 
 - explicit `block_allocator` and `array_allocator` default to heap allocators
   when unset, instead of using Odin's ambient context allocator
+- initialization accepts uninitialized storage and leaves a valid zero state on
+  failure; a live arena must be destroyed before reinitialization
 - the direct allocation entry points (`br_dynamic_arena_alloc` and friends) keep
   their fixed signatures and allocate at `minimum_alignment`; a larger
   per-request alignment is supplied through the generic allocator adapter

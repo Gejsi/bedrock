@@ -136,6 +136,29 @@ static br_alloc_result strict_out_band_fn(void *ctx, const br_alloc_request *req
   return result;
 }
 
+static void test_dynamic_arena_init_overwrites_storage(void) {
+  br_dynamic_arena arena;
+  br_alloc_result allocation;
+
+  memset(&arena, 0xa5, sizeof(arena));
+  assert(br_dynamic_arena_init(&arena, br_allocator_heap(), br_allocator_heap(), 64u, 48u, 8u) ==
+         BR_STATUS_OK);
+  assert(arena.block_size == 64u);
+  assert(arena.minimum_alignment == 8u);
+  assert(arena.unused_blocks == NULL);
+  assert(arena.current_block == NULL);
+  allocation = br_dynamic_arena_alloc(&arena, 16u);
+  assert(allocation.status == BR_STATUS_OK);
+  br_dynamic_arena_destroy(&arena);
+
+  memset(&arena, 0xa5, sizeof(arena));
+  assert(br_dynamic_arena_init(&arena, br_allocator_heap(), br_allocator_heap(), 64u, 48u, 3u) ==
+         BR_STATUS_INVALID_ARGUMENT);
+  assert(arena.block_size == 0u);
+  assert(arena.current_block == NULL);
+  assert(arena.block_allocator.fn == NULL);
+}
+
 static void test_dynamic_arena_basic_resize(void) {
   br_dynamic_arena arena;
   br_alloc_result a;
@@ -742,6 +765,7 @@ static void test_dynamic_arena_reused_block_margin_overflow(void) {
 }
 
 int main(void) {
+  test_dynamic_arena_init_overwrites_storage();
   test_dynamic_arena_basic_resize();
   test_dynamic_arena_reset_reuses_blocks();
   test_dynamic_arena_out_band_and_allocator_adapter();

@@ -395,11 +395,7 @@ br_status br_dynamic_arena_init(br_dynamic_arena *arena,
   if (arena == NULL) {
     return BR_STATUS_INVALID_ARGUMENT;
   }
-  if (arena->unused_blocks != NULL || arena->used_blocks != NULL ||
-      arena->out_band_allocations != NULL || arena->current_block != NULL ||
-      arena->unused_count != 0u || arena->used_count != 0u || arena->out_band_count != 0u) {
-    return BR_STATUS_INVALID_STATE;
-  }
+  *arena = (br_dynamic_arena){0};
 
   if (block_allocator.fn == NULL) {
     block_allocator = br_allocator_heap();
