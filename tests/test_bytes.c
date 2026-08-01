@@ -2,6 +2,8 @@
 
 #include <bedrock.h>
 
+#include "strict_allocator.h"
+
 static void assert_bytes_view_list_eq(br_bytes_view_list list,
                                       const br_bytes_view *expected,
                                       usize expected_len) {
@@ -188,6 +190,29 @@ static void test_bytes_split_helpers(void) {
   assert(split_n.status == BR_STATUS_OK);
   assert(split_n.value.data == NULL);
   assert(split_n.value.len == 0u);
+}
+
+static void test_bytes_split_allocation_contract(void) {
+  test_strict_allocator strict = {0};
+  br_allocator allocator = test_strict_allocator_make(&strict);
+  br_bytes_view_list_result result;
+
+  result = br_bytes_split(BR_BYTES_LIT("alpha,beta,gamma"), BR_BYTES_LIT(","), allocator);
+  assert(result.status == BR_STATUS_OK);
+  assert(strict.allocation_count == 1u);
+  assert(br_bytes_view_list_free(result.value, allocator) == BR_STATUS_OK);
+  assert(strict.size_errors == 0u);
+  assert(strict.allocation_count == 0u);
+
+  if (SIZE_MAX / sizeof(br_bytes_view) < (size_t)PTRDIFF_MAX) {
+    ptrdiff_t overflow_n = (ptrdiff_t)(SIZE_MAX / sizeof(br_bytes_view) + 1u);
+
+    result = br_bytes_split_n(BR_BYTES_LIT("a,b"), BR_BYTES_LIT(","), overflow_n, allocator);
+    assert(result.status == BR_STATUS_OUT_OF_MEMORY);
+    assert(result.value.data == NULL);
+    assert(result.value.len == 0u);
+    assert(strict.allocation_count == 0u);
+  }
 }
 
 static void test_bytes_replace_helpers(void) {
@@ -435,6 +460,7 @@ int main(void) {
   test_bytes_views();
   test_bytes_allocating_helpers();
   test_bytes_split_helpers();
+  test_bytes_split_allocation_contract();
   test_bytes_replace_helpers();
   test_bytes_case_conversion();
   test_bytes_trim();

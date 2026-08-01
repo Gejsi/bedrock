@@ -587,6 +587,9 @@ static br_bytes_view_list_result br__bytes_split_impl(
     if (target_count == 0u) {
       return br__bytes_view_list_result(NULL, 0u, BR_STATUS_OK);
     }
+    if (target_count > SIZE_MAX / sizeof(br_bytes_view)) {
+      return br__bytes_view_list_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+    }
 
     alloc = br_allocator_alloc_uninit(
       allocator, target_count * sizeof(br_bytes_view), _Alignof(br_bytes_view));
@@ -617,6 +620,9 @@ static br_bytes_view_list_result br__bytes_split_impl(
 
   if (target_count == 0u) {
     return br__bytes_view_list_result(NULL, 0u, BR_STATUS_OK);
+  }
+  if (target_count > SIZE_MAX / sizeof(br_bytes_view)) {
+    return br__bytes_view_list_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
   }
 
   alloc = br_allocator_alloc_uninit(

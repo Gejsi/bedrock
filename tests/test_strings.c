@@ -3,6 +3,8 @@
 
 #include <bedrock.h>
 
+#include "strict_allocator.h"
+
 static void assert_string_view_list_eq(br_string_view_list list,
                                        const br_string_view *expected,
                                        usize expected_len) {
@@ -242,6 +244,29 @@ static void test_strings_split_helpers(void) {
   assert_string_view_list_eq(
     rune_split_n.value, expected_rune_split_n, BR_ARRAY_COUNT(expected_rune_split_n));
   assert(br_string_view_list_free(rune_split_n.value, br_allocator_heap()) == BR_STATUS_OK);
+}
+
+static void test_strings_split_allocation_contract(void) {
+  test_strict_allocator strict = {0};
+  br_allocator allocator = test_strict_allocator_make(&strict);
+  br_string_view_list_result result;
+
+  result = br_string_split(BR_STR_LIT("alpha,beta,gamma"), BR_STR_LIT(","), allocator);
+  assert(result.status == BR_STATUS_OK);
+  assert(strict.allocation_count == 1u);
+  assert(br_string_view_list_free(result.value, allocator) == BR_STATUS_OK);
+  assert(strict.size_errors == 0u);
+  assert(strict.allocation_count == 0u);
+
+  if (SIZE_MAX / sizeof(br_string_view) < (size_t)PTRDIFF_MAX) {
+    ptrdiff_t overflow_n = (ptrdiff_t)(SIZE_MAX / sizeof(br_string_view) + 1u);
+
+    result = br_string_split_n(BR_STR_LIT("a,b"), BR_STR_LIT(","), overflow_n, allocator);
+    assert(result.status == BR_STATUS_OUT_OF_MEMORY);
+    assert(result.value.data == NULL);
+    assert(result.value.len == 0u);
+    assert(strict.allocation_count == 0u);
+  }
 }
 
 static void test_strings_replace_helpers(void) {
@@ -508,6 +533,7 @@ int main(void) {
   test_strings_clone_to_cstr();
   test_strings_allocating_helpers();
   test_strings_split_helpers();
+  test_strings_split_allocation_contract();
   test_strings_replace_helpers();
   test_strings_case_conversion();
   test_strings_trim();

@@ -296,6 +296,9 @@ static br_string_view_list_result br__string_split_impl(
     if (target_count == 0u) {
       return br__string_view_list_result(NULL, 0u, BR_STATUS_OK);
     }
+    if (target_count > SIZE_MAX / sizeof(br_string_view)) {
+      return br__string_view_list_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
+    }
 
     alloc = br_allocator_alloc_uninit(
       allocator, target_count * sizeof(br_string_view), _Alignof(br_string_view));
@@ -326,6 +329,9 @@ static br_string_view_list_result br__string_split_impl(
 
   if (target_count == 0u) {
     return br__string_view_list_result(NULL, 0u, BR_STATUS_OK);
+  }
+  if (target_count > SIZE_MAX / sizeof(br_string_view)) {
+    return br__string_view_list_result(NULL, 0u, BR_STATUS_OUT_OF_MEMORY);
   }
 
   alloc = br_allocator_alloc_uninit(
