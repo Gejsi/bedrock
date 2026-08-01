@@ -362,6 +362,7 @@ static void test_windows_long_paths(void) {
   char path[512];
   char absolute[512];
   char extended[520];
+  WCHAR native_extended[520];
   DWORD count;
   size_t extended_len;
   size_t i;
@@ -386,19 +387,22 @@ static void test_windows_long_paths(void) {
   assert(br_write_full(br_file_as_stream(&file), "long", 4u).status == BR_STATUS_OK);
   assert(br_file_close(&file).status == BR_STATUS_OK);
 
-  count = GetFullPathNameA(path, (DWORD)sizeof(absolute), absolute, NULL);
-  assert(count > 0u);
-  assert((size_t)count < sizeof(absolute));
+  extended_len = test_windows_extended_path(path, extended, sizeof(extended));
+  assert(extended_len >= 4u);
+  assert(extended_len - 4u + 1u <= sizeof(absolute));
+  memcpy(absolute, extended + 4u, extended_len - 4u + 1u);
   options = br_file_open_options_make(BR_FILE_OPEN_READ);
   assert(br_file_open(&file, test_path_view(absolute), options).status == BR_STATUS_OK);
   assert(br_file_close(&file).status == BR_STATUS_OK);
 
-  extended_len = test_windows_extended_path(path, extended, sizeof(extended));
   assert(br_file_open(&file, br_string_view_make(extended, extended_len), options).status ==
          BR_STATUS_OK);
   assert(br_file_close(&file).status == BR_STATUS_OK);
 
-  assert(DeleteFileA(extended) != 0);
+  for (i = 0u; i <= extended_len; i += 1u) {
+    native_extended[i] = (WCHAR)(unsigned char)extended[i];
+  }
+  assert(DeleteFileW(native_extended) != 0);
   for (i = BR_ARRAY_COUNT(dirs); i > 0u; i -= 1u) {
     assert(RemoveDirectoryA(dirs[i - 1u]) != 0);
   }
