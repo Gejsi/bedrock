@@ -152,6 +152,8 @@ static br_i64_result br__file_stream_proc(void *context,
       }
       return br_stream_query_utility(modes);
     case BR_IO_MODE_FLUSH:
+    case BR_IO_MODE_WRITE_TO:
+    case BR_IO_MODE_READ_FROM:
     case BR_IO_MODE_COUNT:
       return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
   }

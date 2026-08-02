@@ -88,9 +88,6 @@ br_bufio_writer_io_result br_bufio_writer_write_string(br_bufio_writer *writer, 
 
 /*
 Read from `source` into the buffered writer until EOF or error.
-
-Bedrock currently always stages through the buffer because generic streams do
-not expose a `READ_FROM` specialization mode yet.
 */
 br_i64_result br_bufio_writer_read_from(br_bufio_writer *writer, br_stream source);
 

@@ -438,6 +438,7 @@ static void test_bufio_reader_write_to(void) {
   br_byte_buffer sink;
   br_bufio_reader_peek_result peek_result;
   br_i64_result write_result;
+  br_io_query_result query_result;
   br_bytes_view view;
   test_bufio_data_error_reader data_error_source;
   test_bufio_short_sink short_sink;
@@ -448,6 +449,9 @@ static void test_bufio_reader_write_to(void) {
   assert(br_bufio_reader_init_with_buffer(
            &reader, br_byte_reader_as_stream(&source), backing, BR_ARRAY_COUNT(backing)) ==
          BR_STATUS_OK);
+  query_result = br_query(br_bufio_reader_as_stream(&reader));
+  assert(query_result.status == BR_STATUS_OK);
+  assert((query_result.modes & br_io_mode_bit(BR_IO_MODE_WRITE_TO)) != 0u);
 
   peek_result = br_bufio_reader_peek(&reader, 2u);
   assert(peek_result.status == BR_STATUS_OK);
@@ -798,6 +802,7 @@ static void test_bufio_writer_read_from(void) {
   br_byte_buffer sink;
   br_bufio_writer writer;
   br_i64_result read_result;
+  br_io_query_result query_result;
   br_bytes_view view;
   test_bufio_no_progress_reader stuck_source;
   u8 backing[4];
@@ -807,6 +812,9 @@ static void test_bufio_writer_read_from(void) {
   assert(br_bufio_writer_init_with_buffer(
            &writer, br_byte_buffer_as_stream(&sink), backing, BR_ARRAY_COUNT(backing)) ==
          BR_STATUS_OK);
+  query_result = br_query(br_bufio_writer_as_stream(&writer));
+  assert(query_result.status == BR_STATUS_OK);
+  assert((query_result.modes & br_io_mode_bit(BR_IO_MODE_READ_FROM)) != 0u);
 
   read_result = br_bufio_writer_read_from(&writer, br_byte_reader_as_stream(&source));
   assert(read_result.value == 6);
@@ -841,9 +849,12 @@ static void test_bufio_read_writer_stream(void) {
   br_bufio_reader reader;
   br_bufio_writer writer;
   br_bufio_read_writer read_writer;
+  br_byte_buffer transfer_sink;
+  test_bufio_data_error_reader data_error_source;
   br_stream stream;
   br_io_result io_result;
   br_io_query_result query_result;
+  br_i64_result copy_result;
   br_bytes_view view;
   char buffer[2];
   u8 reader_backing[4];
@@ -867,6 +878,8 @@ static void test_bufio_read_writer_stream(void) {
   assert((query_result.modes & br_io_mode_bit(BR_IO_MODE_READ)) != 0u);
   assert((query_result.modes & br_io_mode_bit(BR_IO_MODE_WRITE)) != 0u);
   assert((query_result.modes & br_io_mode_bit(BR_IO_MODE_FLUSH)) != 0u);
+  assert((query_result.modes & br_io_mode_bit(BR_IO_MODE_WRITE_TO)) != 0u);
+  assert((query_result.modes & br_io_mode_bit(BR_IO_MODE_READ_FROM)) != 0u);
 
   io_result = br_read(stream, buffer, sizeof(buffer));
   assert(io_result.count == 2u);
@@ -882,6 +895,24 @@ static void test_bufio_read_writer_stream(void) {
   assert(view.len == 2u);
   assert(memcmp(view.data, "xy", 2u) == 0);
 
+  memset(&data_error_source, 0, sizeof(data_error_source));
+  copy_result =
+    br_copy(stream, br_stream_make(&data_error_source, test_bufio_data_error_reader_proc));
+  assert(copy_result.value == 3);
+  assert(copy_result.status == BR_STATUS_INVALID_ENCODING);
+  assert(br_bufio_writer_buffered(&writer) == 3u);
+  assert(br_flush(stream).status == BR_STATUS_OK);
+  assert(br_bytes_equal(br_byte_buffer_view(&sink), BR_BYTES_LIT("xyabc")));
+
+  br_byte_reader_init(&source, BR_BYTES_LIT("bulk"));
+  br_bufio_reader_reset(&reader, br_byte_reader_as_stream(&source));
+  br_byte_buffer_init(&transfer_sink, br_allocator_heap());
+  copy_result = br_copy(br_byte_buffer_as_stream(&transfer_sink), stream);
+  assert(copy_result.value == 4);
+  assert(copy_result.status == BR_STATUS_OK);
+  assert(br_bytes_equal(br_byte_buffer_view(&transfer_sink), BR_BYTES_LIT("bulk")));
+
+  br_byte_buffer_destroy(&transfer_sink);
   br_byte_buffer_destroy(&sink);
 }
 

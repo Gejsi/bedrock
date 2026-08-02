@@ -130,16 +130,16 @@ Current Bedrock files:
 | join / concatenate / repeat | `adapted` | `bytes.h`, `bytes.c` | Implemented as explicit allocating helpers. |
 | split / split_n / split_after / split_after_n | `adapted` | `bytes.h`, `bytes.c` | Implemented; empty-separator behavior now follows Odin's rune-aware semantics. |
 | replace / replace_all / remove / remove_all | `adapted` | `bytes.h`, `bytes.c` | Implemented; empty-old replacement now follows Odin's rune-boundary semantics. |
-| `bytes.Buffer` core | `adapted` | `buffer.h`, `buffer.c` | Init, reset, reserve, truncate, write, next, read, read_byte, unread_byte are implemented. |
-| `bytes.Reader` core | `adapted` | `reader.h`, `reader.c` | Init, read, read_at, read_byte, unread_byte, seek are implemented. |
+| `bytes.Buffer` core | `adapted` | `buffer.h`, `buffer.c` | Init, reset, reserve, truncate, write, next, read, read_byte, unread_byte, write_to, and read_from are implemented. |
+| `bytes.Reader` core | `adapted` | `reader.h`, `reader.c` | Init, read, read_at, read_byte, unread_byte, seek, and write_to are implemented. |
 | rune_count / truncate_to_rune / contains_rune / index_rune | `planned` | none | Not implemented yet. |
 | case conversion (`to_lower_ascii`, `to_upper_ascii`) | `adapted` | `bytes.h`, `bytes.c` | ASCII-only case mapping; bytes >= 0x80 pass through so UTF-8 stays valid. Odin `core/bytes` has no case-conversion procs, so this is a Bedrock addition, not a 1:1 port. Unicode-aware conversion is deferred (case tables), hence the `_ascii` suffix. |
 | equal_fold | `planned` | none | Depends on higher Unicode case-folding support. |
 | last_index_any | `planned` | none | Missing. |
 | `bytes.Buffer` rune operations | `planned` | none | `read_rune`, `unread_rune`, `write_rune` not landed. |
-| `bytes.Buffer` random access / stream helpers | `planned` | none | `read_at`, `write_at`, `write_to`, `read_from`, delimiter reads are not landed. |
+| `bytes.Buffer` random access / delimiter helpers | `planned` | none | `read_at`, `write_at`, and delimiter reads are not landed; `write_to` and `read_from` are implemented. |
 | `bytes.Reader` rune operations | `planned` | none | `read_rune`, `unread_rune` not landed. |
-| `bytes.Reader` `io` adapters | `adapted` | `bytes/reader.h`, `bytes/reader.c` | Exposed as a generic stream with read/read_at/seek/size/query support. |
+| `bytes.Reader` `io` adapters | `adapted` | `bytes/reader.h`, `bytes/reader.c` | Exposed as a generic stream with read/read_at/seek/size/write_to/query support. |
 | predicate / proc-based scans and trims | `planned` | none | `index_proc`, `trim_left_proc`, etc. not started. |
 | trim cutset / trim_space / trim_null | `adapted` | `bytes.h`, `bytes.c` | Landed. Cutset trimming is rune-aware; `trim_space` is intentionally ASCII-whitespace-only until Unicode space tables land. |
 | split iterators / split_multi / fields | `adapted` | `strings.h`, `strings.c`, `bytes.h`, `bytes.c` | Allocation-free split iterator landed as a caller-owned cursor struct (`br_*_split_iter` + `_next` / `_split_after_iter_next`), plus a strings fields iterator. The iterator yields the split LIST element-for-element (keeps trailing empties and yields one empty field for empty-input-with-separator) — a documented deviation from Odin's `split_iterator`, which drops the trailing empty; `fields`/the fields iterator are the skip-empties path. `split_multi` not started. |
@@ -231,18 +231,18 @@ Current Bedrock files:
 | Odin area | Status | Bedrock coverage | Notes |
 | --- | --- | --- | --- |
 | `Seek_From` / shared seek origin | `adapted` | `io.h` | Moved out of `base.h` into the IO module. |
-| `Stream_Mode` / mode-set query model | `adapted` | `io.h`, `io.c` | Single stream proc with explicit mode dispatch and query support. |
+| `Stream_Mode` / mode-set query model | `adapted` | `io.h`, `io.c` | Single stream proc with explicit mode dispatch and query support, plus Bedrock write_to/read_from transfer hooks. |
 | generic stream wrapper and aliases (`Reader`, `Writer`, `Seeker`) | `adapted` | `io.h`, `io.c` | Implemented as one `br_stream` plus alias typedefs. |
 | shared IO result / seek result / size result types | `done` | `io.h` | Shared across generic IO and concrete adapters. |
-| byte reader adapters | `adapted` | `bytes/reader.h`, `bytes/reader.c` | `bytes.Reader` now exposes a stream with read/read_at/seek/size support. |
-| byte buffer adapters | `adapted` | `bytes/buffer.h`, `bytes/buffer.c` | `bytes.Buffer` now exposes a stream with read/write/size support. |
+| byte reader adapters | `adapted` | `bytes/reader.h`, `bytes/reader.c` | `bytes.Reader` now exposes a stream with read/read_at/seek/size/write_to support. |
+| byte buffer adapters | `adapted` | `bytes/buffer.h`, `bytes/buffer.c` | `bytes.Buffer` now exposes a stream with read/write/size/write_to/read_from support. |
 | string reader adapters | `adapted` | `strings/reader.h`, `strings/reader.c` | Exposed as a stream with read/read_at/seek/size support. |
 | string builder adapters | `adapted` | `strings/builder.h`, `strings/builder.c` | Exposed as a stream with write/size support. |
 | generic `read_at` / `write_at` / `size` fallbacks | `adapted` | `io.c`, `tests/test_io.c` | Falls back through `seek` when a stream does not implement those modes directly. |
 | generic `read_byte` / `write_byte` helpers | `done` | `io.h`, `io.c`, `tests/test_io.c` | Landed on top of the stream API. |
 | generic `read_rune` / `write_rune` helpers | `adapted` | `io.h`, `io.c`, `tests/test_io.c` | Landed on top of UTF-8; malformed multi-byte stream reads report consumed bytes because generic streams cannot unread. |
 | generic `read_full` / `read_at_least` / `write_full` / `write_at_least` helpers | `adapted` | `io.h`, `io.c`, `tests/test_io.c` | Landed with Odin-style exact/minimum semantics plus Bedrock `NO_PROGRESS` guards for malformed C callbacks. |
-| generic `copy` / `copy_buffer` helpers | `adapted` | `io.h`, `io.c`, `tests/test_io.c` | Landed with explicit short-write detection. |
+| generic `copy` / `copy_buffer` helpers | `adapted` | `io.h`, `io.c`, `tests/test_io.c` | `copy` probes source write_to then destination read_from before its fallback; `copy_buffer` always uses caller-provided storage. Both preserve partial progress and native errors. |
 | close / flush / destroy lifecycle operations | `adapted` | `io.h`, `io.c` | Present in the generic stream API; current in-memory streams mostly report unsupported. |
 | native file stream adapter | `adapted` | `os/file.h`, `src/os/file*.c`, `tests/test_os_file.c` | Caller-owned files now expose direct read/write/read_at/write_at/seek/size/close/query operations. Native errors survive the stream boundary. |
 | buffered IO | `adapted` | `bufio/*`, `tests/test_bufio.c` | Core buffered IO has moved into the `bufio` module. |
@@ -336,14 +336,14 @@ Current Bedrock files:
 | `bufio.Reader` `read` / `read_byte` / `unread_byte` | `done` | `bufio/reader.h`, `bufio/reader.c`, `test_bufio.c` | Landed and follows Odin's buffered-reader model. |
 | `bufio.Reader` `read_rune` / `unread_rune` | `done` | `bufio/reader.h`, `bufio/reader.c`, `test_bufio.c` | Landed. |
 | `bufio.Reader` `read_slice` / `read_bytes` / `read_string` | `adapted` | `bufio/reader.h`, `bufio/reader.c`, `test_bufio.c` | Landed with explicit owned result types for bytes and strings. |
-| `bufio.Reader` stream adapter | `adapted` | `bufio/reader.h`, `bufio/reader.c` | Exposed as a generic read stream. |
+| `bufio.Reader` stream adapter | `adapted` | `bufio/reader.h`, `bufio/reader.c` | Exposed as a generic read stream with a write_to transfer hook. |
 | `bufio.Reader` `write_to` | `adapted` | `bufio/reader.h`, `bufio/reader.c`, `test_bufio.c` | Landed; unlike Odin's single-write helper, Bedrock completes successful partial writes and reports zero progress explicitly. |
 | `bufio.Writer` core init/reset/destroy | `adapted` | `bufio/writer.h`, `bufio/writer.c` | Heap-backed and caller-buffer-backed init landed with explicit allocators. |
 | `bufio.Writer` `flush` / `available` / `buffered` | `done` | `bufio/writer.h`, `bufio/writer.c`, `test_bufio.c` | Landed. |
 | `bufio.Writer` `write` / `write_byte` / `write_rune` / `write_string` | `done` | `bufio/writer.h`, `bufio/writer.c`, `test_bufio.c` | Landed; successful partial writes are completed, while zero progress and real write errors remain explicit. |
-| `bufio.Writer` stream adapter | `adapted` | `bufio/writer.h`, `bufio/writer.c` | Exposed as a generic write/flush stream. |
-| `bufio.Writer` `read_from` | `adapted` | `bufio/writer.h`, `bufio/writer.c`, `test_bufio.c` | Landed; Bedrock currently always stages through the buffer because generic streams do not expose Odin's `read_from` specialization hook. |
-| `bufio.Read_Writer` | `adapted` | `bufio/read_writer.h`, `bufio/read_writer.c`, `test_bufio.c` | Landed as a tiny combined adapter. |
+| `bufio.Writer` stream adapter | `adapted` | `bufio/writer.h`, `bufio/writer.c` | Exposed as a generic write/flush stream with a read_from transfer hook. |
+| `bufio.Writer` `read_from` | `adapted` | `bufio/writer.h`, `bufio/writer.c`, `test_bufio.c` | Landed and exposed through the generic stream transfer hook. |
+| `bufio.Read_Writer` | `adapted` | `bufio/read_writer.h`, `bufio/read_writer.c`, `test_bufio.c` | Landed as a tiny combined adapter that forwards both transfer hooks. |
 | `lookahead_reader` | `cut` | none | Cut July 19, 2026 (cut-list decisions log): `bufio.Reader`'s peek/buffered/discard covers the peek story, and the wave-3 parser research confirmed no planned parser consumes a standalone lookahead reader. No external consumers at removal. |
 | `scanner` | `planned` | none | Not started. |
 

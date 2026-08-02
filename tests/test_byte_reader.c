@@ -2,6 +2,39 @@
 
 #include <bedrock.h>
 
+typedef struct test_byte_reader_writer {
+  u8 data[16];
+  usize written;
+  usize max_per_write;
+  usize fail_after;
+  br_error error;
+} test_byte_reader_writer;
+
+static br_i64_result test_byte_reader_writer_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  test_byte_reader_writer *writer;
+  usize count;
+
+  BR_UNUSED(offset);
+  BR_UNUSED(whence);
+
+  writer = context;
+  if (mode != BR_IO_MODE_WRITE) {
+    return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+  }
+
+  count = br_min_size(data_len, writer->max_per_write);
+  if (writer->error.status != BR_STATUS_OK) {
+    count = br_min_size(count, writer->fail_after - writer->written);
+  }
+  memcpy(writer->data + writer->written, data, count);
+  writer->written += count;
+  if (writer->error.status != BR_STATUS_OK && writer->written == writer->fail_after) {
+    return br_i64_result_make_error((i64)count, writer->error);
+  }
+  return br_i64_result_make((i64)count, BR_STATUS_OK);
+}
+
 static void test_byte_reader_basic_read(void) {
   br_byte_reader reader;
   br_byte_reader_io_result io_result;
@@ -142,10 +175,50 @@ static void test_byte_reader_oversized_view(void) {
 #endif
 }
 
+static void test_byte_reader_write_to(void) {
+  br_byte_reader reader;
+  test_byte_reader_writer writer;
+  br_i64_result result;
+  br_io_query_result query;
+  br_stream stream;
+
+  br_byte_reader_init(&reader, BR_BYTES_LIT("abcdef"));
+  memset(&writer, 0, sizeof(writer));
+  writer.max_per_write = 2u;
+  writer.error = BR_ERROR_OK;
+  result = br_byte_reader_write_to(&reader, br_stream_make(&writer, test_byte_reader_writer_proc));
+  assert(result.status == BR_STATUS_OK);
+  assert(result.value == 6);
+  assert(writer.written == 6u);
+  assert(memcmp(writer.data, "abcdef", 6u) == 0);
+  assert(br_byte_reader_len(&reader) == 0u);
+
+  br_byte_reader_init(&reader, BR_BYTES_LIT("abcdef"));
+  memset(&writer, 0, sizeof(writer));
+  writer.max_per_write = 4u;
+  writer.fail_after = 3u;
+  writer.error = br_error_make_native(BR_STATUS_IO_ERROR, BR_ERROR_DOMAIN_POSIX_ERRNO, 77u);
+  result = br_byte_reader_write_to(&reader, br_stream_make(&writer, test_byte_reader_writer_proc));
+  assert(result.status == BR_STATUS_IO_ERROR);
+  assert(result.native_error.code == 77u);
+  assert(result.value == 3);
+  assert(br_bytes_equal(br_byte_reader_view(&reader), BR_BYTES_LIT("def")));
+
+  stream = br_byte_reader_as_stream(&reader);
+  query = br_query(stream);
+  assert(query.status == BR_STATUS_OK);
+  assert((query.modes & br_io_mode_bit(BR_IO_MODE_WRITE_TO)) != 0u);
+
+  result = stream.procedure(stream.context, BR_IO_MODE_WRITE_TO, NULL, 0u, 0, BR_SEEK_FROM_START);
+  assert(result.value == 0);
+  assert(result.status == BR_STATUS_INVALID_ARGUMENT);
+}
+
 int main(void) {
   test_byte_reader_basic_read();
   test_byte_reader_read_at_and_partial_rules();
   test_byte_reader_seek_semantics();
   test_byte_reader_oversized_view();
+  test_byte_reader_write_to();
   return 0;
 }

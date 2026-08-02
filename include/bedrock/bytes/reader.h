@@ -98,6 +98,14 @@ br_byte_reader_seek_result
 br_byte_reader_seek(br_byte_reader *reader, int64_t offset, br_seek_from whence);
 
 /*
+Write the unread source directly to `dst` and advance by the bytes written.
+
+`dst` must not invalidate or mutate the reader's source storage during the
+transfer.
+*/
+br_i64_result br_byte_reader_write_to(br_byte_reader *reader, br_stream dst);
+
+/*
 Expose this reader through the generic stream interface.
 */
 br_stream br_byte_reader_as_stream(br_byte_reader *reader);

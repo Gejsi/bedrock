@@ -52,6 +52,20 @@ br_byte_buffer_byte_result br_byte_buffer_read_byte(br_byte_buffer *buffer);
 br_status br_byte_buffer_unread_byte(br_byte_buffer *buffer);
 
 /*
+Write all unread bytes directly to `dst`. Successfully written bytes are
+consumed; an error leaves the unwritten suffix in the buffer. `dst` must not
+alias the buffer's storage. Passing this buffer's own stream is rejected.
+*/
+br_i64_result br_byte_buffer_write_to(br_byte_buffer *buffer, br_stream dst);
+
+/*
+Read from `src` until EOF and append the bytes to the unread buffer contents.
+`src` must not read from or retain views into this buffer's storage. Passing
+this buffer's own stream is rejected.
+*/
+br_i64_result br_byte_buffer_read_from(br_byte_buffer *buffer, br_stream src);
+
+/*
 Expose this buffer through the generic stream interface.
 */
 br_stream br_byte_buffer_as_stream(br_byte_buffer *buffer);

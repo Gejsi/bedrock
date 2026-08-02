@@ -79,6 +79,16 @@ typedef enum br_io_mode {
   BR_IO_MODE_SIZE,
   BR_IO_MODE_DESTROY,
   BR_IO_MODE_QUERY,
+  /*
+  Transfer all remaining bytes directly to/from the peer in the
+  `br_io_transfer_request` stored in `data`. `data_len` is
+  `sizeof(br_io_transfer_request)`; `offset` and `whence` are unused. A handler
+  must not retain the request after returning. `BR_STATUS_OK` means the input
+  was fully drained. A handler may return `BR_STATUS_NOT_SUPPORTED` only before
+  making progress.
+  */
+  BR_IO_MODE_WRITE_TO,
+  BR_IO_MODE_READ_FROM,
   BR_IO_MODE_COUNT
 } br_io_mode;
 
@@ -98,6 +108,13 @@ typedef struct br_stream {
   br_stream_proc procedure;
   void *context;
 } br_stream;
+
+/*
+Payload for `BR_IO_MODE_WRITE_TO` and `BR_IO_MODE_READ_FROM`.
+*/
+typedef struct br_io_transfer_request {
+  br_stream peer;
+} br_io_transfer_request;
 
 typedef br_stream br_reader;
 typedef br_stream br_writer;
@@ -398,15 +415,21 @@ Write one rune to a generic stream encoded as UTF-8.
 br_io_result br_write_rune(br_stream stream, br_rune value);
 
 /*
-Copy all remaining bytes from `src` to `dst` through an internal stack buffer.
-EOF from the source is treated as a successful end-of-copy.
+Copy all remaining bytes from `src` to `dst`.
+
+This first tries the source's `WRITE_TO` operation, then the destination's
+`READ_FROM` operation, and otherwise uses an internal stack buffer. EOF from
+the source is treated as a successful end-of-copy. `src` and `dst` must not be
+the same stream or use storage that aliases unsafely.
 */
 br_i64_result br_copy(br_stream dst, br_stream src);
 
 /*
 Copy all remaining bytes from `src` to `dst` using caller-provided scratch
 storage. `buffer` must be non-NULL and `buffer_len` must be greater than zero.
-EOF from the source is treated as a successful end-of-copy.
+This function always uses `buffer`; it does not try direct-transfer modes. EOF
+from the source is treated as a successful end-of-copy. `src` and `dst` must
+not be the same stream or use storage that aliases unsafely.
 */
 br_i64_result br_copy_buffer(br_stream dst, br_stream src, void *buffer, size_t buffer_len);
 

@@ -46,6 +46,8 @@ static br_i64_result br__standard_stream_call(br__standard_stream_kind kind,
     case BR_IO_MODE_WRITE_AT:
     case BR_IO_MODE_SEEK:
     case BR_IO_MODE_SIZE:
+    case BR_IO_MODE_WRITE_TO:
+    case BR_IO_MODE_READ_FROM:
     case BR_IO_MODE_COUNT:
       return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
   }

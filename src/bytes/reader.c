@@ -178,6 +178,37 @@ br_byte_reader_seek(br_byte_reader *reader, i64 offset, br_seek_from whence) {
   return br__byte_reader_seek_result((i64)absolute, BR_STATUS_OK);
 }
 
+br_i64_result br_byte_reader_write_to(br_byte_reader *reader, br_stream dst) {
+  br_io_result result;
+  usize remaining;
+  usize request;
+
+  if (reader == NULL) {
+    return br_i64_result_make(0, BR_STATUS_INVALID_ARGUMENT);
+  }
+
+  remaining = br_byte_reader_len(reader);
+  if (remaining == 0u) {
+    return br_i64_result_make(0, BR_STATUS_OK);
+  }
+
+  request = remaining;
+  if ((u64)request > (u64)INT64_MAX) {
+    request = (usize)INT64_MAX;
+  }
+
+  result = br_write_full(dst, reader->source.data + reader->index, request);
+  reader->index += result.count;
+  if (result.status != BR_STATUS_OK) {
+    return br_i64_result_make_error((i64)result.count,
+                                    br_io_error_make(result.status, result.native_error));
+  }
+  if (request < remaining) {
+    return br_i64_result_make((i64)result.count, BR_STATUS_OUT_OF_RANGE);
+  }
+  return br_i64_result_make((i64)result.count, BR_STATUS_OK);
+}
+
 static br_i64_result br__byte_reader_stream_proc(
   void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
   br_byte_reader *reader;
@@ -201,9 +232,19 @@ static br_i64_result br__byte_reader_stream_proc(
         return br_i64_result_make(0, BR_STATUS_OUT_OF_RANGE);
       }
       return br_i64_result_make((i64)br_byte_reader_size(reader), BR_STATUS_OK);
+    case BR_IO_MODE_WRITE_TO: {
+      br_io_transfer_request request;
+
+      if (data == NULL || data_len != sizeof(request)) {
+        return br_i64_result_make(0, BR_STATUS_INVALID_ARGUMENT);
+      }
+      memcpy(&request, data, sizeof(request));
+      return br_byte_reader_write_to(reader, request.peer);
+    }
     case BR_IO_MODE_QUERY:
       modes = br_io_mode_bit(BR_IO_MODE_READ) | br_io_mode_bit(BR_IO_MODE_READ_AT) |
-              br_io_mode_bit(BR_IO_MODE_SEEK) | br_io_mode_bit(BR_IO_MODE_SIZE);
+              br_io_mode_bit(BR_IO_MODE_SEEK) | br_io_mode_bit(BR_IO_MODE_SIZE) |
+              br_io_mode_bit(BR_IO_MODE_WRITE_TO);
       return br_stream_query_utility(modes);
     default:
       return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);

@@ -640,11 +640,21 @@ static br_i64_result br__bufio_reader_stream_proc(
       io_result = br_bufio_reader_read(reader, data, data_len);
       return br_i64_result_make_error((i64)io_result.count,
                                       br_io_error_make(io_result.status, io_result.native_error));
+    case BR_IO_MODE_WRITE_TO: {
+      br_io_transfer_request request;
+
+      if (data == NULL || data_len != sizeof(request)) {
+        return br_i64_result_make(0, BR_STATUS_INVALID_ARGUMENT);
+      }
+      memcpy(&request, data, sizeof(request));
+      return br_bufio_reader_write_to(reader, request.peer);
+    }
     case BR_IO_MODE_DESTROY:
       br_bufio_reader_destroy(reader);
       return br_i64_result_make(0, BR_STATUS_OK);
     case BR_IO_MODE_QUERY:
-      modes = br_io_mode_bit(BR_IO_MODE_READ) | br_io_mode_bit(BR_IO_MODE_DESTROY);
+      modes = br_io_mode_bit(BR_IO_MODE_READ) | br_io_mode_bit(BR_IO_MODE_DESTROY) |
+              br_io_mode_bit(BR_IO_MODE_WRITE_TO);
       return br_stream_query_utility(modes);
     default:
       return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);

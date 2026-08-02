@@ -272,11 +272,6 @@ br_i64_result br_bufio_writer_read_from(br_bufio_writer *writer, br_stream sourc
     return br_i64_result_make_error(0, br_io_error_make(writer->err, writer->err_native));
   }
 
-  /*
-  Odin can bypass buffering when the underlying writer exposes io.read_from.
-  Bedrock's current stream API has no READ_FROM specialization mode, so this
-  helper always stages through the buffered writer itself.
-  */
   total = 0;
   error = BR_ERROR_OK;
   for (;;) {
@@ -358,12 +353,21 @@ static br_i64_result br__bufio_writer_stream_proc(
       io_result = br_bufio_writer_write(writer, data, data_len);
       return br_i64_result_make_error((i64)io_result.count,
                                       br_io_error_make(io_result.status, io_result.native_error));
+    case BR_IO_MODE_READ_FROM: {
+      br_io_transfer_request request;
+
+      if (data == NULL || data_len != sizeof(request)) {
+        return br_i64_result_make(0, BR_STATUS_INVALID_ARGUMENT);
+      }
+      memcpy(&request, data, sizeof(request));
+      return br_bufio_writer_read_from(writer, request.peer);
+    }
     case BR_IO_MODE_DESTROY:
       error = br_bufio_writer_destroy(writer);
       return br_i64_result_make_error(0, error);
     case BR_IO_MODE_QUERY:
       modes = br_io_mode_bit(BR_IO_MODE_FLUSH) | br_io_mode_bit(BR_IO_MODE_WRITE) |
-              br_io_mode_bit(BR_IO_MODE_DESTROY);
+              br_io_mode_bit(BR_IO_MODE_DESTROY) | br_io_mode_bit(BR_IO_MODE_READ_FROM);
       return br_stream_query_utility(modes);
     default:
       return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);

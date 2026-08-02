@@ -4,6 +4,14 @@
 
 enum { BR__IO_COPY_BUFFER_SIZE = 4096 };
 
+#if defined(_MSC_VER)
+#define BR__IO_NOINLINE __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#define BR__IO_NOINLINE __attribute__((noinline))
+#else
+#define BR__IO_NOINLINE
+#endif
+
 /*
 Odin relies on stream proc contracts to report sane byte counts. Bedrock
 validates them here because arbitrary C callbacks can return impossible values.
@@ -47,6 +55,29 @@ static br_i64_result br__stream_call(
   }
 
   return stream.procedure(stream.context, mode, data, data_len, offset, whence);
+}
+
+static bool br__stream_equal(br_stream first, br_stream second) {
+  return first.procedure == second.procedure && first.context == second.context;
+}
+
+static br_i64_result br__stream_transfer(br_stream stream, br_io_mode mode, br_stream peer) {
+  br_io_transfer_request request;
+  br_i64_result result;
+
+  request.peer = peer;
+  result = br__stream_call(stream, mode, &request, sizeof(request), 0, BR_SEEK_FROM_START);
+  if (result.value < 0) {
+    return br_i64_result_make(0, BR_STATUS_INVALID_STATE);
+  }
+  if (result.status == BR_STATUS_NOT_SUPPORTED && result.value != 0) {
+    return br_i64_result_make(result.value, BR_STATUS_INVALID_STATE);
+  }
+  if (result.status == BR_STATUS_EOF) {
+    return br_i64_result_make(result.value, BR_STATUS_OK);
+  }
+  return br_i64_result_make_error(result.value,
+                                  br_io_error_make(result.status, result.native_error));
 }
 
 static br_io_result br__read_at_fallback(br_stream stream, void *dst, usize dst_len, i64 offset) {
@@ -425,10 +456,30 @@ br_io_result br_write_rune(br_stream stream, br_rune value) {
   return br_write_full(stream, encoded.bytes, encoded.len);
 }
 
-br_i64_result br_copy(br_stream dst, br_stream src) {
+static BR__IO_NOINLINE br_i64_result br__copy_fallback(br_stream dst, br_stream src) {
   u8 buffer[BR__IO_COPY_BUFFER_SIZE];
 
   return br_copy_buffer(dst, src, buffer, BR_ARRAY_COUNT(buffer));
+}
+
+br_i64_result br_copy(br_stream dst, br_stream src) {
+  br_i64_result result;
+
+  if (br__stream_equal(dst, src)) {
+    return br_i64_result_make(0, BR_STATUS_INVALID_ARGUMENT);
+  }
+
+  result = br__stream_transfer(src, BR_IO_MODE_WRITE_TO, dst);
+  if (result.status != BR_STATUS_NOT_SUPPORTED) {
+    return result;
+  }
+
+  result = br__stream_transfer(dst, BR_IO_MODE_READ_FROM, src);
+  if (result.status != BR_STATUS_NOT_SUPPORTED) {
+    return result;
+  }
+
+  return br__copy_fallback(dst, src);
 }
 
 br_i64_result br_copy_buffer(br_stream dst, br_stream src, void *buffer, usize buffer_len) {
@@ -436,6 +487,9 @@ br_i64_result br_copy_buffer(br_stream dst, br_stream src, void *buffer, usize b
   i64 written;
 
   if (buffer == NULL || buffer_len == 0u) {
+    return br_i64_result_make(0, BR_STATUS_INVALID_ARGUMENT);
+  }
+  if (br__stream_equal(dst, src)) {
     return br_i64_result_make(0, BR_STATUS_INVALID_ARGUMENT);
   }
 
@@ -474,7 +528,7 @@ br_i64_result br_copy_buffer(br_stream dst, br_stream src, void *buffer, usize b
         written, br_io_error_make(read_result.status, read_result.native_error));
     }
     if (read_result.count == 0u) {
-      return br_i64_result_make(written, BR_STATUS_INVALID_STATE);
+      return br_i64_result_make(written, BR_STATUS_NO_PROGRESS);
     }
   }
 }

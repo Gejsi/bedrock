@@ -54,6 +54,83 @@ typedef struct test_native_error_stream {
   br_error error;
 } test_native_error_stream;
 
+typedef struct test_transfer_stream {
+  br_io_mode transfer_mode;
+  br_i64_result transfer_result;
+  br_stream expected_peer;
+  const u8 *read_data;
+  usize read_len;
+  usize read_pos;
+  u8 written[32];
+  usize written_len;
+  usize transfer_calls;
+  usize read_calls;
+  usize write_calls;
+  usize *sequence;
+  usize transfer_order;
+  bool request_valid;
+  bool read_no_progress;
+} test_transfer_stream;
+
+static test_transfer_stream test_transfer_stream_make(br_io_mode mode, br_i64_result result) {
+  test_transfer_stream stream;
+
+  memset(&stream, 0, sizeof(stream));
+  stream.transfer_mode = mode;
+  stream.transfer_result = result;
+  return stream;
+}
+
+static br_i64_result test_transfer_stream_proc(
+  void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
+  test_transfer_stream *stream;
+
+  stream = context;
+  if (mode == stream->transfer_mode) {
+    br_io_transfer_request request;
+
+    stream->transfer_calls += 1u;
+    if (stream->sequence != NULL) {
+      *stream->sequence += 1u;
+      stream->transfer_order = *stream->sequence;
+    }
+    stream->request_valid = false;
+    if (data != NULL && data_len == sizeof(request)) {
+      memcpy(&request, data, sizeof(request));
+      stream->request_valid = offset == 0 && whence == BR_SEEK_FROM_START &&
+                              request.peer.procedure == stream->expected_peer.procedure &&
+                              request.peer.context == stream->expected_peer.context;
+    }
+    return stream->transfer_result;
+  }
+
+  if (mode == BR_IO_MODE_READ) {
+    usize count;
+
+    stream->read_calls += 1u;
+    if (stream->read_no_progress) {
+      return br_i64_result_make(0, BR_STATUS_OK);
+    }
+    if (stream->read_pos == stream->read_len) {
+      return br_i64_result_make(0, BR_STATUS_EOF);
+    }
+    count = br_min_size(data_len, stream->read_len - stream->read_pos);
+    memcpy(data, stream->read_data + stream->read_pos, count);
+    stream->read_pos += count;
+    return br_i64_result_make((i64)count, BR_STATUS_OK);
+  }
+
+  if (mode == BR_IO_MODE_WRITE) {
+    assert(stream->written_len + data_len <= BR_ARRAY_COUNT(stream->written));
+    stream->write_calls += 1u;
+    memcpy(stream->written + stream->written_len, data, data_len);
+    stream->written_len += data_len;
+    return br_i64_result_make((i64)data_len, BR_STATUS_OK);
+  }
+
+  return br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+}
+
 static br_i64_result test_native_error_stream_proc(
   void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
   test_native_error_stream *stream;
@@ -789,6 +866,7 @@ static void test_io_copy_helpers(void) {
   u8 scratch[3];
   test_short_writer short_writer;
   test_progress_error_writer failing_writer;
+  test_limited_reader limited_reader;
 
   br_byte_reader_init(&src_reader, BR_BYTES_LIT("copy me"));
   br_byte_buffer_init(&dst_buffer, br_allocator_heap());
@@ -841,6 +919,194 @@ static void test_io_copy_helpers(void) {
   assert(copy_result.native_error.code == 77u);
   assert(failing_writer.written == 2u);
   assert(memcmp(failing_writer.data, "ab", 2u) == 0);
+
+  limited_reader = (test_limited_reader){(const u8 *)"read from", 9u, 0u, 2u};
+  br_byte_buffer_init(&dst_buffer, br_allocator_heap());
+  copy_result = br_copy(br_byte_buffer_as_stream(&dst_buffer),
+                        br_stream_make(&limited_reader, test_limited_reader_proc));
+  assert(copy_result.value == 9);
+  assert(copy_result.status == BR_STATUS_OK);
+  assert(br_bytes_equal(br_byte_buffer_view(&dst_buffer), BR_BYTES_LIT("read from")));
+  br_byte_buffer_destroy(&dst_buffer);
+
+  limited_reader = (test_limited_reader){(const u8 *)"fallback", 8u, 0u, 2u};
+  memset(&short_writer, 0, sizeof(short_writer));
+  short_writer.max_per_write = 1u;
+  copy_result = br_copy(br_stream_make(&short_writer, test_short_writer_proc),
+                        br_stream_make(&limited_reader, test_limited_reader_proc));
+  assert(copy_result.value == 8);
+  assert(copy_result.status == BR_STATUS_OK);
+  assert(short_writer.written == 8u);
+  assert(memcmp(short_writer.data, "fallback", 8u) == 0);
+}
+
+static void test_io_copy_dispatch(void) {
+  test_transfer_stream source;
+  test_transfer_stream destination;
+  br_stream src;
+  br_stream dst;
+  br_i64_result result;
+  usize sequence;
+  u8 scratch[3];
+
+  sequence = 0u;
+  source = test_transfer_stream_make(BR_IO_MODE_WRITE_TO, br_i64_result_make(5, BR_STATUS_OK));
+  destination =
+    test_transfer_stream_make(BR_IO_MODE_READ_FROM, br_i64_result_make(9, BR_STATUS_OK));
+  src = br_stream_make(&source, test_transfer_stream_proc);
+  dst = br_stream_make(&destination, test_transfer_stream_proc);
+  source.expected_peer = dst;
+  source.sequence = &sequence;
+  destination.expected_peer = src;
+  destination.sequence = &sequence;
+  result = br_copy(dst, src);
+  assert(result.value == 5);
+  assert(result.status == BR_STATUS_OK);
+  assert(source.transfer_calls == 1u);
+  assert(source.transfer_order == 1u);
+  assert(source.request_valid);
+  assert(destination.transfer_calls == 0u);
+  assert(source.read_calls == 0u);
+  assert(destination.write_calls == 0u);
+
+  sequence = 0u;
+  source =
+    test_transfer_stream_make(BR_IO_MODE_WRITE_TO, br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED));
+  destination =
+    test_transfer_stream_make(BR_IO_MODE_READ_FROM, br_i64_result_make(3, BR_STATUS_EOF));
+  src = br_stream_make(&source, test_transfer_stream_proc);
+  dst = br_stream_make(&destination, test_transfer_stream_proc);
+  source.expected_peer = dst;
+  source.sequence = &sequence;
+  destination.expected_peer = src;
+  destination.sequence = &sequence;
+  result = br_copy(dst, src);
+  assert(result.value == 3);
+  assert(result.status == BR_STATUS_OK);
+  assert(result.native_error.domain == BR_ERROR_DOMAIN_NONE);
+  assert(source.transfer_calls == 1u);
+  assert(source.transfer_order == 1u);
+  assert(source.request_valid);
+  assert(destination.transfer_calls == 1u);
+  assert(destination.transfer_order == 2u);
+  assert(destination.request_valid);
+  assert(source.read_calls == 0u);
+  assert(destination.write_calls == 0u);
+
+  source = test_transfer_stream_make(
+    BR_IO_MODE_WRITE_TO,
+    br_i64_result_make_error(
+      2, br_error_make_native(BR_STATUS_IO_ERROR, BR_ERROR_DOMAIN_POSIX_ERRNO, 77u)));
+  destination =
+    test_transfer_stream_make(BR_IO_MODE_READ_FROM, br_i64_result_make(9, BR_STATUS_OK));
+  src = br_stream_make(&source, test_transfer_stream_proc);
+  dst = br_stream_make(&destination, test_transfer_stream_proc);
+  source.expected_peer = dst;
+  destination.expected_peer = src;
+  result = br_copy(dst, src);
+  assert(result.value == 2);
+  assert(result.status == BR_STATUS_IO_ERROR);
+  assert(result.native_error.domain == BR_ERROR_DOMAIN_POSIX_ERRNO);
+  assert(result.native_error.code == 77u);
+  assert(source.request_valid);
+  assert(destination.transfer_calls == 0u);
+  assert(source.read_calls == 0u);
+  assert(destination.write_calls == 0u);
+
+  source =
+    test_transfer_stream_make(BR_IO_MODE_WRITE_TO, br_i64_result_make(1, BR_STATUS_NOT_SUPPORTED));
+  destination =
+    test_transfer_stream_make(BR_IO_MODE_READ_FROM, br_i64_result_make(9, BR_STATUS_OK));
+  src = br_stream_make(&source, test_transfer_stream_proc);
+  dst = br_stream_make(&destination, test_transfer_stream_proc);
+  source.expected_peer = dst;
+  destination.expected_peer = src;
+  result = br_copy(dst, src);
+  assert(result.value == 1);
+  assert(result.status == BR_STATUS_INVALID_STATE);
+  assert(source.request_valid);
+  assert(destination.transfer_calls == 0u);
+  assert(source.read_calls == 0u);
+  assert(destination.write_calls == 0u);
+
+  source = test_transfer_stream_make(BR_IO_MODE_WRITE_TO, br_i64_result_make(-1, BR_STATUS_OK));
+  destination =
+    test_transfer_stream_make(BR_IO_MODE_READ_FROM, br_i64_result_make(9, BR_STATUS_OK));
+  src = br_stream_make(&source, test_transfer_stream_proc);
+  dst = br_stream_make(&destination, test_transfer_stream_proc);
+  source.expected_peer = dst;
+  destination.expected_peer = src;
+  result = br_copy(dst, src);
+  assert(result.value == 0);
+  assert(result.status == BR_STATUS_INVALID_STATE);
+  assert(source.request_valid);
+  assert(destination.transfer_calls == 0u);
+
+  sequence = 0u;
+  source =
+    test_transfer_stream_make(BR_IO_MODE_WRITE_TO, br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED));
+  source.read_data = (const u8 *)"fallback";
+  source.read_len = 8u;
+  source.sequence = &sequence;
+  destination =
+    test_transfer_stream_make(BR_IO_MODE_READ_FROM, br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED));
+  destination.sequence = &sequence;
+  src = br_stream_make(&source, test_transfer_stream_proc);
+  dst = br_stream_make(&destination, test_transfer_stream_proc);
+  source.expected_peer = dst;
+  destination.expected_peer = src;
+  result = br_copy(dst, src);
+  assert(result.value == 8);
+  assert(result.status == BR_STATUS_OK);
+  assert(source.transfer_order == 1u);
+  assert(destination.transfer_order == 2u);
+  assert(source.request_valid);
+  assert(destination.request_valid);
+  assert(source.read_calls > 0u);
+  assert(destination.write_calls > 0u);
+  assert(destination.written_len == 8u);
+  assert(memcmp(destination.written, "fallback", 8u) == 0);
+
+  source =
+    test_transfer_stream_make(BR_IO_MODE_WRITE_TO, br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED));
+  source.read_no_progress = true;
+  destination =
+    test_transfer_stream_make(BR_IO_MODE_READ_FROM, br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED));
+  src = br_stream_make(&source, test_transfer_stream_proc);
+  dst = br_stream_make(&destination, test_transfer_stream_proc);
+  source.expected_peer = dst;
+  destination.expected_peer = src;
+  result = br_copy(dst, src);
+  assert(result.value == 0);
+  assert(result.status == BR_STATUS_NO_PROGRESS);
+  assert(source.read_calls == 1u);
+
+  source =
+    test_transfer_stream_make(BR_IO_MODE_WRITE_TO, br_i64_result_make(7, BR_STATUS_INVALID_STATE));
+  source.read_data = (const u8 *)"buffered";
+  source.read_len = 8u;
+  destination =
+    test_transfer_stream_make(BR_IO_MODE_READ_FROM, br_i64_result_make(7, BR_STATUS_INVALID_STATE));
+  src = br_stream_make(&source, test_transfer_stream_proc);
+  dst = br_stream_make(&destination, test_transfer_stream_proc);
+  source.expected_peer = dst;
+  destination.expected_peer = src;
+  result = br_copy_buffer(dst, src, scratch, sizeof(scratch));
+  assert(result.value == 8);
+  assert(result.status == BR_STATUS_OK);
+  assert(source.transfer_calls == 0u);
+  assert(destination.transfer_calls == 0u);
+  assert(source.read_calls > 0u);
+  assert(destination.write_calls > 0u);
+  assert(destination.written_len == 8u);
+  assert(memcmp(destination.written, "buffered", 8u) == 0);
+
+  result = br_copy(src, src);
+  assert(result.value == 0);
+  assert(result.status == BR_STATUS_INVALID_ARGUMENT);
+  result = br_copy_buffer(src, src, scratch, sizeof(scratch));
+  assert(result.value == 0);
+  assert(result.status == BR_STATUS_INVALID_ARGUMENT);
 }
 
 static void test_io_invalid_callback_counts(void) {
@@ -935,6 +1201,7 @@ int main(void) {
   test_io_byte_and_rune_helpers();
   test_io_write_exact_and_at_least_helpers();
   test_io_copy_helpers();
+  test_io_copy_dispatch();
   test_io_invalid_callback_counts();
   test_io_destroy_lifecycle();
   test_io_native_error_propagation();
