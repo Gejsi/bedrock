@@ -2,6 +2,8 @@
 
 #include <bedrock/io/io.h>
 
+#include "io_internal.h"
+
 enum { BR__IO_COPY_BUFFER_SIZE = 4096 };
 
 #if defined(_MSC_VER)
@@ -483,10 +485,14 @@ br_i64_result br_copy(br_stream dst, br_stream src) {
 }
 
 br_i64_result br_copy_buffer(br_stream dst, br_stream src, void *buffer, usize buffer_len) {
-  u8 *scratch;
-  i64 written;
+  return br__io_copy_buffer(dst, src, buffer, buffer_len, 0);
+}
 
-  if (buffer == NULL || buffer_len == 0u) {
+br_i64_result
+br__io_copy_buffer(br_stream dst, br_stream src, void *buffer, usize buffer_len, i64 written) {
+  u8 *scratch;
+
+  if (buffer == NULL || buffer_len == 0u || written < 0) {
     return br_i64_result_make(0, BR_STATUS_INVALID_ARGUMENT);
   }
   if (br__stream_equal(dst, src)) {
@@ -494,7 +500,6 @@ br_i64_result br_copy_buffer(br_stream dst, br_stream src, void *buffer, usize b
   }
 
   scratch = (u8 *)buffer;
-  written = 0;
   for (;;) {
     br_io_result read_result;
     usize read_len;
