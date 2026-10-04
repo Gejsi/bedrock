@@ -13,7 +13,7 @@ thinking.
 
 - Porting Odin compiler/runtime internals
 - Recreating Odin's implicit `context`
-- Shipping a giant platform layer in v1
+- Shipping a giant platform layer
 - Hiding portability problems behind undefined behavior or macro magic
 
 ## Language Baseline
@@ -30,7 +30,8 @@ The source tree should stay modular:
 
 - `include/bedrock/` for public modular headers
 - `src/` for implementation
-- `spec/`, `tracking/`, and `decisions/` for project memory
+- `spec/` and `decisions/` for the published design contract
+- `.codex/tracking/` for local, gitignored work memory
 
 The supported consumption model is vendored source plus static link: a consumer
 vendors the repository (copy or git submodule), runs `make` to produce
@@ -124,14 +125,20 @@ This is described in detail in `spec/modules/generics.md`.
 
 ## Context Management In This Repo
 
-Do not accumulate a single giant planning file.
+Keep a short resume snapshot and focused companion records rather than a
+single giant planning file.
 
 Use:
 
 - `spec/foundation.md` for project-wide rules
 - `spec/modules/*.md` for module-level design
 - `decisions/ADR-*.md` for stable decisions
-- `tracking/odin-port-matrix.md` for source coverage and scope
+- `.codex/tracking/TRACKER.md` as the canonical local work tracker
+- its linked task graph, decisions, scope, module coverage, issues, and evidence
+  for the details needed by a particular task
+- `tracking/` only as preserved historical reference material
 
-This mirrors the good part of the `typescript-go` pattern: one small repo-wide
-instruction file plus small task-specific context files.
+Read the snapshot, active decisions, and newest checkpoint before resuming;
+verify them against live state. Update at meaningful boundaries and before
+handoff. The tracker records authorization but never grants it. ADR-0009
+defines this workflow and supersedes the earlier tracking storage policy.
