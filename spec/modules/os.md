@@ -135,8 +135,10 @@ context. Other stream types return `NOT_SUPPORTED` with zero progress and no I/O
 allowing their existing transfer implementation or ordinary copying to run.
 The public file layout and stream protocol do not change.
 
-Both files must be live and direction-compatible. An invalid request or access
-direction returns `INVALID_ARGUMENT`; an inert peer returns `INVALID_STATE`.
+Both files must be live and direction-compatible. A live file lacking the access
+required for the requested transfer mode returns `NOT_SUPPORTED`. Within a
+supported mode, an invalid request or incompatible native peer access returns
+`INVALID_ARGUMENT`; an inert native peer returns `INVALID_STATE`.
 Direct self-copy and independent handles identifying the same native file,
 including hard links, are rejected before data or cursor movement.
 
