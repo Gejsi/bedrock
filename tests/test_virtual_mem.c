@@ -8,6 +8,8 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+static void test_virtual_arena_expect_guard_fault(void *ptr, usize size);
 #endif
 
 #define TEST_VM_PAGE_SIZE_THREAD_COUNT 8u
@@ -184,6 +186,240 @@ static void test_virtual_arena_growing(void) {
   assert(arena.total_reserved == initial_reserved);
 
   br_virtual_arena_destroy(&arena);
+}
+
+static void test_virtual_arena_expect_bytes(const void *ptr, usize size, u8 value) {
+  const u8 *bytes = (const u8 *)ptr;
+
+  for (usize i = 0u; i < size; ++i) {
+    assert(bytes[i] == value);
+  }
+}
+
+static void test_virtual_arena_large_alignment(void) {
+  usize page_size = br_vm_page_size();
+
+  if (page_size == 0u) {
+    return;
+  }
+
+  for (usize alignment = 2u * 1024u * 1024u; alignment <= 16u * 1024u * 1024u; alignment *= 2u) {
+    for (u32 guarded = 0u; guarded < 2u; ++guarded) {
+      br_virtual_arena arena = {0};
+      br_alloc_result full;
+      br_alloc_result reused;
+      br_alloc_result tail;
+      br_virtual_arena_mark mark;
+      usize reserved;
+
+      arena.flags = guarded != 0u ? BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION : 0u;
+      /* No init call: exact size=alignment must work from the zero-ready state. */
+      full = br_virtual_arena_alloc_uninit(&arena, alignment, alignment);
+      assert(full.status == BR_STATUS_OK);
+      assert(full.size == alignment);
+      assert(((uptr)full.ptr % alignment) == 0u);
+      assert(arena.total_reserved == alignment);
+      assert(arena.total_used == alignment);
+      memset(full.ptr, 0xa5, full.size);
+      reserved = arena.total_reserved;
+
+      mark = br_virtual_arena_mark_save(&arena);
+      tail = br_allocator_alloc(br_virtual_arena_allocator(&arena), page_size, 1u);
+      assert(tail.status == BR_STATUS_OK);
+      assert(arena.total_reserved > reserved);
+      test_virtual_arena_expect_bytes(full.ptr, full.size, 0xa5u);
+      assert(br_virtual_arena_rewind(&arena, mark) == BR_STATUS_OK);
+      assert(arena.total_reserved == reserved);
+      assert(arena.total_used == alignment);
+      test_virtual_arena_expect_bytes(full.ptr, full.size, 0xa5u);
+
+      br_virtual_arena_reset(&arena);
+      assert(arena.total_used == 0u);
+      assert(arena.total_reserved == reserved);
+      reused = br_virtual_arena_alloc_uninit(&arena, alignment, alignment);
+      assert(reused.status == BR_STATUS_OK);
+      assert(reused.ptr == full.ptr);
+      test_virtual_arena_expect_bytes(reused.ptr, reused.size, 0xa5u);
+
+      br_virtual_arena_reset(&arena);
+      reused = br_virtual_arena_alloc(&arena, alignment, alignment);
+      assert(reused.status == BR_STATUS_OK);
+      assert(reused.ptr == full.ptr);
+      test_virtual_arena_expect_bytes(reused.ptr, reused.size, 0u);
+#if !defined(_WIN32)
+      if (guarded != 0u) {
+        test_virtual_arena_expect_guard_fault(reused.ptr, reused.size);
+      }
+#endif
+      br_virtual_arena_destroy(&arena);
+    }
+  }
+}
+
+static void test_virtual_arena_large_alignment_growing(void) {
+  usize page_size = br_vm_page_size();
+
+  if (page_size == 0u) {
+    return;
+  }
+
+  for (usize alignment = 2u * 1024u * 1024u; alignment <= 16u * 1024u * 1024u; alignment *= 2u) {
+    for (u32 guarded = 0u; guarded < 2u; ++guarded) {
+      br_virtual_arena arena = {0};
+      br_alloc_result prefix;
+      br_alloc_result full;
+      br_alloc_result tail;
+      br_alloc_result small;
+      br_virtual_arena_mark mark;
+      br_virtual_arena_temp_result temp;
+      usize reserved = page_size * 2u;
+
+      arena.flags = guarded != 0u ? BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION : 0u;
+      arena.default_commit_size = page_size;
+      assert(br_virtual_arena_init_growing(&arena, reserved) == BR_STATUS_OK);
+      prefix = br_virtual_arena_alloc_uninit(&arena, page_size, 1u);
+      assert(prefix.status == BR_STATUS_OK);
+      memset(prefix.ptr, 0x6c, prefix.size);
+      mark = br_virtual_arena_mark_save(&arena);
+
+      full = br_allocator_alloc_uninit(br_virtual_arena_allocator(&arena), alignment, alignment);
+      assert(full.status == BR_STATUS_OK);
+      assert(((uptr)full.ptr % alignment) == 0u);
+      assert(arena.total_reserved == reserved + alignment);
+      memset(full.ptr, 0x7d, full.size);
+      test_virtual_arena_expect_bytes(prefix.ptr, prefix.size, 0x6cu);
+      assert(br_virtual_arena_rewind(&arena, mark) == BR_STATUS_OK);
+      assert(arena.total_reserved == reserved);
+      assert(arena.total_used == prefix.size);
+
+      /* A small payload with a large alignment does not need an alignment-sized block. */
+      temp = br_virtual_arena_temp_begin(&arena);
+      assert(temp.status == BR_STATUS_OK);
+      tail = br_virtual_arena_alloc_uninit(&arena, page_size, 1u);
+      assert(tail.status == BR_STATUS_OK);
+      small = br_virtual_arena_alloc(&arena, 1u, alignment);
+      assert(small.status == BR_STATUS_OK);
+      assert(((uptr)small.ptr % alignment) == 0u);
+      assert(*(u8 *)small.ptr == 0u);
+      assert(arena.total_reserved == reserved + page_size * 2u);
+      test_virtual_arena_expect_bytes(prefix.ptr, prefix.size, 0x6cu);
+      assert(br_virtual_arena_temp_end(temp.value) == BR_STATUS_OK);
+      assert(arena.total_reserved == reserved);
+      assert(arena.total_used == prefix.size);
+      br_virtual_arena_destroy(&arena);
+    }
+  }
+}
+
+static void test_virtual_arena_large_alignment_static(void) {
+  usize page_size = br_vm_page_size();
+
+  if (page_size == 0u) {
+    return;
+  }
+
+  for (usize alignment = 2u * 1024u * 1024u; alignment <= 16u * 1024u * 1024u; alignment *= 2u) {
+    for (u32 guarded = 0u; guarded < 2u; ++guarded) {
+      br_virtual_arena arena = {0};
+      br_alloc_result prefix;
+      br_alloc_result full;
+      br_alloc_result failed;
+      br_alloc_result reused;
+      usize reserved = alignment * 2u;
+      usize used;
+
+      arena.flags = guarded != 0u ? BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION : 0u;
+      arena.default_commit_size = page_size;
+      assert(br_virtual_arena_init_static(&arena, reserved, page_size) == BR_STATUS_OK);
+      prefix = br_virtual_arena_alloc_uninit(&arena, 1u, 1u);
+      assert(prefix.status == BR_STATUS_OK);
+      *(u8 *)prefix.ptr = 0x3cu;
+      full = br_virtual_arena_alloc_uninit(&arena, alignment, alignment);
+      assert(full.status == BR_STATUS_OK);
+      assert(((uptr)full.ptr % alignment) == 0u);
+      assert(arena.total_reserved == reserved);
+      assert(arena.total_used <= reserved);
+      memset(full.ptr, 0x4d, full.size);
+      assert(*(u8 *)prefix.ptr == 0x3cu);
+
+      /* Padding is charged to fixed capacity: another full aligned payload cannot fit. */
+      used = arena.total_used;
+      failed = br_virtual_arena_alloc_uninit(&arena, alignment, alignment);
+      assert(failed.status == BR_STATUS_OUT_OF_MEMORY);
+      assert(failed.ptr == NULL);
+      assert(arena.total_used == used);
+      assert(arena.total_reserved == reserved);
+      test_virtual_arena_expect_bytes(full.ptr, full.size, 0x4du);
+
+      br_virtual_arena_reset(&arena);
+      reused = br_virtual_arena_alloc_uninit(&arena, 1u, 1u);
+      assert(reused.status == BR_STATUS_OK && reused.ptr == prefix.ptr);
+      assert(*(u8 *)reused.ptr == 0x3cu);
+      reused = br_virtual_arena_alloc_uninit(&arena, alignment, alignment);
+      assert(reused.status == BR_STATUS_OK && reused.ptr == full.ptr);
+      test_virtual_arena_expect_bytes(reused.ptr, reused.size, 0x4du);
+
+      br_virtual_arena_reset(&arena);
+      reused = br_virtual_arena_alloc(&arena, reserved, 1u);
+      assert(reused.status == BR_STATUS_OK && reused.ptr == prefix.ptr);
+      test_virtual_arena_expect_bytes(reused.ptr, reused.size, 0u);
+#if !defined(_WIN32)
+      if (guarded != 0u) {
+        test_virtual_arena_expect_guard_fault(reused.ptr, reused.size);
+      }
+#endif
+      br_virtual_arena_destroy(&arena);
+    }
+  }
+}
+
+static void test_virtual_arena_alignment_overflow(void) {
+  usize page_size = br_vm_page_size();
+  usize highest_alignment = SIZE_MAX / 2u + 1u;
+
+  if (page_size == 0u) {
+    return;
+  }
+
+  for (u32 guarded = 0u; guarded < 2u; ++guarded) {
+    br_virtual_arena arena = {0};
+    br_alloc_result failed;
+    br_alloc_result prefix;
+    br_virtual_arena_mark mark;
+    usize reserved;
+
+    arena.flags = guarded != 0u ? BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION : 0u;
+    failed = br_virtual_arena_alloc_uninit(&arena, 1u, 3u);
+    assert(failed.status == BR_STATUS_INVALID_ARGUMENT && failed.ptr == NULL);
+    failed = br_virtual_arena_alloc_uninit(&arena, SIZE_MAX, 1u);
+    assert(failed.status == BR_STATUS_OUT_OF_MEMORY && failed.ptr == NULL);
+    failed = br_virtual_arena_alloc_uninit(&arena, highest_alignment, highest_alignment);
+    assert(failed.status == BR_STATUS_OUT_OF_MEMORY && failed.ptr == NULL);
+    assert(arena.curr_block == NULL && arena.total_reserved == 0u && arena.total_used == 0u);
+
+    prefix = br_virtual_arena_alloc_uninit(&arena, page_size, 1u);
+    assert(prefix.status == BR_STATUS_OK);
+    memset(prefix.ptr, 0x5e, prefix.size);
+    mark = br_virtual_arena_mark_save(&arena);
+    reserved = arena.total_reserved;
+    failed = br_virtual_arena_alloc_uninit(&arena, highest_alignment, highest_alignment);
+    assert(failed.status == BR_STATUS_OUT_OF_MEMORY && failed.ptr == NULL);
+    assert(br_virtual_arena_mark_save(&arena).block == mark.block);
+    assert(arena.total_used == mark.used && arena.total_reserved == reserved);
+    test_virtual_arena_expect_bytes(prefix.ptr, prefix.size, 0x5eu);
+    br_virtual_arena_destroy(&arena);
+
+    assert(br_virtual_arena_init_static(&arena, SIZE_MAX, page_size) == BR_STATUS_OUT_OF_MEMORY);
+    assert(arena.curr_block == NULL && arena.kind == BR_VIRTUAL_ARENA_KIND_NONE);
+    if (guarded != 0u) {
+      arena.flags = BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION;
+      /* Payload + prefix fits size_t, but adding the trailing guard overflows. */
+      assert(br_virtual_arena_init_static(&arena, SIZE_MAX - (page_size * 2u - 1u), page_size) ==
+             BR_STATUS_OUT_OF_MEMORY);
+      assert(arena.curr_block == NULL && arena.kind == BR_VIRTUAL_ARENA_KIND_NONE);
+    }
+    br_virtual_arena_destroy(&arena);
+  }
 }
 
 static void test_virtual_arena_rollback_retains_storage_contents(void) {
@@ -554,9 +790,9 @@ static void test_virtual_arena_overflow_protection(void) {
 #if !defined(_WIN32)
 /*
 Prove the overflow-protection guard page actually faults on an out-of-bounds
-write, not just that the arena's bookkeeping refuses over-allocation. A forked
-child writes the last valid payload byte (must succeed) and then one byte into
-the trailing guard page (must fault). The child calls `_exit(0)` -- the
+write, not just that the arena's bookkeeping refuses over-allocation. The parent
+writes the last valid payload byte (must succeed), then a forked child writes one
+byte into the trailing guard page (must fault). The child calls `_exit(0)` -- the
 underscore form, to skip atexit/sanitizer teardown -- right after the guard
 write, so if the guard did NOT fault the child exits cleanly with 0 and the
 parent's "did not exit 0" assertion fails. The parent therefore only needs to
@@ -569,8 +805,6 @@ static void test_virtual_arena_guard_page_faults(void) {
   br_alloc_result full;
   usize page_size = br_vm_page_size();
   usize reserved;
-  pid_t child;
-  int status;
 
   if (page_size == 0u) {
     return;
@@ -587,11 +821,20 @@ static void test_virtual_arena_guard_page_faults(void) {
   assert(full.status == BR_STATUS_OK);
   assert(full.ptr != NULL);
 
+  test_virtual_arena_expect_guard_fault(full.ptr, full.size);
+  br_virtual_arena_destroy(&arena);
+}
+
+static void test_virtual_arena_expect_guard_fault(void *ptr, usize size) {
+  volatile u8 *payload = (volatile u8 *)ptr;
+  pid_t child;
+  int status;
+
+  /* Test the last payload byte in the parent, so its failure cannot pass as a guard fault. */
+  payload[size - 1u] = 0x5au;
   child = fork();
   assert(child >= 0);
   if (child == 0) {
-    volatile u8 *payload = (volatile u8 *)full.ptr;
-
     /*
     Restore default fault handlers so the EXPECTED guard fault kills the child
     cleanly instead of triggering the sanitizer's SEGV/BUS reporter, which would
@@ -603,10 +846,8 @@ static void test_virtual_arena_guard_page_faults(void) {
     signal(SIGSEGV, SIG_DFL);
     signal(SIGBUS, SIG_DFL);
 
-    /* Last valid byte must be writable; this proves the fault below is the guard. */
-    payload[reserved - 1u] = 0x5au;
     /* First byte past the payload is the PROT_NONE guard page: this must fault. */
-    payload[reserved] = 0x5au;
+    payload[size] = 0x5au;
     /* Only reached if the guard did NOT fault (the broken case). */
     _exit(0);
   }
@@ -618,8 +859,6 @@ static void test_virtual_arena_guard_page_faults(void) {
   intercepted the fault. A clean exit 0 means the guard failed to protect.
   */
   assert(!(WIFEXITED(status) && WEXITSTATUS(status) == 0));
-
-  br_virtual_arena_destroy(&arena);
 }
 #endif /* !defined(_WIN32): end of the POSIX-only guard-page death test */
 
@@ -701,6 +940,10 @@ int main(void) {
   test_vm_reserve_commit_release();
   test_virtual_arena_static();
   test_virtual_arena_growing();
+  test_virtual_arena_large_alignment();
+  test_virtual_arena_large_alignment_growing();
+  test_virtual_arena_large_alignment_static();
+  test_virtual_arena_alignment_overflow();
   test_virtual_arena_rollback_retains_storage_contents();
   test_virtual_arena_resize_realigns_equal_and_shrunk_allocations();
   test_virtual_arena_temp_end();

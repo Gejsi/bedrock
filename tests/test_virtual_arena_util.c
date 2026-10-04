@@ -80,9 +80,37 @@ static void test_virtual_arena_util_make_multi_pointer(void) {
   br_virtual_arena_destroy(&arena);
 }
 
+static void test_virtual_arena_util_large_alignment(void) {
+  if (br_vm_page_size() == 0u) {
+    return;
+  }
+
+  for (usize alignment = 2u * 1024u * 1024u; alignment <= 16u * 1024u * 1024u; alignment *= 2u) {
+    br_virtual_arena arena = {0};
+    u64 *items = NULL;
+    usize len = 0u;
+    usize count = alignment / sizeof(*items);
+    br_status status;
+
+    arena.flags = BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION;
+    status = br_virtual_arena_make_aligned(&arena, u64, count, alignment, items, len);
+    assert(status == BR_STATUS_OK);
+    assert(len == count);
+    assert(((uptr)(void *)items % alignment) == 0u);
+    for (usize i = 0u; i < len; ++i) {
+      assert(items[i] == 0u);
+    }
+    items[0] = 17u;
+    items[len - 1u] = 29u;
+    assert(items[0] == 17u && items[len - 1u] == 29u);
+    br_virtual_arena_destroy(&arena);
+  }
+}
+
 int main(void) {
   test_virtual_arena_util_new_and_clone();
   test_virtual_arena_util_alignment_and_make();
   test_virtual_arena_util_make_multi_pointer();
+  test_virtual_arena_util_large_alignment();
   return 0;
 }

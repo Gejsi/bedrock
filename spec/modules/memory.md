@@ -267,6 +267,17 @@ is caller information. Explicit init functions remain valid and take effect when
 called before first use. This mirrors Odin, whose zeroed `Arena` is likewise a
 growing arena.
 
+Allocations accept power-of-two alignments larger than the VM page size.
+When growing needs a new block, Bedrock reserves checked headroom and aligns
+the payload against the actual OS address, rather than only aligning a header
+offset. Initial commitment and later commit bounds use that actual offset;
+the trailing guard begins immediately after the payload reservation and stays
+outside the usable capacity. Header/alignment overhead is excluded from
+`total_reserved`. A new block does not round a small request up to its alignment
+as a payload-size requirement. Static arenas keep their fixed payload capacity:
+alignment padding consumes that capacity, and a request that cannot fit reports
+`OUT_OF_MEMORY` without growing or invalidating earlier allocations.
+
 Important Bedrock-specific deviations from Odin for now:
 
 - no buffer-backed variant in `virtual_arena`; fixed buffers stay in `br_arena`

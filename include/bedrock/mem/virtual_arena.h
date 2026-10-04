@@ -102,6 +102,14 @@ br_status br_virtual_arena_temp_end(br_virtual_arena_temp temp);
 br_status br_virtual_arena_temp_ignore(br_virtual_arena_temp temp);
 br_status br_virtual_arena_check_temp(br_virtual_arena *arena);
 
+/*
+Alignment may be any supported power of two, including values larger than a VM
+page; zero selects the default alignment. Growing arenas reserve enough space
+for a new payload at that alignment, independently of the VM address returned by
+the OS. Header/alignment overhead and the trailing guard are excluded from
+`total_reserved`. Static arenas charge alignment padding against their fixed
+payload capacity and report OUT_OF_MEMORY if the request cannot fit.
+*/
 br_alloc_result br_virtual_arena_alloc(br_virtual_arena *arena, size_t size, size_t alignment);
 br_alloc_result
 br_virtual_arena_alloc_uninit(br_virtual_arena *arena, size_t size, size_t alignment);

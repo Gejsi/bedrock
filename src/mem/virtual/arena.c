@@ -86,7 +86,9 @@ static br_status br__virtual_block_create(usize committed,
                                           br_virtual_arena_block **out_block) {
   br__vm_platform_memory_block *platform_block;
   br_status status;
+  usize base_address;
   usize base_offset;
+  usize maximum_base_offset;
   usize page_size;
   usize required_alignment;
   usize total_commit;
@@ -128,12 +130,21 @@ static br_status br__virtual_block_create(usize committed,
   overflow_protection = (flags & BR_VIRTUAL_ARENA_FLAG_OVERFLOW_PROTECTION) != 0u;
   required_alignment = overflow_protection ? br_max_size(alignment, page_size) : alignment;
 
-  status =
-    br__align_up_size(sizeof(br__vm_platform_memory_block), required_alignment, &base_offset);
+  /*
+  VM addresses are page-aligned, not necessarily aligned to a larger request.
+  Leave room to align the absolute payload address after reserving. The prefix
+  starts at a page multiple for over-page alignment, so its worst extra padding
+  is required_alignment - page_size rather than required_alignment - 1.
+  */
+  status = br__align_up_size(
+    sizeof(br__vm_platform_memory_block), br_min_size(required_alignment, page_size), &base_offset);
   if (status != BR_STATUS_OK) {
     return status;
   }
-  if (!br__safe_add_size(base_offset, reserved, &total_size)) {
+  if (!br__safe_add_size(base_offset,
+                         required_alignment > page_size ? required_alignment - page_size : 0u,
+                         &maximum_base_offset) ||
+      !br__safe_add_size(maximum_base_offset, reserved, &total_size)) {
     return BR_STATUS_OUT_OF_MEMORY;
   }
   if (overflow_protection && !br__safe_add_size(total_size, page_size, &total_size)) {
@@ -142,10 +153,41 @@ static br_status br__virtual_block_create(usize committed,
   if (!br__safe_add_size(base_offset, committed, &total_commit)) {
     return BR_STATUS_OUT_OF_MEMORY;
   }
-
+  /*
+  Commit from the minimum prefix first, then extend if absolute alignment moves
+  the payload. Page-sized and smaller alignments need no extra commit call.
+  */
   platform_block = br__vm_platform_memory_alloc(total_commit, total_size, &status);
   if (platform_block == NULL) {
     return status;
+  }
+
+  if (!br__safe_add_size((usize)(uptr)(void *)platform_block, base_offset, &base_address)) {
+    br__vm_platform_memory_free(platform_block);
+    return BR_STATUS_OUT_OF_MEMORY;
+  }
+  status = br__align_up_size(base_address, required_alignment, &base_address);
+  if (status != BR_STATUS_OK) {
+    br__vm_platform_memory_free(platform_block);
+    return status;
+  }
+  base_offset = base_address - (usize)(uptr)(void *)platform_block;
+
+  if (!br__safe_add_size(base_offset, reserved, &payload_limit) ||
+      !br__safe_add_size(base_offset, committed, &total_commit)) {
+    br__vm_platform_memory_free(platform_block);
+    return BR_STATUS_OUT_OF_MEMORY;
+  }
+  if (base_offset > maximum_base_offset || payload_limit > platform_block->reserved_total) {
+    br__vm_platform_memory_free(platform_block);
+    return BR_STATUS_INVALID_STATE;
+  }
+  if (total_commit > platform_block->committed_total) {
+    status = br__vm_platform_memory_commit(platform_block, total_commit);
+    if (status != BR_STATUS_OK) {
+      br__vm_platform_memory_free(platform_block);
+      return status;
+    }
   }
 
   platform_block->block.base = (u8 *)(void *)platform_block + base_offset;
@@ -153,8 +195,7 @@ static br_status br__virtual_block_create(usize committed,
   platform_block->block.reserved = reserved;
 
   if (overflow_protection) {
-    if (!br__safe_add_size(base_offset, reserved, &payload_limit) ||
-        !br__safe_add_size(payload_limit, page_size, &guard_end) ||
+    if (!br__safe_add_size(payload_limit, page_size, &guard_end) ||
         guard_end > platform_block->reserved_total) {
       br__vm_platform_memory_free(platform_block);
       return BR_STATUS_INVALID_STATE;
@@ -411,12 +452,8 @@ static br_alloc_result br__virtual_arena_alloc_internal(br_virtual_arena *arena,
         if (status != BR_STATUS_OK) {
           return br__virtual_arena_result(NULL, 0u, status);
         }
-        status = br__align_up_size(size, alignment, &needed);
-        if (status != BR_STATUS_OK) {
-          return br__virtual_arena_result(NULL, 0u, status);
-        }
-
-        needed = br_max_size(needed, default_commit_size);
+        /* A new block's absolute payload base already satisfies alignment. */
+        needed = br_max_size(size, default_commit_size);
         block_size = br_max_size(needed, minimum_block_size);
 
         status = br__virtual_block_create(needed, block_size, alignment, arena->flags, &new_block);
