@@ -12,6 +12,7 @@ static br_string_view sv(const char *s) {
    NULL on non-OK status, with the status out-param set). */
 static br_status format_into(br_time t, int32_t off, char *out, usize out_cap) {
   br_io_result r = br_rfc3339_format(t, off, (u8 *)out, out_cap);
+  assert(r.native_error.domain == BR_ERROR_DOMAIN_NONE && r.native_error.code == 0u);
   if (r.status == BR_STATUS_OK) {
     out[r.count] = '\0';
   }
@@ -258,11 +259,21 @@ static void test_offset_boundaries(void) {
   /* Caller-provided offsets outside RFC 3339's range are rejected before arithmetic. */
   formatted = br_rfc3339_format(hi, INT32_MAX, (u8 *)out, sizeof(out));
   assert(formatted.status == BR_STATUS_INVALID_ARGUMENT && formatted.count == 0u);
+  assert(formatted.native_error.domain == BR_ERROR_DOMAIN_NONE &&
+         formatted.native_error.code == 0u);
   formatted = br_rfc3339_format(lo, INT32_MIN, (u8 *)out, sizeof(out));
   assert(formatted.status == BR_STATUS_INVALID_ARGUMENT && formatted.count == 0u);
+  assert(formatted.native_error.domain == BR_ERROR_DOMAIN_NONE &&
+         formatted.native_error.code == 0u);
 
   formatted = br_rfc3339_format((br_time){0}, 0, NULL, BR_RFC3339_MAX);
   assert(formatted.status == BR_STATUS_SHORT_BUFFER && formatted.count == 0u);
+  assert(formatted.native_error.domain == BR_ERROR_DOMAIN_NONE &&
+         formatted.native_error.code == 0u);
+  formatted = br_rfc3339_format((br_time){0}, 0, (u8 *)out, 1u);
+  assert(formatted.status == BR_STATUS_SHORT_BUFFER && formatted.count == 0u);
+  assert(formatted.native_error.domain == BR_ERROR_DOMAIN_NONE &&
+         formatted.native_error.code == 0u);
 }
 
 int main(void) {

@@ -210,10 +210,7 @@ br_rfc3339_result br_rfc3339_parse_prefix(br_string_view s) {
 }
 
 static br_io_result br__io_result(usize count, br_status status) {
-  br_io_result result;
-  result.count = count;
-  result.status = status;
-  return result;
+  return br_io_result_make(count, status);
 }
 
 /* Write `count` zero-padded digits of `value` at buf[pos..], returning the new

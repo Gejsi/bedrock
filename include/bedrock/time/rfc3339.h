@@ -47,6 +47,7 @@ Returns the number of bytes written. If `dst` is too small the result is
 BR_STATUS_SHORT_BUFFER with count 0 (never a truncated write). Offset arithmetic
 is performed as civil datetime arithmetic, so formatting an extreme br_time at
 a legal offset cannot overflow.
+Every result's native error is NONE/0.
 */
 br_io_result br_rfc3339_format(br_time t, int32_t utc_offset_min, uint8_t *dst, size_t dst_cap);
 
