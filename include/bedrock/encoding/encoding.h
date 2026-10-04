@@ -28,11 +28,14 @@ Result of an into-buffer or to-stream decode.
 
 `count` is the number of bytes written to the destination buffer or writer.
 `error_offset` follows the same convention as `br_decode_result`.
+`native_error` preserves the writer's native error domain/code on output
+failure. Buffer results, success, and parser errors use `BR_NATIVE_ERROR_NONE`.
 */
 typedef struct br_decode_into_result {
   size_t count;
   size_t error_offset;
   br_status status;
+  br_native_error native_error;
 } br_decode_into_result;
 
 BR_EXTERN_C_END

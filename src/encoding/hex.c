@@ -53,6 +53,7 @@ br__hex_decode_into_result(usize count, usize error_offset, br_status status) {
   result.count = count;
   result.error_offset = error_offset;
   result.status = status;
+  result.native_error = BR_NATIVE_ERROR_NONE;
   return result;
 }
 
@@ -134,7 +135,8 @@ br_io_result br_hex_encode_to_writer(br_bytes_view src, br_hex_case letter_case,
 
       total += written.count;
       if (written.status != BR_STATUS_OK) {
-        return br_io_result_make(total, written.status);
+        written.count = total;
+        return written;
       }
       buffered = 0u;
     }
@@ -145,7 +147,8 @@ br_io_result br_hex_encode_to_writer(br_bytes_view src, br_hex_case letter_case,
 
     total += written.count;
     if (written.status != BR_STATUS_OK) {
-      return br_io_result_make(total, written.status);
+      written.count = total;
+      return written;
     }
   }
 

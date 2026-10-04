@@ -100,7 +100,8 @@ br_base64_encode_into(br_base64_encoding enc, br_bytes_view src, uint8_t *dst, s
 
 /*
 Encode `src` to the writer `w`, returning the count written and propagating the
-writer's status on a short or failed write. Returns BR_STATUS_OUT_OF_RANGE
+writer's status and native error on a short or failed write. The count includes
+all bytes accepted before the failure. Returns BR_STATUS_OUT_OF_RANGE
 without reading `src` if the encoded byte count cannot fit in size_t.
 */
 br_io_result br_base64_encode_to_writer(br_base64_encoding enc, br_bytes_view src, br_writer w);
@@ -130,7 +131,10 @@ br_base64_decode_into(br_base64_encoding enc, br_bytes_view src, uint8_t *dst, s
 /*
 Decode `src` to the writer `w`, returning the count written. Malformed input is
 reported as in `br_base64_decode`; a short or failed write propagates the
-writer's status.
+writer's status and native error, with `error_offset` set to 0. The count
+includes all bytes accepted before the failure, including earlier writes.
+Parser errors retain their input offset and use `BR_NATIVE_ERROR_NONE`; staged
+bytes that have not reached the writer are excluded from the count.
 */
 br_decode_into_result
 br_base64_decode_to_writer(br_base64_encoding enc, br_bytes_view src, br_writer w);

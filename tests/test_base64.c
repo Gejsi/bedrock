@@ -8,12 +8,29 @@ static br_bytes_view bv(const char *s) {
 }
 
 typedef struct test_base64_writer {
-  u8 data[8];
+  u8 data[1024];
   usize len;
   usize max_accept;
+  usize fail_after;
   usize calls;
-  br_status status;
+  br_error error;
 } test_base64_writer;
+
+static test_base64_writer
+test_base64_writer_make(usize max_accept, usize fail_after, br_error error) {
+  test_base64_writer writer;
+
+  memset(&writer, 0, sizeof(writer));
+  writer.max_accept = max_accept;
+  writer.fail_after = fail_after;
+  writer.error = error;
+  return writer;
+}
+
+static void test_base64_assert_no_native(br_native_error error) {
+  assert(error.domain == BR_ERROR_DOMAIN_NONE);
+  assert(error.code == 0u);
+}
 
 static br_i64_result test_base64_writer_proc(
   void *context, br_io_mode mode, void *data, usize data_len, i64 offset, br_seek_from whence) {
@@ -27,10 +44,12 @@ static br_i64_result test_base64_writer_proc(
     case BR_IO_MODE_WRITE:
       count = br_min_size(data_len, writer->max_accept);
       count = br_min_size(count, BR_ARRAY_COUNT(writer->data) - writer->len);
+      count = br_min_size(count, writer->fail_after - writer->len);
       memcpy(writer->data + writer->len, data, count);
       writer->len += count;
       writer->calls += 1u;
-      return br_i64_result_make((i64)count, writer->status);
+      return br_i64_result_make_error(
+        (i64)count, writer->len == writer->fail_after ? writer->error : BR_ERROR_OK);
     case BR_IO_MODE_QUERY:
       return br_stream_query_utility(br_io_mode_bit(BR_IO_MODE_WRITE));
     default:
@@ -69,6 +88,7 @@ static void test_rfc4648_vectors(void) {
     dec = br_base64_decode_into(br_base64_std(), bv(vectors[i].encoded), dec_buf, sizeof(dec_buf));
     assert(dec.status == BR_STATUS_OK);
     assert(dec.count == in.len);
+    test_base64_assert_no_native(dec.native_error);
     assert(memcmp(dec_buf, in.data, in.len) == 0);
   }
 }
@@ -102,6 +122,7 @@ static void test_raw_std_vectors(void) {
       br_base64_decode_into(br_base64_raw_std(), bv(vectors[i].encoded), dec_buf, sizeof(dec_buf));
     assert(dec.status == BR_STATUS_OK);
     assert(dec.count == in.len && memcmp(dec_buf, in.data, in.len) == 0);
+    test_base64_assert_no_native(dec.native_error);
   }
 }
 
@@ -126,6 +147,7 @@ static void test_url_alphabet(void) {
   ud = br_base64_decode_into(
     br_base64_url(), br_bytes_view_make(url_buf, ue.count), dec_buf, sizeof(dec_buf));
   assert(ud.status == BR_STATUS_OK && ud.count == in.len && memcmp(dec_buf, raw, in.len) == 0);
+  test_base64_assert_no_native(ud.native_error);
 }
 
 /* A byte outside the active alphabet -> INVALID_ENCODING at its index. NO
@@ -199,6 +221,7 @@ static void test_error_reports_partial_output(void) {
   assert(d.status == BR_STATUS_INVALID_ENCODING);
   assert(d.error_offset == 5u);
   assert(d.count == 3u);
+  test_base64_assert_no_native(d.native_error);
   assert(memcmp(buf, "ABC", 3u) == 0);
   assert(buf[3] == 0xa5u);
 }
@@ -222,6 +245,7 @@ static void test_decode_to_writer_standard(void) {
   assert(result.status == BR_STATUS_OK);
   assert(result.count == DECODED_LEN);
   assert(result.error_offset == 0u);
+  test_base64_assert_no_native(result.native_error);
 
   decoded = br_byte_buffer_view(&sink);
   assert(decoded.len == DECODED_LEN);
@@ -242,6 +266,7 @@ static void test_decode_to_writer_raw_url(void) {
   assert(result.status == BR_STATUS_OK);
   assert(result.count == sizeof(expected));
   assert(result.error_offset == 0u);
+  test_base64_assert_no_native(result.native_error);
   assert(
     br_bytes_equal(br_byte_buffer_view(&sink), br_bytes_view_make(expected, sizeof(expected))));
   br_byte_buffer_destroy(&sink);
@@ -251,9 +276,7 @@ static void test_decode_to_writer_malformed_input(void) {
   test_base64_writer sink;
   br_decode_into_result result;
 
-  memset(&sink, 0, sizeof(sink));
-  sink.max_accept = BR_ARRAY_COUNT(sink.data);
-  sink.status = BR_STATUS_OK;
+  sink = test_base64_writer_make(SIZE_MAX, SIZE_MAX, BR_ERROR_OK);
 
   /* The valid first quantum remains buffered when the next quantum fails. */
   result = br_base64_decode_to_writer(
@@ -261,6 +284,7 @@ static void test_decode_to_writer_malformed_input(void) {
   assert(result.status == BR_STATUS_INVALID_ENCODING);
   assert(result.count == 0u);
   assert(result.error_offset == 4u);
+  test_base64_assert_no_native(result.native_error);
   assert(sink.calls == 0u);
   assert(sink.len == 0u);
 }
@@ -269,15 +293,14 @@ static void test_decode_to_writer_short_write(void) {
   test_base64_writer sink;
   br_decode_into_result result;
 
-  memset(&sink, 0, sizeof(sink));
-  sink.max_accept = 2u;
-  sink.status = BR_STATUS_SHORT_WRITE;
+  sink = test_base64_writer_make(2u, 2u, br_error_make(BR_STATUS_SHORT_WRITE));
 
   result = br_base64_decode_to_writer(
     br_base64_std(), bv("Zm9vYmFy"), br_stream_make(&sink, test_base64_writer_proc));
   assert(result.status == BR_STATUS_SHORT_WRITE);
   assert(result.count == 2u);
   assert(result.error_offset == 0u);
+  test_base64_assert_no_native(result.native_error);
   assert(sink.calls == 1u);
   assert(sink.len == 2u);
   assert(memcmp(sink.data, "fo", 2u) == 0);
@@ -294,6 +317,215 @@ static void test_short_buffer(void) {
 
   d = br_base64_decode_into(br_base64_std(), bv("Zm9vYmFy"), small, sizeof(small));
   assert(d.status == BR_STATUS_SHORT_BUFFER && d.count == 0u);
+  test_base64_assert_no_native(d.native_error);
+}
+
+static void test_encode_to_writer_native_error(void) {
+  static const struct {
+    usize src_len;
+    usize fail_after;
+  } cases[] = {
+    {384u, 1u},   /* Failure in the first full flush. */
+    {2u, 1u},     /* Failure in a tail-only write. */
+    {768u, 514u}, /* A completed flush, then a failing full flush. */
+    {386u, 514u}, /* A completed flush, then a failing tail. */
+    {1u, 0u},     /* A native failure without any accepted bytes. */
+  };
+  br_base64_encoding encodings[] = {br_base64_std(), br_base64_raw_url()};
+  br_error errors[] = {
+    br_error_make_native(BR_STATUS_IO_ERROR, BR_ERROR_DOMAIN_POSIX_ERRNO, 5u),
+    br_error_make_native(BR_STATUS_IO_ERROR, BR_ERROR_DOMAIN_WIN32, 112u),
+  };
+  u8 raw[768];
+  u8 expected[1024];
+
+  memset(raw, 'A', sizeof(raw));
+  for (usize e = 0u; e < BR_ARRAY_COUNT(encodings); ++e) {
+    for (usize n = 0u; n < BR_ARRAY_COUNT(errors); ++n) {
+      for (usize i = 0u; i < BR_ARRAY_COUNT(cases); ++i) {
+        br_bytes_view src = br_bytes_view_make(raw, cases[i].src_len);
+        test_base64_writer sink = test_base64_writer_make(7u, cases[i].fail_after, errors[n]);
+        br_io_result encoded = br_base64_encode_into(encodings[e], src, expected, sizeof(expected));
+        br_io_result result = br_base64_encode_to_writer(
+          encodings[e], src, br_stream_make(&sink, test_base64_writer_proc));
+
+        assert(encoded.status == BR_STATUS_OK);
+        assert(result.status == errors[n].status);
+        assert(result.count == cases[i].fail_after);
+        assert(result.native_error.domain == errors[n].native.domain);
+        assert(result.native_error.code == errors[n].native.code);
+        assert(sink.len == result.count);
+        assert(memcmp(sink.data, expected, result.count) == 0);
+      }
+    }
+  }
+}
+
+static void test_decode_to_writer_native_error(void) {
+  static const struct {
+    usize groups;
+    usize fail_after;
+  } cases[] = {
+    {128u, 1u},   /* Failure in the first full flush. */
+    {2u, 1u},     /* Failure in a tail-only write. */
+    {256u, 386u}, /* A completed flush, then a failing full flush. */
+    {129u, 386u}, /* A completed flush, then a failing tail. */
+    {1u, 0u},     /* A native failure without any accepted bytes. */
+  };
+  static const u8 decoded[] = {'A', 'B', 'C'};
+  br_error errors[] = {
+    br_error_make_native(BR_STATUS_IO_ERROR, BR_ERROR_DOMAIN_POSIX_ERRNO, 5u),
+    br_error_make_native(BR_STATUS_IO_ERROR, BR_ERROR_DOMAIN_WIN32, 112u),
+  };
+  u8 encoded[1024];
+
+  for (usize i = 0u; i < sizeof(encoded); i += 4u) {
+    memcpy(encoded + i, "QUJD", 4u);
+  }
+  for (usize n = 0u; n < BR_ARRAY_COUNT(errors); ++n) {
+    for (usize i = 0u; i < BR_ARRAY_COUNT(cases); ++i) {
+      test_base64_writer sink = test_base64_writer_make(7u, cases[i].fail_after, errors[n]);
+      br_decode_into_result result =
+        br_base64_decode_to_writer(br_base64_std(),
+                                   br_bytes_view_make(encoded, cases[i].groups * 4u),
+                                   br_stream_make(&sink, test_base64_writer_proc));
+
+      assert(result.status == errors[n].status);
+      assert(result.count == cases[i].fail_after);
+      assert(result.error_offset == 0u);
+      assert(result.native_error.domain == errors[n].native.domain);
+      assert(result.native_error.code == errors[n].native.code);
+      assert(sink.len == result.count);
+      for (usize j = 0u; j < sink.len; ++j) {
+        assert(sink.data[j] == decoded[j % 3u]);
+      }
+    }
+  }
+}
+
+static void test_writer_non_native_results(void) {
+  br_error error = br_error_make_native(BR_STATUS_IO_ERROR, BR_ERROR_DOMAIN_POSIX_ERRNO, 5u);
+  test_base64_writer sink = test_base64_writer_make(0u, 0u, error);
+  br_writer writer = br_stream_make(&sink, test_base64_writer_proc);
+  br_io_result encoded;
+  br_decode_into_result decoded;
+  u8 raw[386];
+  u8 src[516];
+
+  encoded = br_base64_encode_to_writer(br_base64_std(), br_bytes_view_make(NULL, 0u), writer);
+  decoded = br_base64_decode_to_writer(br_base64_std(), br_bytes_view_make(NULL, 0u), writer);
+  assert(encoded.status == BR_STATUS_OK && encoded.count == 0u);
+  assert(decoded.status == BR_STATUS_OK && decoded.count == 0u && decoded.error_offset == 0u);
+  test_base64_assert_no_native(encoded.native_error);
+  test_base64_assert_no_native(decoded.native_error);
+  assert(sink.calls == 0u);
+
+  sink = test_base64_writer_make(2u, SIZE_MAX, BR_ERROR_OK);
+  encoded = br_base64_encode_to_writer(br_base64_std(), bv("foobar"), writer);
+  assert(encoded.status == BR_STATUS_OK && encoded.count == 8u);
+  test_base64_assert_no_native(encoded.native_error);
+  assert(sink.calls == 4u && memcmp(sink.data, "Zm9vYmFy", 8u) == 0);
+
+  sink = test_base64_writer_make(2u, SIZE_MAX, BR_ERROR_OK);
+  decoded = br_base64_decode_to_writer(br_base64_std(), bv("Zm9vYmFy"), writer);
+  assert(decoded.status == BR_STATUS_OK && decoded.count == 6u && decoded.error_offset == 0u);
+  test_base64_assert_no_native(decoded.native_error);
+  assert(sink.calls == 3u && memcmp(sink.data, "foobar", 6u) == 0);
+
+  /* A successful zero-count callback becomes NO_PROGRESS, including after a flush. */
+  memset(raw, 'A', sizeof(raw));
+  for (usize i = 0u; i < sizeof(src); i += 4u) {
+    memcpy(src + i, "QUJD", 4u);
+  }
+  for (usize i = 0u; i < 2u; ++i) {
+    usize encode_limit = i == 0u ? 0u : 512u;
+    usize decode_limit = i == 0u ? 0u : 384u;
+
+    sink = test_base64_writer_make(7u, encode_limit, BR_ERROR_OK);
+    encoded =
+      br_base64_encode_to_writer(br_base64_std(), br_bytes_view_make(raw, sizeof(raw)), writer);
+    assert(encoded.status == BR_STATUS_NO_PROGRESS && encoded.count == encode_limit);
+    test_base64_assert_no_native(encoded.native_error);
+
+    sink = test_base64_writer_make(7u, decode_limit, BR_ERROR_OK);
+    decoded =
+      br_base64_decode_to_writer(br_base64_std(), br_bytes_view_make(src, sizeof(src)), writer);
+    assert(decoded.status == BR_STATUS_NO_PROGRESS && decoded.count == decode_limit);
+    assert(decoded.error_offset == 0u);
+    test_base64_assert_no_native(decoded.native_error);
+  }
+
+  writer = br_stream_make(NULL, NULL);
+  encoded = br_base64_encode_to_writer(br_base64_std(), bv("f"), writer);
+  decoded = br_base64_decode_to_writer(br_base64_std(), bv("Zg=="), writer);
+  assert(encoded.status == BR_STATUS_NOT_SUPPORTED && encoded.count == 0u);
+  assert(decoded.status == BR_STATUS_NOT_SUPPORTED && decoded.count == 0u);
+  assert(decoded.error_offset == 0u);
+  test_base64_assert_no_native(encoded.native_error);
+  test_base64_assert_no_native(decoded.native_error);
+}
+
+static void test_decode_parser_errors_have_no_native_error(void) {
+  static const struct {
+    const char *src;
+    bool padded;
+    usize count;
+    usize offset;
+  } cases[] = {
+    {"QUJD!A==", true, 0u, 4u},
+    {"Zg=", true, 0u, 2u},
+    {"AA=A", true, 0u, 2u},
+    {"Zg==", false, 0u, 2u},
+    {"QUJDZh==", true, 3u, 5u},
+    {"QUJDZm9=", true, 3u, 6u},
+  };
+  br_error error = br_error_make_native(BR_STATUS_IO_ERROR, BR_ERROR_DOMAIN_WIN32, 112u);
+  u8 dst[8];
+  u8 late[514];
+  br_base64_encoding raw_strict = br_base64_raw_std();
+  test_base64_writer sink;
+  br_decode_into_result result;
+
+  raw_strict.strict = true;
+  for (usize i = 0u; i < BR_ARRAY_COUNT(cases); ++i) {
+    br_base64_encoding enc = br_base64_std();
+    br_decode_into_result buffer;
+    br_decode_into_result writer;
+
+    enc.padded = cases[i].padded;
+    enc.strict = true;
+    memset(dst, 0xa5, sizeof(dst));
+    sink = test_base64_writer_make(SIZE_MAX, SIZE_MAX, error);
+    buffer = br_base64_decode_into(enc, bv(cases[i].src), dst, sizeof(dst));
+    writer = br_base64_decode_to_writer(
+      enc, bv(cases[i].src), br_stream_make(&sink, test_base64_writer_proc));
+    assert(buffer.status == BR_STATUS_INVALID_ENCODING && buffer.count == cases[i].count);
+    assert(buffer.error_offset == cases[i].offset);
+    assert(writer.status == BR_STATUS_INVALID_ENCODING && writer.count == 0u);
+    assert(writer.error_offset == cases[i].offset);
+    test_base64_assert_no_native(buffer.native_error);
+    test_base64_assert_no_native(writer.native_error);
+    assert(dst[cases[i].count] == 0xa5u);
+    assert(sink.calls == 0u);
+  }
+
+  /* A late canonicality error retains already-flushed progress and its input offset. */
+  for (usize i = 0u; i < 512u; i += 4u) {
+    memcpy(late + i, "QUJD", 4u);
+  }
+  memcpy(late + 512u, "Zk", 2u);
+  sink = test_base64_writer_make(7u, SIZE_MAX, error);
+  result = br_base64_decode_to_writer(raw_strict,
+                                      br_bytes_view_make(late, sizeof(late)),
+                                      br_stream_make(&sink, test_base64_writer_proc));
+  assert(result.status == BR_STATUS_INVALID_ENCODING && result.count == 384u);
+  assert(result.error_offset == 513u && sink.len == 384u);
+  test_base64_assert_no_native(result.native_error);
+
+  result = br_base64_decode_into(br_base64_std(), bv("Zg=="), NULL, 1u);
+  assert(result.status == BR_STATUS_SHORT_BUFFER && result.count == 0u &&
+         result.error_offset == 0u);
+  test_base64_assert_no_native(result.native_error);
 }
 
 static void test_encoded_length_overflow(void) {
@@ -361,6 +593,10 @@ int main(void) {
   test_decode_to_writer_raw_url();
   test_decode_to_writer_malformed_input();
   test_decode_to_writer_short_write();
+  test_encode_to_writer_native_error();
+  test_decode_to_writer_native_error();
+  test_writer_non_native_results();
+  test_decode_parser_errors_have_no_native_error();
   test_short_buffer();
   test_encoded_length_overflow();
   test_allocating_and_free_on_error();

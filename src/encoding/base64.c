@@ -75,6 +75,14 @@ br__base64_decode_into_result(usize count, usize off, br_status status) {
   result.count = count;
   result.error_offset = off;
   result.status = status;
+  result.native_error = BR_NATIVE_ERROR_NONE;
+  return result;
+}
+
+static br_decode_into_result br__base64_decode_writer_result(usize count, br_io_result written) {
+  br_decode_into_result result = br__base64_decode_into_result(count, 0u, written.status);
+
+  result.native_error = written.native_error;
   return result;
 }
 
@@ -248,7 +256,8 @@ br_io_result br_base64_encode_to_writer(br_base64_encoding enc, br_bytes_view sr
       br_io_result written = br_write_full(w, buffer, buffered);
       total += written.count;
       if (written.status != BR_STATUS_OK) {
-        return br_io_result_make(total, written.status);
+        written.count = total;
+        return written;
       }
       buffered = 0u;
     }
@@ -281,7 +290,8 @@ br_io_result br_base64_encode_to_writer(br_base64_encoding enc, br_bytes_view sr
     br_io_result written = br_write_full(w, buffer, buffered);
     total += written.count;
     if (written.status != BR_STATUS_OK) {
-      return br_io_result_make(total, written.status);
+      written.count = total;
+      return written;
     }
   }
 
@@ -554,7 +564,7 @@ br_base64_decode_to_writer(br_base64_encoding enc, br_bytes_view src, br_writer 
       br_io_result written = br_write_full(w, buffer, buffered);
       total += written.count;
       if (written.status != BR_STATUS_OK) {
-        return br__base64_decode_into_result(total, 0u, written.status);
+        return br__base64_decode_writer_result(total, written);
       }
       buffered = 0u;
     }
@@ -598,7 +608,7 @@ br_base64_decode_to_writer(br_base64_encoding enc, br_bytes_view src, br_writer 
     br_io_result written = br_write_full(w, buffer, buffered);
     total += written.count;
     if (written.status != BR_STATUS_OK) {
-      return br__base64_decode_into_result(total, 0u, written.status);
+      return br__base64_decode_writer_result(total, written);
     }
   }
 

@@ -51,7 +51,8 @@ br_hex_encode_into(br_bytes_view src, br_hex_case letter_case, uint8_t *dst, siz
 Encode `src` as a hex sequence to the writer `w`.
 
 Returns the number of bytes written in `count`. Propagates the writer's status
-on a short or failed write.
+and native error on a short or failed write. The count includes all bytes
+accepted before the failure.
 */
 br_io_result br_hex_encode_to_writer(br_bytes_view src, br_hex_case letter_case, br_writer w);
 

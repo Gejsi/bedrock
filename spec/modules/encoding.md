@@ -28,8 +28,8 @@ the v1 encoding set.
   allocating (returns owned bytes), into-buffer (`uint8_t *dst, size_t dst_cap`,
   returns bytes written), and to-stream (`br_writer`/`br_reader`).
 - Encoders cannot fail on content; only allocation (`OUT_OF_MEMORY`) or a short
-  caller buffer (`SHORT_BUFFER`) can fail an encode. Decoders can additionally
-  fail on malformed input.
+  caller buffer (`SHORT_BUFFER`) can fail an in-memory encode. Writer variants
+  can additionally fail on output. Decoders can fail on malformed input.
 
 ## Error Model
 
@@ -64,8 +64,29 @@ typedef struct br_decode_into_result {  /* into-buffer or to-stream decode */
   size_t count;           /* bytes written to dst / writer */
   size_t error_offset;
   br_status status;
+  br_native_error native_error;
 } br_decode_into_result;
 ```
+
+Writer variants preserve the underlying portable status and native domain/code
+in-band, following ADR-0007. `count` includes accepted bytes from earlier
+flushes and the failing write; successful short writes are retried. Decoder
+output failures set `error_offset` to 0. Parser errors retain their input offset
+and count only output already committed to the buffer or writer, excluding
+staged bytes. Buffer results, success, parser errors, and locally generated
+errors such as `SHORT_BUFFER` and `NO_PROGRESS` use native NONE/0.
+
+Adding `native_error` to the existing shared into-result keeps both output
+errors and parser offsets without a separate writer-only result type or hidden
+error state. Its by-value layout changes, so consumers must rebuild with the
+matching headers; Bedrock has no stable cross-version ABI. Allocating decode
+results remain unchanged because they perform no stream output.
+
+Odin's codec bool/enum errors do not carry native output details. Go uses
+`CorruptInputError` for decode offsets and ordinary `error` values for writer
+failures; Rust's I/O error retains the category and raw OS code. Bedrock keeps
+its explicit offset/status result and adds the ADR-0007 native channel to follow
+that in-band error model.
 
 ## hex
 
