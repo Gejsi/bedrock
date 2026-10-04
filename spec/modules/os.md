@@ -98,6 +98,8 @@ The borrowed file stream supports:
 - `READ` when opened for reading
 - `WRITE` when opened for writing
 - `READ_AT` and `WRITE_AT` using native positioned operations
+- `WRITE_TO` when opened for reading, for another native file stream
+- `READ_FROM` when opened for writing, for another native file stream
 - `SEEK`
 - `SIZE`
 - `CLOSE`
@@ -123,6 +125,50 @@ largest count its platform can represent.
 
 The raw file stream does not support `FLUSH`. Buffered writers flush bytes to
 it; durable storage synchronization will be a separate explicit operation.
+
+## File Transfers
+
+File transfer modes use the existing `br_io_transfer_request { br_stream peer; }`.
+The request has its exact typed size; `offset` and `whence` are unused. A file
+recognizes another file stream by its procedure before interpreting the peer
+context. Other stream types return `NOT_SUPPORTED` with zero progress and no I/O,
+allowing their existing transfer implementation or ordinary copying to run.
+The public file layout and stream protocol do not change.
+
+Both files must be live and direction-compatible. An invalid request or access
+direction returns `INVALID_ARGUMENT`; an inert peer returns `INVALID_STATE`.
+Direct self-copy and independent handles identifying the same native file,
+including hard links, are rejected before data or cursor movement.
+
+A transfer copies the source's remaining bytes to the destination's current
+sequential cursor. It does not truncate an existing destination, copy metadata,
+reopen paths, take ownership, or close either file. Positioned operations remain
+independent. Append destinations use the existing native append writes, even
+when their sequential cursor was explicitly moved earlier.
+
+Eligible Linux regular-file pairs use bounded `copy_file_range` operations.
+Each successful native step advances both cursors by its accepted byte count.
+Unsupported kernel/filesystem combinations continue with ordinary native
+read/write calls at those cursors. A zero native return is confirmed by ordinary
+reading, avoiding false EOF from filesystems that cannot provide the native
+copy. macOS and Windows use their existing native read/write continuation.
+Their data-copy and storage-offload APIs require additional handling to
+preserve this contract, so acceleration on those platforms remains separate.
+
+Native progress and subsequent buffered progress share one `INT64_MAX` count
+limit. Interrupted POSIX operations retry; legal short writes are completed;
+zero successful progress terminates. EOF completes successfully. Errors retain
+the cumulative accepted-output count and exact native domain/code. As with
+ordinary buffered copying, a failed write can leave the source ahead of the
+accepted destination bytes.
+
+Safe continuation is an internal explicit outcome, so it never escapes as a
+public unsupported result after progress. For a recognized file pair, an
+operational `NOT_SUPPORTED`, including an identity-query failure before data
+I/O, is reported as `IO_ERROR` with its native detail. It cannot trigger an
+outer transfer probe that bypasses validation or reconsumes input.
+`br_copy_buffer` continues to use its caller-provided storage without probing
+the file transfer modes.
 
 ## Standard Streams
 

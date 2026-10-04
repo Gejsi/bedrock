@@ -1,4 +1,10 @@
 #include "file_internal.h"
+
+/* Expose FileIdInfo unless the caller selected an older Windows SDK target. */
+#if defined(_WIN32) && !defined(_WIN32_WINNT)
+#define _WIN32_WINNT 0x0602
+#endif
+
 #include "error_internal.h"
 
 #if defined(_WIN32)
@@ -528,6 +534,130 @@ br_i64_result br__file_platform_size(br_file *file) {
     return br_i64_result_make(0, BR_STATUS_OUT_OF_RANGE);
   }
   return br_i64_result_make((int64_t)size.QuadPart, BR_STATUS_OK);
+}
+
+static br_error br__file_windows_transfer_kind(HANDLE handle, DWORD *kind) {
+  SetLastError(NO_ERROR);
+  *kind = GetFileType(handle);
+  if (*kind == FILE_TYPE_UNKNOWN) {
+    DWORD native_error = GetLastError();
+
+    if (native_error != NO_ERROR) {
+      return br__os_error_from_win32(native_error);
+    }
+    return br_error_make(BR_STATUS_NOT_SUPPORTED);
+  }
+  if (*kind != FILE_TYPE_DISK && *kind != FILE_TYPE_PIPE && *kind != FILE_TYPE_CHAR) {
+    return br_error_make(BR_STATUS_NOT_SUPPORTED);
+  }
+  return BR_ERROR_OK;
+}
+
+static br_error br__file_windows_transfer_identity(HANDLE dst, HANDLE src) {
+#if _WIN32_WINNT >= 0x0602
+  FILE_ID_INFO dst_id = {0};
+  FILE_ID_INFO src_id = {0};
+  DWORD native_error;
+
+  /*
+  ReFS requires the 128-bit ID to avoid collisions between distinct files.
+  Compare IDs from the same information class; never mix modern and legacy IDs.
+  */
+  if (GetFileInformationByHandleEx(src, FileIdInfo, &src_id, (DWORD)sizeof(src_id))) {
+    if (GetFileInformationByHandleEx(dst, FileIdInfo, &dst_id, (DWORD)sizeof(dst_id))) {
+      if (src_id.VolumeSerialNumber == dst_id.VolumeSerialNumber &&
+          memcmp(src_id.FileId.Identifier,
+                 dst_id.FileId.Identifier,
+                 sizeof(src_id.FileId.Identifier)) == 0) {
+        return br_error_make(BR_STATUS_INVALID_ARGUMENT);
+      }
+      return BR_ERROR_OK;
+    }
+  }
+  native_error = GetLastError();
+  switch (native_error) {
+    case ERROR_INVALID_PARAMETER:
+    case ERROR_INVALID_FUNCTION:
+    case ERROR_NOT_SUPPORTED:
+    case ERROR_CALL_NOT_IMPLEMENTED:
+      /* Older systems/filesystems can still provide the legacy identity. */
+      break;
+    default:
+      return br__os_error_from_win32(native_error);
+  }
+#endif
+
+  {
+    BY_HANDLE_FILE_INFORMATION dst_info = {0};
+    BY_HANDLE_FILE_INFORMATION src_info = {0};
+
+    if (!GetFileInformationByHandle(src, &src_info)) {
+      return br__os_error_from_win32(GetLastError());
+    }
+    if (!GetFileInformationByHandle(dst, &dst_info)) {
+      return br__os_error_from_win32(GetLastError());
+    }
+    /* Network providers may return partial information; do not assume identity. */
+    if ((src_info.nFileIndexHigh == 0u && src_info.nFileIndexLow == 0u) ||
+        (dst_info.nFileIndexHigh == 0u && dst_info.nFileIndexLow == 0u)) {
+      return br_error_make(BR_STATUS_NOT_SUPPORTED);
+    }
+    /*
+    Legacy IDs can collide on ReFS. Rejecting equal IDs is conservative: a
+    collision can reject distinct files but cannot authorize a same-file copy.
+    */
+    if (src_info.dwVolumeSerialNumber == dst_info.dwVolumeSerialNumber &&
+        src_info.nFileIndexHigh == dst_info.nFileIndexHigh &&
+        src_info.nFileIndexLow == dst_info.nFileIndexLow) {
+      return br_error_make(BR_STATUS_INVALID_ARGUMENT);
+    }
+  }
+  return BR_ERROR_OK;
+}
+
+br__file_transfer_result br__file_platform_transfer(br_file *dst, br_file *src) {
+  br__file_transfer_result result = {br_i64_result_make(0, BR_STATUS_OK), false};
+  HANDLE dst_handle = br__file_windows_handle(dst);
+  HANDLE src_handle = br__file_windows_handle(src);
+  DWORD dst_kind;
+  DWORD src_kind;
+  br_error error;
+
+  /* The common dispatcher has already validated both native file objects. */
+  if (dst_handle == src_handle) {
+    result.result = br_i64_result_make(0, BR_STATUS_INVALID_ARGUMENT);
+    return result;
+  }
+  error = br__file_windows_transfer_kind(src_handle, &src_kind);
+  if (error.status != BR_STATUS_OK) {
+    result.result = br_i64_result_make_error(0, error);
+    return result;
+  }
+  error = br__file_windows_transfer_kind(dst_handle, &dst_kind);
+  if (error.status != BR_STATUS_OK) {
+    result.result = br_i64_result_make_error(0, error);
+    return result;
+  }
+  if (src_kind == FILE_TYPE_DISK && dst_kind == FILE_TYPE_DISK) {
+    error = br__file_windows_transfer_identity(dst_handle, src_handle);
+    if (error.status != BR_STATUS_OK) {
+      result.result = br_i64_result_make_error(0, error);
+      return result;
+    }
+  } else if (src_kind == dst_kind) {
+    /*
+    The documented file-ID queries exclude pipes and do not establish identity
+    for character devices. Without identity, same-kind pairs cannot proceed.
+    */
+    result.result = br_i64_result_make(0, BR_STATUS_NOT_SUPPORTED);
+    return result;
+  }
+  /*
+  Storage offload/block cloning uses explicit ranges, not sequential cursors
+  or atomic append. Continue through the existing ReadFile/WriteFile routines.
+  */
+  result.fallback = true;
+  return result;
 }
 
 #endif /* defined(_WIN32) */

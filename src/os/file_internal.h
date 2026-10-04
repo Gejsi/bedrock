@@ -13,4 +13,18 @@ br__file_platform_write_at(br_file *file, const void *src, size_t len, int64_t o
 br_i64_result br__file_platform_seek(br_file *file, int64_t offset, br_seek_from whence);
 br_i64_result br__file_platform_size(br_file *file);
 
+/*
+Private native-transfer outcome. `result.value` counts accepted output bytes.
+`fallback` requests ordinary read/write continuation from the current cursors;
+it is valid only with an OK result. Native progress must remain included in
+the combined INT64_MAX count limit. A platform checks same-file identity before
+any transfer and never requests fallback after an unaccounted side effect.
+*/
+typedef struct br__file_transfer_result {
+  br_i64_result result;
+  bool fallback;
+} br__file_transfer_result;
+
+br__file_transfer_result br__file_platform_transfer(br_file *dst, br_file *src);
+
 #endif

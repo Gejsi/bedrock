@@ -1,3 +1,7 @@
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE 1
+#endif
+
 #ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #endif
@@ -18,6 +22,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#if defined(__linux__)
+#include <sys/syscall.h>
+#endif
 
 #include <bedrock/mem/alloc.h>
 
@@ -288,6 +296,138 @@ br_i64_result br__file_platform_size(br_file *file) {
     return br_i64_result_make(0, BR_STATUS_OUT_OF_RANGE);
   }
   return br_i64_result_make((int64_t)info.st_size, BR_STATUS_OK);
+}
+
+#if defined(__linux__) && defined(SYS_copy_file_range)
+static size_t br__file_posix_transfer_chunk(int64_t total) {
+  size_t chunk = br__file_posix_chunk(1024u * 1024u);
+  uint64_t remaining = (uint64_t)(INT64_MAX - total);
+
+  return remaining < (uint64_t)chunk ? (size_t)remaining : chunk;
+}
+
+static bool br__file_posix_transfer_unsupported(int error) {
+  switch (error) {
+    case ENOSYS:
+    case EXDEV:
+#ifdef EOPNOTSUPP
+    case EOPNOTSUPP:
+#endif
+#if defined(ENOTSUP) && (!defined(EOPNOTSUPP) || ENOTSUP != EOPNOTSUPP)
+    case ENOTSUP:
+#endif
+      return true;
+    default:
+      return false;
+  }
+}
+#endif
+
+br__file_transfer_result br__file_platform_transfer(br_file *dst, br_file *src) {
+  br__file_transfer_result transfer;
+  struct stat src_info;
+  struct stat dst_info;
+  int src_fd = br__file_fd(src);
+  int dst_fd = br__file_fd(dst);
+  int result;
+
+  transfer.result = br_i64_result_make(0, BR_STATUS_OK);
+  transfer.fallback = true;
+
+  if (src_fd == dst_fd) {
+    transfer.result.status = BR_STATUS_INVALID_ARGUMENT;
+    transfer.fallback = false;
+    return transfer;
+  }
+  do {
+    result = fstat(src_fd, &src_info);
+  } while (result < 0 && errno == EINTR);
+  if (result < 0) {
+    transfer.result = br_i64_result_make_error(0, br__os_error_from_errno(errno));
+    transfer.fallback = false;
+    return transfer;
+  }
+  do {
+    result = fstat(dst_fd, &dst_info);
+  } while (result < 0 && errno == EINTR);
+  if (result < 0) {
+    transfer.result = br_i64_result_make_error(0, br__os_error_from_errno(errno));
+    transfer.fallback = false;
+    return transfer;
+  }
+  if (src_info.st_dev == dst_info.st_dev && src_info.st_ino == dst_info.st_ino) {
+    transfer.result.status = BR_STATUS_INVALID_ARGUMENT;
+    transfer.fallback = false;
+    return transfer;
+  }
+
+#if defined(__linux__) && defined(SYS_copy_file_range)
+  if (!S_ISREG(src_info.st_mode) || !S_ISREG(dst_info.st_mode) ||
+      ((src->flags | dst->flags) & BR_FILE_OPEN_APPEND) != 0u) {
+    return transfer;
+  }
+  /* Also honor append set on the native descriptor after the file was opened. */
+  do {
+    result = fcntl(src_fd, F_GETFL);
+  } while (result < 0 && errno == EINTR);
+  if (result < 0) {
+    transfer.result = br_i64_result_make_error(0, br__os_error_from_errno(errno));
+    transfer.fallback = false;
+    return transfer;
+  }
+  if ((result & O_APPEND) != 0) {
+    return transfer;
+  }
+  do {
+    result = fcntl(dst_fd, F_GETFL);
+  } while (result < 0 && errno == EINTR);
+  if (result < 0) {
+    transfer.result = br_i64_result_make_error(0, br__os_error_from_errno(errno));
+    transfer.fallback = false;
+    return transfer;
+  }
+  if ((result & O_APPEND) != 0) {
+    return transfer;
+  }
+
+  for (;;) {
+    size_t chunk = br__file_posix_transfer_chunk(transfer.result.value);
+    long count;
+
+    if (chunk == 0u) {
+      /* Continuation enforces the shared cap without consuming excess input. */
+      return transfer;
+    }
+    do {
+      /* Null offsets advance both current cursors; no libc copy wrapper needed. */
+      count =
+        syscall(SYS_copy_file_range, (long)src_fd, 0L, (long)dst_fd, 0L, (unsigned long)chunk, 0L);
+    } while (count < 0 && errno == EINTR);
+    if (count < 0) {
+      int native_error = errno;
+
+      if (br__file_posix_transfer_unsupported(native_error)) {
+        return transfer;
+      }
+      transfer.result =
+        br_i64_result_make_error(transfer.result.value, br__os_error_from_errno(native_error));
+      transfer.fallback = false;
+      return transfer;
+    }
+    if ((unsigned long)count > (unsigned long)chunk) {
+      transfer.result.status = BR_STATUS_INVALID_STATE;
+      transfer.fallback = false;
+      return transfer;
+    }
+    if (count == 0) {
+      /* Ordinary reading confirms EOF, including kernels with false-zero bugs. */
+      return transfer;
+    }
+    transfer.result.value += (int64_t)count;
+  }
+#else
+  return transfer;
+#endif
 }
 
 #endif

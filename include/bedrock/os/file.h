@@ -62,6 +62,14 @@ br_error br_file_close(br_file *file);
 Return a stream that borrows `file`. The stream is invalid after the file is
 closed or its storage stops existing. Destroying the stream closes the file but
 does not free caller-owned storage.
+
+Readable files support `WRITE_TO`, and writable files support `READ_FROM`, for
+another native file stream. Transfers use the current sequential cursors, keep
+the destination's remaining tail, and preserve append behavior. Copying to the
+same native file through another handle is rejected. Other peer stream types
+return unsupported before I/O so their own transfer support or ordinary copying
+can be used. A failed transfer reports accepted output bytes and native errors;
+buffered continuation can consume more input than the destination accepted.
 */
 br_stream br_file_as_stream(br_file *file);
 
