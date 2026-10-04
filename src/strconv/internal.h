@@ -6,9 +6,14 @@
 /*
 Multiprecision decimal used only for float parsing and formatting. `digits` are
 ASCII '0'..'9', big-endian, with an implied decimal point `decimal_point` places
-from the left. `trunc` records that digits past the buffer were dropped.
+from the left. `trunc` records that nonzero digits past the buffer were dropped.
+
+A finite f64 needs at most 767 significant decimal digits; its rounding
+midpoints need at most 768. Keep these exact, plus working space for shifts.
+Beyond this capacity, the sticky `trunc` flag distinguishes a midpoint from a
+larger input even when its last nonzero digit is arbitrarily far away.
 */
-#define BR__DECIMAL_MAX_DIGITS 384
+#define BR__DECIMAL_MAX_DIGITS 800
 
 typedef struct br__decimal {
   u8 digits[BR__DECIMAL_MAX_DIGITS];

@@ -120,7 +120,7 @@ br_io_result br_format_f32(float value, br_float_format fmt, int prec, uint8_t *
 #define BR_FORMAT_I64_MAX          65   /* sign + 64 base-2 digits */
 #define BR_FORMAT_U64_MAX          64   /* 64 base-2 digits */
 #define BR_FORMAT_F64_SHORTEST_MAX 24
-#define BR_FORMAT_F32_SHORTEST_MAX 16
+#define BR_FORMAT_F32_SHORTEST_MAX 22
 #define BR_FORMAT_FLOAT_PRECISION_MAX 1048576
 
 /* Worst-case bytes for every accepted (fmt, prec) — successful output never
@@ -141,16 +141,29 @@ size_t br_format_f32_bound(br_float_format fmt, int prec);
   written "3." is worse than an error.
 - The `_SHORTEST_MAX` macros bound ONLY `BR_FLOAT_SHORTEST`; for any other mode
   callers size with `br_format_f64_bound(fmt, prec)`.
+- SHORTEST uses decimal form through exponent 20 at both widths. f32 can
+  therefore need 21 integral digits plus a minus sign; its bound is 22 bytes.
+- Formatting performs no OS calls. Every result, including portable failures,
+  initializes `native_error` to NONE/0.
 
 ## Shared internal engine
 
-One fixed-buffer multiprecision-decimal path (a `[384]`-byte digit buffer,
+One fixed-buffer multiprecision-decimal path (an 800-byte digit buffer,
 `Float_Info {mantbits, expbits, bias}` selecting f32/f64), ported from Odin's
 `decimal` subpackage (itself a port of Go's legacy decimal). No bignum, no heap,
 no multi-KB tables. Both parse (`decimal_to_float_bits`) and format
 (`generic_ftoa`) select the `Float_Info` by type; the public `_f32`/`_f64` pairs
 are typed entry points over this one engine (C has no generics, and typed funcs
 beat a runtime `bit_size` arg a caller can pass wrong).
+
+Finite f64 values need at most 767 significant decimal digits, and their
+nearest-even boundaries need at most 768. The buffer retains these exact
+expansions with shift working space. Parsing records discarded nonzero digits
+in a sticky flag, so an arbitrarily late nonzero tail can distinguish an exact
+midpoint from a value above it. Decimal position is counted independently of
+stored digits, and a compensating exponent is applied before range saturation.
+Formatting precision can exceed the buffer: the exact dyadic expansion ends
+within it, and only the remaining zeroes are emitted in bulk.
 
 ## Strings builder integration (dogfood consumer)
 
@@ -193,9 +206,10 @@ into the reserved tail; advance length by `result.count`.
   ever needs them, adopt Go's base-0-only rule as the designated future shape,
   NOT Odin's accept-everywhere.
 - f32 parses natively at f32 precision, NOT via f64-then-narrow (double-rounding
-  correctness). Odin's `parse_f32` narrows from `parse_f64`
+  correctness). The pinned Odin `parse_f32` narrows from `parse_f64`
   (`strconv.odin:748-751`) — a VERIFIED 1-ULP defect with a machine-checked
-  witness; see `tracking/odin-suspected-bugs.md`.
+  witness; see `tracking/odin-suspected-bugs.md`. Newer Odin also rounds scalar
+  f32 directly; Bedrock retains its direct-rounding contract.
 - Typed `br_float_format` enum + `_f32`/`_f64` pairs replace Odin's fmt byte +
   int bit_size.
 - Float format emits a sign only for negative values; Odin's `generic_ftoa`
@@ -204,9 +218,9 @@ into the reserved tail; advance length by `result.count`.
   value without a stray leading `+`).
 - Locale independence stated as a property (deviation from C `strtod`, not Odin).
 - No `Append*` family; quote/unquote deferred; f16 excluded.
-- Algorithm: fixed-buffer decimal; Bedrock DECLINES Rust's Eisel-Lemire/Grisu3
-  speed bar deliberately — exact shortest-round-trip at minimal code/data cost is
-  the v1 goal; revisit only if profiled hot.
+- Algorithm: fixed-buffer decimal, selected for exact conversion with small
+  code/data cost and no allocation. A faster path requires a demonstrated hot
+  workload and must preserve the exact fallback.
 
 ## Testing
 

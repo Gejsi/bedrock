@@ -120,6 +120,7 @@ count written. No terminating NUL is written. When `dst` is NULL, `dst_cap` is
 zero, or the buffer cannot hold the whole result, the return is
 `BR_STATUS_SHORT_BUFFER` with count 0 and no bytes written -- never a truncated
 number. `base` outside 2..36 is `BR_STATUS_INVALID_ARGUMENT`.
+Formatting performs no OS calls; every result's native error is NONE/0.
 */
 br_io_result br_format_i64(int64_t value, int base, uint8_t *dst, size_t dst_cap);
 br_io_result br_format_u64(uint64_t value, int base, uint8_t *dst, size_t dst_cap);
@@ -155,7 +156,8 @@ those with `br_format_f64_bound`/`br_format_f32_bound`.
 #define BR_FORMAT_I64_MAX 65u          /* sign + 64 base-2 digits */
 #define BR_FORMAT_U64_MAX 64u          /* 64 base-2 digits */
 #define BR_FORMAT_F64_SHORTEST_MAX 24u /* sign, digits, '.', 'e', exp sign, exp */
-#define BR_FORMAT_F32_SHORTEST_MAX 16u
+/* SHORTEST can emit 21 integral digits in decimal form, plus a minus sign. */
+#define BR_FORMAT_F32_SHORTEST_MAX 22u
 
 /*
 Worst-case bytes to format any value for every accepted `(fmt, prec)`;

@@ -314,12 +314,46 @@ static usize br__parse_float_special(const u8 *p, usize len, double *value) {
 }
 
 /*
+Combine the decimal position and exponent before narrowing to the engine's
+signed index. Both magnitudes can exceed its digit capacity; opposite signs
+must cancel exactly before saturation. Positions outside +/-1000 are already
+past every f32/f64 overflow/underflow boundary.
+*/
+static i32
+br__float_decimal_point(usize places, bool places_neg, usize exponent, bool exponent_neg) {
+  const usize limit = 1000u;
+  usize magnitude;
+  bool neg;
+
+  if (places_neg == exponent_neg) {
+    neg = places_neg;
+    if (places > limit || exponent > limit || places > limit - exponent) {
+      magnitude = limit;
+    } else {
+      magnitude = places + exponent;
+    }
+  } else if (places >= exponent) {
+    magnitude = places - exponent;
+    neg = places_neg;
+  } else {
+    magnitude = exponent - places;
+    neg = exponent_neg;
+  }
+  if (magnitude > limit) {
+    magnitude = limit;
+  }
+  return neg ? -(i32)magnitude : (i32)magnitude;
+}
+
+/*
 Scan a decimal float syntax: optional sign, integer/fraction digits, optional
 `e`/`E` exponent. Returns consumed length (0 if the leading text is not a
 number). Fills the multiprecision `d` (its sign/digits/decimal_point).
 */
 static usize br__scan_float(const u8 *p, usize len, br__decimal *d) {
   usize i = 0u;
+  usize places = 0u;
+  bool places_neg = false;
   bool saw_dot = false;
   bool saw_digits = false;
 
@@ -343,14 +377,19 @@ static usize br__scan_float(const u8 *p, usize len, br__decimal *d) {
         break;
       }
       saw_dot = true;
-      d->decimal_point = d->count;
       continue;
     }
     if (c >= '0' && c <= '9') {
       saw_digits = true;
       if (c == '0' && d->count == 0) {
-        d->decimal_point -= 1;
+        if (saw_dot) {
+          places += 1u;
+          places_neg = true;
+        }
         continue;
+      }
+      if (!saw_dot) {
+        places += 1u;
       }
       if (d->count < BR__DECIMAL_MAX_DIGITS) {
         d->digits[d->count] = c;
@@ -366,19 +405,16 @@ static usize br__scan_float(const u8 *p, usize len, br__decimal *d) {
   if (!saw_digits) {
     return 0u;
   }
-  if (!saw_dot) {
-    d->decimal_point = d->count;
-  }
+  d->decimal_point = br__float_decimal_point(places, places_neg, 0u, false);
 
   if (i < len && (p[i] | 0x20u) == 'e') {
     usize j = i + 1u;
-    i32 exp_sign = 1;
-    i32 e = 0;
-    bool saw_exp_digit = false;
+    bool exp_neg = false;
+    usize e = 0u;
 
     if (j < len && (p[j] == '+' || p[j] == '-')) {
       if (p[j] == '-') {
-        exp_sign = -1;
+        exp_neg = true;
       }
       j += 1u;
     }
@@ -387,15 +423,16 @@ static usize br__scan_float(const u8 *p, usize len, br__decimal *d) {
       return i;
     }
     for (; j < len && p[j] >= '0' && p[j] <= '9'; j += 1u) {
-      saw_exp_digit = true;
-      if (e < 10000) {
-        e = e * 10 + (i32)(p[j] - '0');
+      usize digit = (usize)(p[j] - '0');
+
+      if (e > (SIZE_MAX - digit) / 10u) {
+        e = SIZE_MAX;
+      } else {
+        e = e * 10u + digit;
       }
     }
-    if (saw_exp_digit) {
-      d->decimal_point += e * exp_sign;
-      i = j;
-    }
+    d->decimal_point = br__float_decimal_point(places, places_neg, e, exp_neg);
+    i = j;
   }
 
   return i;

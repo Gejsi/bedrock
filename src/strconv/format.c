@@ -3,10 +3,7 @@
 #include <math.h>
 
 static br_io_result br__format_result(usize count, br_status status) {
-  br_io_result r;
-  r.count = count;
-  r.status = status;
-  return r;
+  return br_io_result_make(count, status);
 }
 
 /*
